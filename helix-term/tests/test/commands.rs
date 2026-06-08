@@ -1108,3 +1108,22 @@ async fn set_keeps_the_picker_keys_from_the_config() -> anyhow::Result<()> {
     )
     .await
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_reflow_selections_in_one_paragraph() -> anyhow::Result<()> {
+    test((
+        indoc! {"\
+            #[a|]# b c d e
+            f #(g|)# h
+        "},
+        ":reflow 5<ret>",
+        indoc! {"\
+            #[a|]# b c
+            d e f
+            #(g|)# h
+        "},
+    ))
+    .await?;
+
+    Ok(())
+}
