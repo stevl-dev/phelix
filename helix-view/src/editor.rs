@@ -11,7 +11,7 @@ use crate::{
     input::KeyEvent,
     register::Registers,
     theme::{self, Theme},
-    tree::{self, Tree},
+    tree::{self, Tab, Tree},
     Document, DocumentId, View, ViewId,
 };
 use helix_event::dispatch;
@@ -1968,11 +1968,11 @@ impl Editor {
                     // If the buffer we are changing to is not this buffer
                     && id != doc.id
                     && self.review.stream_of(doc.id).is_none()
-                    // Ensure the buffer is not displayed in any other splits.
+                    // Ensure the buffer is not displayed in any other splits, in any tab.
                     && !self
                         .tree
-                        .traverse()
-                        .any(|(_, v)| v.doc == doc.id && v.id != view.id);
+                        .views()
+                        .any(|(v, _)| v.doc == doc.id && v.id != view.id);
 
                 let (view, doc) = current!(self);
                 let view_id = view.id;
@@ -2165,6 +2165,51 @@ impl Editor {
         self._refresh();
     }
 
+    /// Closes view `id`. The last view of a tab quits Helix, from any tab, so
+    /// then every view closes.
+    pub fn quit_view(&mut self, id: ViewId) {
+        if !self.tree.is_last_in_tab(id) {
+            return self.close(id);
+        }
+        let views: Vec<_> = self.tree.views().map(|(view, _)| view.id).collect();
+        for view in views {
+            self.close(view);
+        }
+    }
+
+    /// Opens `tab` with one view of `doc_id`, and switches to it.
+    pub fn open_tab(&mut self, tab: Tab, doc_id: DocumentId) -> ViewId {
+        self.enter_normal_mode();
+        let (view, doc) = current!(self);
+        doc.append_changes_to_history(view);
+        let focus_lost = view.doc;
+
+        let view = View::new(doc_id, self.config().gutters.clone());
+        let view_id = self.tree.open_tab(tab, view);
+        let doc = doc_mut!(self, &doc_id);
+        doc.ensure_view_init(view_id);
+        doc.mark_as_focused();
+
+        self._refresh();
+        dispatch(DocumentFocusLost {
+            editor: self,
+            doc: focus_lost,
+        });
+        view_id
+    }
+
+    /// Switches to `tab`, at the view it last focused. `false` when it isn't
+    /// open.
+    pub fn switch_tab(&mut self, tab: Tab) -> bool {
+        match self.tree.tab_focus(tab) {
+            Some(view) => {
+                self.focus(view);
+                true
+            }
+            None => false,
+        }
+    }
+
     pub fn close_document(&mut self, doc_id: DocumentId, force: bool) -> Result<(), CloseError> {
         let doc = match self.documents.get(&doc_id) {
             Some(doc) => doc,
@@ -2215,10 +2260,10 @@ impl Editor {
 
         let doc = self.documents.remove(&doc_id).unwrap();
 
-        // If the document we removed was visible in all views, we will have no more views. We don't
-        // want to close the editor just for a simple buffer close, so we need to create a new view
-        // containing either an existing document, or a brand new document.
-        if self.tree.views().next().is_none() {
+        // If the document we removed was visible in all of the code tab's views, it has no more
+        // views. We don't want to close the editor just for a simple buffer close, so we need to
+        // create a new view containing either an existing document, or a brand new document.
+        if self.tree.is_tab_empty(Tab::Code) {
             let doc_id = self
                 .documents
                 .iter()
@@ -2231,7 +2276,7 @@ impl Editor {
                     ))
                 });
             let view = View::new(doc_id, self.config().gutters.clone());
-            let view_id = self.tree.insert(view);
+            let view_id = self.tree.insert_into(Tab::Code, view);
             let doc = doc_mut!(self, &doc_id);
             doc.ensure_view_init(view_id);
             doc.mark_as_focused();
@@ -2296,14 +2341,17 @@ impl Editor {
         self.enter_normal_mode();
         let (view, doc) = current!(self);
         doc.append_changes_to_history(view);
-        self.ensure_cursor_in_view(view_id);
         // Update jumplist selections with new document changes.
         for (view, _focused) in self.tree.views_mut() {
             let doc = doc_mut!(self, &view.doc);
             view.sync_changes(doc);
         }
 
-        let prev_id = std::mem::replace(&mut self.tree.focus, view_id);
+        let prev_id = self.tree.focus;
+        // WHY: a view in a hidden tab gets its area when its tab shows, and the
+        // cursor needs that area to scroll into view.
+        self.tree.focus_view(view_id);
+        self.ensure_cursor_in_view(view_id);
         doc_mut!(self).mark_as_focused();
 
         let focus_lost = self.tree.get(prev_id).doc;
@@ -2337,7 +2385,7 @@ impl Editor {
     }
 
     pub fn should_close(&self) -> bool {
-        self.tree.is_empty()
+        self.tree.views().next().is_none()
     }
 
     pub fn ensure_cursor_in_view(&mut self, id: ViewId) {

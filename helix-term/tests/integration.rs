@@ -22,4 +22,5 @@ mod test {
     mod review;
     mod splits;
     mod statusline;
+    mod tabs;
 }

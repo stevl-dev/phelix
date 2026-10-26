@@ -2,7 +2,7 @@
 
 Snapshot: `main` at `d6ed5bf05`.
 
-Status: proposed 2026-10-26, with its questions answered (Decisions). It waits for the human's approval.
+Status: approved 2026-10-26. Phase 1 done 2026-10-26.
 
 ## Bottom line
 
@@ -98,7 +98,7 @@ Each phase is one commit. Each commit marks its phase done here.
 | # | Status | Commit | Scope |
 | --- | --- | --- | --- |
 | 0 | Done | Add the tabs plan. | This file. |
-| 1 | | Let the tree hold several tabs. | Sections 1–3. `Code` and `Review` kinds, switching, dropping an emptied tab, the quit checks, `close_document`'s new view, `Editor::focus` across tabs, and the draw loop, mouse, and `wonly` on the active tab. No command opens a second tab yet, so nothing changes for the user. Unit tests in `tree.rs`: a hidden tab's views keep their ids and stay in `views()` but not `traverse()`, removing a tab's last view drops it and restores the code tab's focus, and `next` and `find_split_in_direction` stay in the active tab. Integration tests open a second tab through the editor's API: `:q` on either tab's last view checks for unsaved buffers and quits, `:q` on a split in it closes only the split, `:bc` of its only buffer drops it and leaves Helix running, and `:bca` from it leaves the code tab a view. A `tabs` entry in `FORK.md`. |
+| 1 | Done | Let the tree hold several tabs. | Sections 1–3. `Code` and `Review` kinds, switching, dropping an emptied tab, the quit checks, `close_document`'s new view, `Editor::focus` across tabs, and the draw loop, mouse, and `wonly` on the active tab. No command opens a second tab yet, so nothing changes for the user. Unit tests in `tree.rs`: a hidden tab's views keep their ids and stay in `views()` but not `traverse()`, removing a tab's last view drops it and restores the code tab's focus, and `next` and `find_split_in_direction` stay in the active tab. Integration tests open a second tab through the editor's API: `:q` on either tab's last view checks for unsaved buffers and quits, `:q` on a split in it closes only the split, `:bc` of its only buffer drops it and leaves Helix running, and `:bc` of the code tab's only file from it leaves the code tab a view. A `tabs` entry in `FORK.md`. |
 | 2 | | Open the review in a tab of its own. | Section 4. `review::show`, and `open` and `jump` in `commands/review.rs`. Integration tests: `:review` leaves the code tab's view on its file, `Enter` switches to code and opens the row's line, `:review` comes back with the cursor where it was, and `:bc` in the review closes it, its tab, and the buffers it loaded. Book: `keymap.md` (Review). `FORK.md`: the `review-stream` entry. |
 | 3 | | Move what opens from the review to the code tab. | Section 5. The check in `review/sync.rs`. Integration tests: `:e` in the review's view opens the file in the code tab and leaves the review in its view, a goto against rust-analyzer does the same once its answer comes (in the ignored `rust_analyzer.rs`), and `:vs` with a file stays in the review tab. Book: `keymap.md` (Review). |
 | 4 | | Add :tab to switch tabs. | Section 6. The command row and `cargo xtask docgen`. Integration tests: `:tab code` and `:tab review` switch, and `:tab review` with no review fails with its message. Book: `keymap.md` (Review), generated `typable-cmd.md`. |
@@ -126,3 +126,11 @@ Phase 1 is the riskiest, and everything else stands on it. Phase 3 is next, sinc
 - The git client.
 
 ## Found
+
+- Phase 1: two more places assumed one tree, beyond section 2's list.
+  `Editor::switch` deleted an empty scratch buffer unless another view of the active tab showed it. It now checks every tab's views, or a scratch shown only in a hidden tab would go from under it.
+  `Tree::remove` merged a lone child into its grandparent unless the parent was the active root. For a hidden tab's root, that removed the root itself. It now checks against the view's own tab's root.
+  `Editor::focus` switches tabs before `ensure_cursor_in_view`, which moved below the jump sync, so the cursor scrolls by the view's current area.
+  The plan's `:bca` test became `:bc <path>`. Until phase 5, `:bca` closes the review's buffer too, which closes the review tab, so the hidden code tab is never left empty.
+  `buffers_remaining_impl` switches the focused view to the first modified buffer when the focused one isn't. In the review tab that's the review's view, which phase 3's check will move to the code tab.
+  The tests fail with each of these put back: the root check in `remove`, a hidden tab's focus moving off a removed view, `quit_view`'s close of every view, and `close_document`'s check of the code tab.

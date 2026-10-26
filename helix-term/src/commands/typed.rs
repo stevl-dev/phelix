@@ -120,12 +120,12 @@ fn quit(cx: &mut compositor::Context, _args: Args, event: PromptEvent) -> anyhow
     }
 
     // last view and we have unsaved changes
-    if cx.editor.tree.views().count() == 1 {
+    if cx.editor.tree.is_last_in_tab(view!(cx.editor).id) {
         buffers_remaining_impl(cx.editor)?
     }
 
     cx.block_try_flush_writes()?;
-    cx.editor.close(view!(cx.editor).id);
+    cx.editor.quit_view(view!(cx.editor).id);
 
     Ok(())
 }
@@ -136,7 +136,7 @@ fn force_quit(cx: &mut compositor::Context, _args: Args, event: PromptEvent) -> 
     }
 
     cx.block_try_flush_writes()?;
-    cx.editor.close(view!(cx.editor).id);
+    cx.editor.quit_view(view!(cx.editor).id);
 
     Ok(())
 }

@@ -5957,7 +5957,7 @@ fn vsplit_new(cx: &mut Context) {
 }
 
 fn wclose(cx: &mut Context) {
-    if cx.editor.tree.views().count() == 1 {
+    if cx.editor.tree.is_last_in_tab(view!(cx.editor).id) {
         if let Err(err) = typed::buffers_remaining_impl(cx.editor) {
             cx.editor.set_error(err.to_string());
             return;
@@ -5965,18 +5965,19 @@ fn wclose(cx: &mut Context) {
     }
     let view_id = view!(cx.editor).id;
     // close current split
-    cx.editor.close(view_id);
+    cx.editor.quit_view(view_id);
 }
 
 fn wonly(cx: &mut Context) {
+    let focus = cx.editor.tree.focus;
     let views = cx
         .editor
         .tree
-        .views()
-        .map(|(v, focus)| (v.id, focus))
+        .traverse()
+        .map(|(view_id, _)| view_id)
         .collect::<Vec<_>>();
-    for (view_id, focus) in views {
-        if !focus {
+    for view_id in views {
+        if view_id != focus {
             cx.editor.close(view_id);
         }
     }
