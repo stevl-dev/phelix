@@ -472,7 +472,8 @@ Each file starts with a row naming it and how it changed. Its hunks follow with 
 The gutter shows each row's old and new line numbers, then `+` for an added line or `-` for a removed one.
 
 The review opens in a tab of its own, a layout with its own splits, beside the code tab Helix starts in.
-`Enter` on a row switches to the code tab and opens the file there, and `:review` switches back. `:bc` in the review closes it and its tab.
+`Enter` on a row switches to the code tab and opens the file there, and `:review` switches back. A goto, a picker, or `:e` in the review's view opens in the code tab too, while a split you open on a file stays beside the review.
+`:bc` in the review closes it and its tab.
 `:q` on the tab's last view quits Helix, as in the code tab.
 
 An edit to added or unchanged lines goes to the file's buffer as you type, new and deleted lines too, and the rows follow it: an edited line gets its old version above it.

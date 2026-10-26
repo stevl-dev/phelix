@@ -1,4 +1,4 @@
-//! Completion in the review against rust-analyzer, which
+//! Completion and goto in the review against rust-analyzer, which
 //! has to be on the `PATH`. The fixture is the working directory, as the
 //! server's root, so the test is ignored and runs alone, at the review's
 //! manual check:
@@ -95,7 +95,7 @@ fn from_server(app: &Application) -> Option<(bool, Arc<SavePoint>)> {
 
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "needs rust-analyzer, and changes the working directory"]
-async fn rust_analyzer_completes_in_the_review() -> anyhow::Result<()> {
+async fn rust_analyzer_completes_and_goes_to_definitions_in_the_review() -> anyhow::Result<()> {
     let changed = LIB.replace(
         "    let mut s = shapes::Square { side: 2.0 };\n",
         "    let mut s = shapes::Square { side: 2.0 };\n    let t = 1.0;\n",
@@ -192,5 +192,22 @@ async fn rust_analyzer_completes_in_the_review() -> anyhow::Result<()> {
     })
     .await?;
     assert_eq!(text(&app).matches("s.area()").count(), 1, "{}", text(&app));
+
+    let shapes = repo.path().join("src/shapes.rs").canonicalize()?;
+    wait(&mut app, "/shapes::Square<ret>gd", 20, |app| {
+        doc!(app.editor).path() == Some(&shapes)
+    })
+    .await?;
+    assert_eq!(
+        app.editor.tree.tab(),
+        Tab::Code,
+        "the answer lands in the code tab"
+    );
+    let review = app.editor.tree.tab_focus(Tab::Review).unwrap();
+    assert_eq!(
+        app.editor.tree.get(review).doc,
+        stream(&app).doc,
+        "the review's view shows the review again"
+    );
     Ok(())
 }

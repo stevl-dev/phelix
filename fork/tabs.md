@@ -2,7 +2,7 @@
 
 Snapshot: `main` at `d6ed5bf05`.
 
-Status: approved 2026-10-26. Phases 1–2 done 2026-10-26.
+Status: approved 2026-10-26. Phases 1–3 done 2026-10-26.
 
 ## Bottom line
 
@@ -100,7 +100,7 @@ Each phase is one commit. Each commit marks its phase done here.
 | 0 | Done | Add the tabs plan. | This file. |
 | 1 | Done | Let the tree hold several tabs. | Sections 1–3. `Code` and `Review` kinds, switching, dropping an emptied tab, the quit checks, `close_document`'s new view, `Editor::focus` across tabs, and the draw loop, mouse, and `wonly` on the active tab. No command opens a second tab yet, so nothing changes for the user. Unit tests in `tree.rs`: a hidden tab's views keep their ids and stay in `views()` but not `traverse()`, removing a tab's last view drops it and restores the code tab's focus, and `next` and `find_split_in_direction` stay in the active tab. Integration tests open a second tab through the editor's API: `:q` on either tab's last view checks for unsaved buffers and quits, `:q` on a split in it closes only the split, `:bc` of its only buffer drops it and leaves Helix running, and `:bc` of the code tab's only file from it leaves the code tab a view. A `tabs` entry in `FORK.md`. |
 | 2 | Done | Open the review in a tab of its own. | Section 4. `review::show`, and `open` and `jump` in `commands/review.rs`. Integration tests: `:review` leaves the code tab's view on its file, `Enter` switches to code and opens the row's line, `:review` comes back with the cursor where it was, and `:bc` in the review closes it, its tab, and the buffers it loaded. Book: `keymap.md` (Review). `FORK.md`: the `review-stream` entry. |
-| 3 | | Move what opens from the review to the code tab. | Section 5. The check in `review/sync.rs`. Integration tests: `:e` in the review's view opens the file in the code tab and leaves the review in its view, a goto against rust-analyzer does the same once its answer comes (in the ignored `rust_analyzer.rs`), and `:vs` with a file stays in the review tab. Book: `keymap.md` (Review). |
+| 3 | Done | Move what opens from the review to the code tab. | Section 5. The check in `review/sync.rs`. Integration tests: `:e` in the review's view opens the file in the code tab and leaves the review in its view, a goto against rust-analyzer does the same once its answer comes (in the ignored `rust_analyzer.rs`), and `:vs` with a file stays in the review tab. Book: `keymap.md` (Review). |
 | 4 | | Add :tab to switch tabs. | Section 6. The command row and `cargo xtask docgen`. Integration tests: `:tab code` and `:tab review` switch, and `:tab review` with no review fails with its message. Book: `keymap.md` (Review), generated `typable-cmd.md`. |
 | 5 | | Leave the review out of the buffer lists. | Section 7. Integration tests: `:bn` skips the review from code and leaves it from the review, and `:bca` leaves it open. Book: `keymap.md` (Review). |
 | 6 | | Name the review buffer. | Section 8. Integration test: the statusline's drawn row says `[review]`, read as `align-message`'s test reads it. |
@@ -139,3 +139,7 @@ Phase 1 is the riskiest, and everything else stands on it. Phase 3 is next, sinc
   Gap: `:bc` in the review leaves its tab open when a split you opened in it shows a file, so the tab outlives the review. A new `:review` puts its stream in that tab's focused view.
   All twelve `Ctrl-o`s in `review.rs` came back from a file to the review, and became `:review<ret>`. Two tests passed without the change, since they checked only the review's text, not where the cursor was.
   In `a_saved_file_closes_with_the_review_that_left_it_its_view`, closing `a.txt` now empties the code tab, whose new view takes the review. The test's path changed, not what it checks.
+- Phase 3: the check keys on the review tab's views that showed the stream at the last sync, a new `Stream::views`. `Stream::selections` wouldn't do, since it keeps views that stopped showing the stream.
+  `Editor::replace_document_in_view` became crate-visible. Putting the stream back can't go through `switch`, which acts on the focused view and records a jump.
+  The goto joined the one rust-analyzer test, renamed `rust_analyzer_completes_and_goes_to_definitions_in_the_review`. A second test in the same process found the server rooted in the first test's deleted directory. Helix caches the working directory the first time it reads it (`current_working_dir` in `helix-stdx/src/env.rs`), so the second test's `set_current_dir` never reaches it. The manual check's filter, `rust_analyzer`, still matches.
+  The `:e` test and the goto fail with the check's call taken out.

@@ -160,6 +160,8 @@ pub struct Stream {
     pending: Vec<(DocumentId, ViewId)>,
     /// Files' buffers the review opened in the background.
     loaded: Vec<DocumentId>,
+    /// The review tab's views that showed the buffer at the last sync.
+    views: Vec<ViewId>,
     /// Whether an edit was forwarded since the rows were laid out.
     relayout: bool,
     log: log::Log,
@@ -564,6 +566,7 @@ pub fn show(editor: &mut Editor, root: PathBuf, scope: ChangeView, sections: Vec
         indent: doc.indent_style,
         pending: Vec::new(),
         loaded: Vec::new(),
+        views: Vec::new(),
         relayout: false,
         log: log::Log::default(),
         reports: diagnostics::Reports::new(),
@@ -893,6 +896,7 @@ mod tests {
             indent: IndentStyle::Tabs,
             pending: Vec::new(),
             loaded: Vec::new(),
+            views: Vec::new(),
             relayout: false,
             log: log::Log::default(),
             reports: diagnostics::Reports::new(),

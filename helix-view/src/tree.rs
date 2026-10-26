@@ -392,12 +392,21 @@ impl Tree {
         id
     }
 
+    pub fn tab_of(&self, id: ViewId) -> Tab {
+        let root = self.root_of(id);
+        if root == self.root {
+            return self.tab;
+        }
+        self.hidden
+            .iter()
+            .find(|hidden| hidden.root == root)
+            .map(|hidden| hidden.tab)
+            .expect("every view is in a tab")
+    }
+
     /// Focuses `id`, and switches to its tab when that's hidden.
     pub fn focus_view(&mut self, id: ViewId) {
-        let root = self.root_of(id);
-        if let Some(hidden) = self.hidden.iter().find(|hidden| hidden.root == root) {
-            self.activate(hidden.tab);
-        }
+        self.activate(self.tab_of(id));
         self.focus = id;
     }
 

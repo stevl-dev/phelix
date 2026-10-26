@@ -1633,6 +1633,72 @@ async fn ret_on_a_gap_shows_its_lines_and_they_stay_shown() -> anyhow::Result<()
     .await
 }
 
+/// The doc the review tab's focused view shows.
+fn review_tab_doc(app: &Application) -> helix_view::DocumentId {
+    let view = app.editor.tree.tab_focus(Tab::Review).unwrap();
+    app.editor.tree.get(view).doc
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_file_opened_in_the_reviews_view_lands_in_the_code_tab() -> anyhow::Result<()> {
+    let repo = seventh_changed();
+    let (file, other) = (repo.path().join("a.txt"), repo.path().join("other.txt"));
+    let mut app = app_on(file.clone())?;
+    start_review(&mut app).await?;
+    std::fs::write(&other, "other\n")?;
+
+    test_key_sequences(
+        &mut app,
+        vec![
+            (
+                Some(&format!(":edit {}<ret>", other.display())),
+                Some(&|app| {
+                    assert_eq!(app.editor.tree.tab(), Tab::Code);
+                    assert!(doc!(app.editor).path() == Some(&other));
+                    assert_eq!(review_tab_doc(app), stream(app).doc);
+                }),
+            ),
+            (
+                Some("<C-o>"),
+                Some(&|app| {
+                    assert!(
+                        doc!(app.editor).path() == Some(&file),
+                        "a jump back to where the code tab was"
+                    );
+                }),
+            ),
+        ],
+        false,
+    )
+    .await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_split_opened_on_a_file_in_the_review_tab_stays_there() -> anyhow::Result<()> {
+    let repo = seventh_changed();
+    let other = repo.path().join("other.txt");
+    let mut app = app_on(repo.path().join("a.txt"))?;
+    start_review(&mut app).await?;
+    std::fs::write(&other, "other\n")?;
+
+    test_key_sequences(
+        &mut app,
+        vec![
+            (
+                Some(&format!(":vsplit {}<ret>", other.display())),
+                Some(&|app| {
+                    assert_eq!(app.editor.tree.tab(), Tab::Review);
+                    assert!(doc!(app.editor).path() == Some(&other));
+                    assert_eq!(app.editor.tree.traverse().count(), 2);
+                }),
+            ),
+            (Some(":quit-all!<ret>"), None),
+        ],
+        true,
+    )
+    .await
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn review_switches_to_the_open_review() -> anyhow::Result<()> {
     let repo = seventh_changed();

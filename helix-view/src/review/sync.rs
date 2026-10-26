@@ -12,8 +12,8 @@ use helix_vcs::ChangeView;
 use super::{complete, diagnostics, edit_file, forward, layout, log, update, Content, Row, Stream};
 use crate::document::{from_reader, DocumentOpenError, Mode};
 use crate::editor::Action;
-use crate::tree::Tree;
-use crate::{Document, DocumentId, Editor, ViewId};
+use crate::tree::{Tab, Tree};
+use crate::{align_view, current, Align, Document, DocumentId, Editor, ViewId};
 
 /// `completing` is whether a completion menu is open.
 pub fn sync(editor: &mut Editor, completing: bool) {
@@ -28,6 +28,7 @@ pub fn sync(editor: &mut Editor, completing: bool) {
         return;
     }
 
+    move_out(editor, doc_id);
     let taken = take_edits(editor, doc_id);
     complete::make_deferred(editor, matches!(taken, Some(Err(_))));
     let mut moved = taken.is_some();
@@ -55,9 +56,55 @@ pub fn sync(editor: &mut Editor, completing: bool) {
         editor.set_status(message);
     }
     save_selections(editor, doc_id);
+    note_views(editor, doc_id);
     keep_shown(editor);
     fit_file_style(editor, doc_id);
     fit_gutters(editor);
+}
+
+// WHY: what a view of the review tab shows in place of the stream goes to the
+// code tab, as `Enter`'s file does, and the stream goes back in the view. The
+// check reads what views show, not which command ran, so it catches a goto
+// whose answer comes after the key, a picker, and `:e` alike. A split opened on
+// a file never showed the stream, so it stays.
+fn move_out(editor: &mut Editor, doc_id: DocumentId) {
+    let Some(stream) = editor.review.stream.as_ref() else {
+        return;
+    };
+    let views: Vec<_> = stream
+        .views
+        .iter()
+        .copied()
+        .filter(|&view| {
+            editor
+                .tree
+                .try_get(view)
+                .is_some_and(|shown| shown.doc != doc_id)
+                && editor.tree.tab_of(view) == Tab::Review
+        })
+        .collect();
+    for view in views {
+        let file = editor.tree.get(view).doc;
+        let selection = editor.documents[&file].selection(view).clone();
+        editor.replace_document_in_view(view, doc_id);
+        editor.switch_tab(Tab::Code);
+        editor.switch(file, Action::Replace);
+        let (view, doc) = current!(editor);
+        doc.set_selection(view.id, selection);
+        align_view(doc, view, Align::Center);
+    }
+}
+
+fn note_views(editor: &mut Editor, doc_id: DocumentId) {
+    let Some(stream) = editor.review.stream.as_mut() else {
+        return;
+    };
+    stream.views = editor
+        .tree
+        .views()
+        .filter(|(view, _)| view.doc == doc_id && editor.tree.tab_of(view.id) == Tab::Review)
+        .map(|(view, _)| view.id)
+        .collect();
 }
 
 // WHY: `o` and `Enter` insert the buffer's line ending, and `Tab` and `>` its

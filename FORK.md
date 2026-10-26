@@ -94,7 +94,7 @@ Each entry says what the feature adds, and where its code, tests, and book pages
   `rename_symbol` in the review opens the review's own prompt, and the rename is a step of the review's undo log.
   Each file's diagnostics show on its rows, from its buffer, or from what its servers reported when it isn't open.
   Completion in the review offers the items of the row's file's language servers and opens on their trigger characters. Selecting an item there doesn't preview it in the text. An item's other edits, like an import, go to the file after the item, in the same undo step. Signature help in the review asks the row's file's language server, and opens on its trigger characters.
-  The review has a tab of its own (`tabs`). `Enter` in it (`review_open`) switches to the code tab and opens the row's file at that line, and `:review` comes back. On a row of unchanged lines, `Enter` shows them. `:bc` in the review closes it and its tab.
+  The review has a tab of its own (`tabs`). `Enter` in it (`review_open`) switches to the code tab and opens the row's file at that line, and `:review` comes back. On a row of unchanged lines, `Enter` shows them. A goto, a picker, or `:e` in the review's view opens in the code tab too, and a split opened on a file stays in the review's tab. `:bc` in the review closes it and its tab.
   An edit to a file's buffer shows in the review, with the cursor kept on its line. With a review open, `:review` switches to it, and `:review-refresh` lists and reads the changes again.
   In the review, `goto_next_change` and the other change motions select the review's hunks across files, on whatever keys they're bound to, and `]F`/`[F` go between files.
   `:stage-hunk` and `:unstage-hunk` write the hunks the selection touches to the index through the `git` binary, in a trusted workspace.
@@ -104,7 +104,7 @@ Each entry says what the feature adds, and where its code, tests, and book pages
   Removed and added rows get tints, headers a rule, and changed words a mark, from theme scopes: `diff.{plus,minus}.view`, `diff.delta.view.text`, and the fork's `ui.review.header` and `ui.review.gap`.
 - Code: `helix-view/src/review.rs` and `review/{layout,reconcile,forward,gutter,diagnostics,lend,log,sync,syntax,words,complete}.rs`, `helix-term/src/commands/review.rs` and `review/{lsp,stage,restore}.rs`, `helix-term/src/handlers/completion/request/review.rs`, `helix-term/src/handlers/signature_help/review.rs`, `helix-term/src/commands/typed/review_write.rs`, `helix-term/src/keymap/review.rs`, `helix-term/src/ui/text_decorations/review.rs`, and `helix-vcs/src/git/index.rs` with the `helix-vcs/src/index.rs` facade.
   It hooks in at:
-  - `helix-view/src/editor.rs`: the `Editor::review` field, and a condition in `Editor::switch` that keeps the stream when you switch away from it. Without it, switching away deletes the stream, an unmodified buffer with no path.
+  - `helix-view/src/editor.rs`: the `Editor::review` field, and a condition in `Editor::switch` that keeps the stream when you switch away from it. Without it, switching away deletes the stream, an unmodified buffer with no path. `replace_document_in_view` is crate-visible, so the sync can put the stream back in its view.
   - `helix-view/src/gutter.rs`: the stream's branch at the top of `line_numbers`, `diff`, and `diagnostic`.
   - `helix-term/src/ui/editor.rs`: the `review_keys` field, `review::sync` and the keymap swap at the top of `handle_event`, `review::sync` at the top of `render`, and the review's decoration and overlays in `render_view`.
   - `helix-term/src/handlers/completion/request.rs`: the review's requests in `request_completions`, and its own re-request at the top of `request_incomplete_completion_list`.
@@ -115,7 +115,7 @@ Each entry says what the feature adds, and where its code, tests, and book pages
   - `helix-term/src/ui/picker.rs`: the `on_review_jump` hook, its builder, and its key arm.
     `picker_keys.rs` (`picker-keys`) has `ReviewJump` and its `Alt-r` default, and `changed_file.rs` (`changed-files-views`) sets the hook.
 - Book: `book/src/keymap.md` (Review), `book/src/themes.md` (the review's scopes), and `book/src/generated/static-cmd.md` and `typable-cmd.md`, generated.
-- Tests: unit tests in `review.rs`, `review/layout.rs`, `review/reconcile.rs`, `review/forward.rs`, `review/syntax.rs`, `review/words.rs`, `review/complete.rs`, `helix-vcs/src/git/index.rs`, and `commands/review/stage.rs`. Integration tests in `helix-term/tests/test/review.rs` over a temporary git repository. `review/rust_analyzer.rs` runs completion against rust-analyzer. It's ignored, since it changes the working directory, and runs alone at a manual check: `cargo integration-test -- --ignored rust_analyzer --test-threads=1`.
+- Tests: unit tests in `review.rs`, `review/layout.rs`, `review/reconcile.rs`, `review/forward.rs`, `review/syntax.rs`, `review/words.rs`, `review/complete.rs`, `helix-vcs/src/git/index.rs`, and `commands/review/stage.rs`. Integration tests in `helix-term/tests/test/review.rs` over a temporary git repository. `review/rust_analyzer.rs` runs completion and a goto against rust-analyzer. It's ignored, since it changes the working directory, and runs alone at a manual check: `cargo integration-test -- --ignored rust_analyzer --test-threads=1`.
 - Relies on:
   - `goto_*`, `hover`, and `code_action` in `helix-term/src/commands/lsp.rs` run with the view lent to the row's file. A cherry-pick that makes their answers read the focused buffer breaks that.
   - The review's rename in `commands/review/lsp.rs` follows `rename_symbol`'s request and edit, without `prepareRename`. A cherry-pick that changes them updates it.
@@ -131,10 +131,11 @@ Each entry says what the feature adds, and where its code, tests, and book pages
   - The stream sets `gutters.line_numbers.min_width` on the views that show it, because `GutterType::width` gets no `&Editor`.
   - The review's LSP keys run upstream's own commands with the focused view pointed at the row's file for the length of the key, since their answers never read the buffer they asked from. They're built in the review's keymap and aren't in the command table.
   - `u` in the review walks the review's own log of the files' revisions, since the stream's history is cleared on every sync. When a file moved on since a step, the undo stops and names it, rather than undoing the file's own latest change.
+  - What opens in the review's view moves to the code tab through a check in the sync, which reads what the review tab's views show, not which command ran. So it covers a goto whose answer comes after the key, the pickers, and typable commands, with no hook in each.
 
 ### tabs
 
-- Plan: `fork/tabs.md`, done through phase 2.
+- Plan: `fork/tabs.md`, done through phase 3.
 - Adds: tabs, each a layout of its own with its own splits and focus. Features open them, one of each kind: `code`, where Helix starts, and `review`.
   `:q`, `:q!`, and `Ctrl-w q` on a tab's last view quit Helix, from any tab. A buffer close that takes a tab's last view closes that tab and goes back to `code`. The code tab never closes, and gets a new view instead, as the editor did.
   `:review` opens the review tab (`review-stream`).
