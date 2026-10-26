@@ -450,11 +450,15 @@ pub mod completers {
     }
 
     pub fn buffer(editor: &Editor, input: &str) -> Vec<Completion> {
-        let names = editor.documents.values().map(|doc| {
-            doc.relative_path()
-                .map(|p| p.display().to_string().into())
-                .unwrap_or_else(|| Cow::from(SCRATCH_BUFFER_NAME))
-        });
+        let names = editor
+            .documents
+            .values()
+            .filter(|doc| doc.listed)
+            .map(|doc| {
+                doc.relative_path()
+                    .map(|p| p.display().to_string().into())
+                    .unwrap_or_else(|| Cow::from(SCRATCH_BUFFER_NAME))
+            });
 
         fuzzy_match(input, names, true)
             .into_iter()

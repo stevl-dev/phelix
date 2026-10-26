@@ -595,34 +595,6 @@ async fn closing_the_review_closes_the_saved_files_it_opened() -> anyhow::Result
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn a_saved_file_closes_with_the_review_that_left_it_its_view() -> anyhow::Result<()> {
-    let repo = three_hunks();
-    let (a, b) = (repo.path().join("a.txt"), repo.path().join("b.txt"));
-    let mut app = app_on(a.clone())?;
-    start_review(&mut app).await?;
-    // WHY: with `a.txt` closed, the code tab's view takes the review, so
-    // closing the review leaves the code tab a view of the only buffer left,
-    // `b.txt`.
-    let edit = format!(":buffer-close {}<ret>/^B<ret>ix<esc>:wa<ret>", a.display());
-
-    test_key_sequences(
-        &mut app,
-        vec![
-            (Some(&edit), None),
-            (
-                Some(":buffer-close<ret>"),
-                Some(&|app| {
-                    assert!(app.editor.review.stream().is_none());
-                    assert!(app.editor.document_by_path(&b).is_none());
-                }),
-            ),
-        ],
-        false,
-    )
-    .await
-}
-
-#[tokio::test(flavor = "multi_thread")]
 async fn a_file_opened_from_the_review_stays_open_after_it() -> anyhow::Result<()> {
     let repo = three_hunks();
     let b = repo.path().join("b.txt");
@@ -1769,6 +1741,58 @@ fn three_hunks() -> TempDir {
             ("b.txt", Some("B\n")),
         ],
     )
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn buffer_commands_pass_over_the_review() -> anyhow::Result<()> {
+    let repo = three_hunks();
+    let (a, b) = (repo.path().join("a.txt"), repo.path().join("b.txt"));
+    let mut app = app_on(a.clone())?;
+    start_review(&mut app).await?;
+
+    test_key_sequences(
+        &mut app,
+        vec![
+            (
+                Some(&format!(
+                    ":tab code<ret>:open {}<ret>:tab review<ret>:bn<ret>",
+                    b.display()
+                )),
+                Some(&|app| {
+                    assert_eq!(app.editor.tree.tab(), Tab::Code);
+                    assert!(
+                        doc!(app.editor).path() == Some(&b),
+                        "from the review, the buffer after it, in the code tab"
+                    );
+                    assert_eq!(review_tab_doc(app), stream(app).doc);
+                }),
+            ),
+            (
+                Some(":bn<ret>"),
+                Some(&|app| assert!(doc!(app.editor).path() == Some(&a))),
+            ),
+            (
+                Some(":bn<ret>"),
+                Some(&|app| {
+                    assert!(
+                        doc!(app.editor).path() == Some(&b),
+                        "from a.txt, past the review"
+                    );
+                }),
+            ),
+            (
+                Some(":buffer-close-all<ret>"),
+                Some(&|app| {
+                    assert!(app.editor.document_by_path(&a).is_none());
+                    assert!(app.editor.document_by_path(&b).is_none());
+                    assert!(app.editor.document(stream(app).doc).is_some());
+                    assert!(app.editor.tree.tab_focus(Tab::Review).is_some());
+                }),
+            ),
+        ],
+        false,
+    )
+    .await
 }
 
 #[tokio::test(flavor = "multi_thread")]

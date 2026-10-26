@@ -287,6 +287,7 @@ fn buffer_gather_others_impl(editor: &mut Editor, skip_visible: bool) -> Vec<Doc
             .collect::<HashSet<_>>();
         editor
             .documents()
+            .filter(|doc| doc.listed)
             .map(|doc| doc.id())
             .filter(|doc_id| !visible_document_ids.contains(doc_id))
             .collect()
@@ -294,6 +295,7 @@ fn buffer_gather_others_impl(editor: &mut Editor, skip_visible: bool) -> Vec<Doc
         let current_document = &doc!(editor).id();
         editor
             .documents()
+            .filter(|doc| doc.listed)
             .map(|doc| doc.id())
             .filter(|doc_id| doc_id != current_document)
             .collect()
@@ -327,7 +329,11 @@ fn force_buffer_close_others(
 }
 
 fn buffer_gather_all_impl(editor: &mut Editor) -> Vec<DocumentId> {
-    editor.documents().map(|doc| doc.id()).collect()
+    editor
+        .documents()
+        .filter(|doc| doc.listed)
+        .map(|doc| doc.id())
+        .collect()
 }
 
 fn buffer_close_all(

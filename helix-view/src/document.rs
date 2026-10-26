@@ -213,6 +213,9 @@ pub struct Document {
     pub focused_at: std::time::Instant,
 
     pub readonly: bool,
+    /// Whether the buffer lists show it: the bufferline, the buffer picker,
+    /// `:bn`, and `:bca`. A feature's own buffer, like the review, isn't.
+    pub listed: bool,
 
     pub previous_diagnostic_ids: HashMap<LanguageServerId, String>,
 
@@ -764,6 +767,7 @@ impl Document {
             version_control_head: None,
             focused_at: std::time::Instant::now(),
             readonly: false,
+            listed: true,
             jump_labels: HashMap::new(),
             document_highlights: HashMap::new(),
             code_action_hints: HashSet::new(),

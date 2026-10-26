@@ -551,6 +551,7 @@ pub fn show(editor: &mut Editor, root: PathBuf, scope: ChangeView, sections: Vec
     // WHY: upstream only uses the flag for writes. Here it shows in the
     // statusline that a staged review takes no edits.
     doc.readonly = scope == ChangeView::Staged;
+    doc.listed = false;
     editor.review.stream = Some(Stream {
         doc: doc_id,
         root,

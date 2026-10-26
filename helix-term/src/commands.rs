@@ -926,12 +926,22 @@ fn goto_previous_buffer(cx: &mut Context) {
 
 fn goto_buffer(editor: &mut Editor, direction: Direction, count: usize) {
     let current = view!(editor).doc;
+    if !editor.documents.values().any(|doc| doc.listed) {
+        return;
+    }
+    let listed = |id: &&DocumentId| editor.documents[*id].listed;
 
+    // WHY: the current buffer may be unlisted, so the cycle finds it in the
+    // full list and skips the unlisted ones after it.
     let id = match direction {
         Direction::Forward => {
             let iter = editor.documents.keys();
             // skip 'count' times past current buffer
-            iter.cycle().skip_while(|id| *id != &current).nth(count)
+            iter.cycle()
+                .skip_while(|id| *id != &current)
+                .skip(1)
+                .filter(listed)
+                .nth(count - 1)
         }
         Direction::Backward => {
             let iter = editor.documents.keys();
@@ -939,7 +949,9 @@ fn goto_buffer(editor: &mut Editor, direction: Direction, count: usize) {
             iter.rev()
                 .cycle()
                 .skip_while(|id| *id != &current)
-                .nth(count)
+                .skip(1)
+                .filter(listed)
+                .nth(count - 1)
         }
     }
     .unwrap();
@@ -3344,6 +3356,7 @@ fn buffer_picker(cx: &mut Context) {
         .editor
         .documents
         .values()
+        .filter(|doc| doc.listed)
         .map(new_meta)
         .collect::<Vec<BufferMeta>>();
 

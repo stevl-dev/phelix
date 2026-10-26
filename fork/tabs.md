@@ -2,7 +2,7 @@
 
 Snapshot: `main` at `d6ed5bf05`.
 
-Status: approved 2026-10-26. Phases 1–4 done 2026-10-26.
+Status: approved 2026-10-26. Phases 1–5 done 2026-10-26.
 
 ## Bottom line
 
@@ -102,7 +102,7 @@ Each phase is one commit. Each commit marks its phase done here.
 | 2 | Done | Open the review in a tab of its own. | Section 4. `review::show`, and `open` and `jump` in `commands/review.rs`. Integration tests: `:review` leaves the code tab's view on its file, `Enter` switches to code and opens the row's line, `:review` comes back with the cursor where it was, and `:bc` in the review closes it, its tab, and the buffers it loaded. Book: `keymap.md` (Review). `FORK.md`: the `review-stream` entry. |
 | 3 | Done | Move what opens from the review to the code tab. | Section 5. The check in `review/sync.rs`. Integration tests: `:e` in the review's view opens the file in the code tab and leaves the review in its view, a goto against rust-analyzer does the same once its answer comes (in the ignored `rust_analyzer.rs`), and `:vs` with a file stays in the review tab. Book: `keymap.md` (Review). |
 | 4 | Done | Add :tab to switch tabs. | Section 6. The command row and `cargo xtask docgen`. Integration tests: `:tab code` and `:tab review` switch, and `:tab review` with no review fails with its message. Book: `keymap.md` (Review), generated `typable-cmd.md`. |
-| 5 | | Leave the review out of the buffer lists. | Section 7. Integration tests: `:bn` skips the review from code and leaves it from the review, and `:bca` leaves it open. Book: `keymap.md` (Review). |
+| 5 | Done | Leave the review out of the buffer lists. | Section 7. Integration tests: `:bn` skips the review from code and leaves it from the review, and `:bca` leaves it open. Book: `keymap.md` (Review). |
 | 6 | | Name the review buffer. | Section 8. Integration test: the statusline's drawn row says `[review]`, read as `align-message`'s test reads it. |
 
 Phase 1 is the riskiest, and everything else stands on it. Phase 3 is next, since its check runs on every frame. Phases 5 and 6 don't depend on each other.
@@ -146,3 +146,8 @@ Phase 1 is the riskiest, and everything else stands on it. Phase 3 is next, sinc
 - Phase 4: `Tab::ALL` and `Tab::name` hold the names, and `Tree::tabs` lists the open tabs for the completer.
   An unknown name is refused with the list of tabs, as `:review` refuses an unknown scope. The list is written out in the message, so a new tab updates it.
   `:review`'s help still called the review read-only, and didn't say it opens a tab. That was fixed in a commit of its own, before this phase.
+- Phase 5: `close_document`'s new view for an emptied code tab takes the first listed buffer, or a new scratch one, so the review never fills the code tab. Section 7's list missed it.
+  `goto_buffer` returns when no buffer is listed, or its cycle would never end, the trap's second form.
+  `a_saved_file_closes_with_the_review_that_left_it_its_view` is gone. With the new view taking listed buffers only, closing `a.txt` from the review gives the code tab a new scratch buffer, and the test ran the same path as `closing_the_review_closes_the_saved_files_it_opened`.
+  The bufferline, the buffer picker, and `:buffer`'s completion have no test. Each is one filter, and a picker's items aren't reachable from the tests.
+  `buffer_commands_pass_over_the_review` fails with `goto_buffer`'s filter or `buffer_gather_all_impl`'s taken out.

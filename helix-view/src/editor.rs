@@ -2267,8 +2267,8 @@ impl Editor {
             let doc_id = self
                 .documents
                 .iter()
+                .find(|(_, doc)| doc.listed)
                 .map(|(&doc_id, _)| doc_id)
-                .next()
                 .unwrap_or_else(|| {
                     self.new_document(Document::default(
                         self.config.clone(),
