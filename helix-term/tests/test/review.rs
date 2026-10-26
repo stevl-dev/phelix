@@ -1744,6 +1744,46 @@ fn three_hunks() -> TempDir {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn a_refusal_over_unsaved_files_leaves_you_in_the_review() -> anyhow::Result<()> {
+    let repo = seventh_changed();
+    let file = repo.path().join("a.txt");
+    let mut app = app_on(file.clone())?;
+    start_review(&mut app).await?;
+    let refusal = |command| {
+        format!(
+            "'{command}': 1 unsaved buffer remaining: [{:?}]",
+            shown(file.clone())
+        )
+    };
+    let in_review = |app: &Application| {
+        assert_eq!(app.editor.tree.tab(), Tab::Review);
+        assert!(in_stream(app));
+    };
+
+    test_key_sequences(
+        &mut app,
+        vec![
+            (
+                Some("/^seven<ret>ix<esc>:q<ret>"),
+                Some(&|app| {
+                    assert_eq!(status(app), refusal("quit"));
+                    in_review(app);
+                }),
+            ),
+            (
+                Some(":bca<ret>"),
+                Some(&|app| {
+                    assert_eq!(status(app), refusal("buffer-close-all"));
+                    in_review(app);
+                }),
+            ),
+        ],
+        false,
+    )
+    .await
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn the_review_goes_by_its_name() -> anyhow::Result<()> {
     let repo = seventh_changed();
     let mut app = app_on(repo.path().join("a.txt"))?;

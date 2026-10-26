@@ -111,7 +111,7 @@ Each entry says what the feature adds, and where its code, tests, and book pages
   - `helix-term/src/handlers/completion.rs`: the file's trigger characters in `trigger_auto_completion`.
   - `helix-term/src/ui/completion.rs`: previews off for the review in `Completion::new`, and `review::accept_item` in the menu's accept arm.
   - `helix-term/src/handlers/signature_help.rs`: the lend at the top of `request_signature_help`, and the file's trigger characters in `signature_help_post_insert_char_hook`.
-  - `helix-term/src/commands/typed.rs`: the seam at the top of `write_impl` that sends `:w` in the review to `typed/review_write.rs`.
+  - `helix-term/src/commands/typed.rs`: the seam at the top of `write_impl` that sends `:w` in the review to `typed/review_write.rs`. And a condition in `buffers_remaining_impl` and `buffer_close_by_ids_impl` that keeps the review in its view when `:q`, `:bca`, or `:bco` refuses over unsaved files.
   - `helix-term/src/ui/picker.rs`: the `on_review_jump` hook, its builder, and its key arm.
     `picker_keys.rs` (`picker-keys`) has `ReviewJump` and its `Alt-r` default, and `changed_file.rs` (`changed-files-views`) sets the hook.
 - Book: `book/src/keymap.md` (Review), `book/src/themes.md` (the review's scopes), and `book/src/generated/static-cmd.md` and `typable-cmd.md`, generated.
@@ -131,6 +131,7 @@ Each entry says what the feature adds, and where its code, tests, and book pages
   - The stream sets `gutters.line_numbers.min_width` on the views that show it, because `GutterType::width` gets no `&Editor`.
   - The review's LSP keys run upstream's own commands with the focused view pointed at the row's file for the length of the key, since their answers never read the buffer they asked from. They're built in the review's keymap and aren't in the command table.
   - `u` in the review walks the review's own log of the files' revisions, since the stream's history is cleared on every sync. When a file moved on since a step, the undo stops and names it, rather than undoing the file's own latest change.
+  - A refusal over unsaved files leaves you in the review, by the human's call. Upstream switches the view to the first unsaved buffer, which in the review's view would move it to the code tab.
   - What opens in the review's view moves to the code tab through a check in the sync, which reads what the review tab's views show, not which command ran. So it covers a goto whose answer comes after the key, the pickers, and typable commands, with no hook in each.
 
 ### tabs

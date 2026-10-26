@@ -476,6 +476,7 @@ The review opens in a tab of its own, a layout with its own splits, beside the c
 `:tab code` and `:tab review` switch between the two tabs without opening anything, and `:tab` says which one you're in. Bind them to keys like any typable command.
 `:bc` in the review closes it and its tab.
 `:q` on the tab's last view quits Helix, as in the code tab.
+When `:q`, `:bca`, or `:bco` refuses over unsaved files, you stay in the review, which shows their changes, and `:w` there writes them.
 The review stays out of the buffer lists: the bufferline, `Space b`, and `:buffer`'s completion don't show it, and `:bn`, `:bp`, `:bca`, and `:bco` pass over it. The statusline calls it `[review]`.
 
 An edit to added or unchanged lines goes to the file's buffer as you type, new and deleted lines too, and the rows follow it: an edited line gets its old version above it.

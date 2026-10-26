@@ -203,7 +203,11 @@ fn buffer_close_by_ids_impl(
         let current = doc!(cx.editor);
         // If the current document is unmodified, and there are modified
         // documents, switch focus to the first modified doc.
-        if !modified_ids.contains(&current.id()) {
+        // WHY: not from the review, which shows their changes. Its view would
+        // hand the file to the code tab.
+        if !modified_ids.contains(&current.id())
+            && cx.editor.review.stream_of(current.id()).is_none()
+        {
             cx.editor.switch(*first, Action::Replace);
         }
         bail!(
@@ -844,7 +848,10 @@ pub(super) fn buffers_remaining_impl(editor: &mut Editor) -> anyhow::Result<()> 
         let current = doc!(editor);
         // If the current document is unmodified, and there are modified
         // documents, switch focus to the first modified doc.
-        if !modified_ids.contains(&current.id()) {
+        // WHY: not from the review, which shows their changes. Its view would
+        // hand the file to the code tab.
+        if !modified_ids.contains(&current.id()) && editor.review.stream_of(current.id()).is_none()
+        {
             editor.switch(*first, Action::Replace);
         }
 
