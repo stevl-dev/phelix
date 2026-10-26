@@ -2,7 +2,7 @@
 
 Snapshot: `main` at `d6ed5bf05`.
 
-Status: approved 2026-10-26. Phases 1–5 done 2026-10-26.
+Status: done 2026-10-26. Phases 1–6 are complete.
 
 ## Bottom line
 
@@ -103,7 +103,7 @@ Each phase is one commit. Each commit marks its phase done here.
 | 3 | Done | Move what opens from the review to the code tab. | Section 5. The check in `review/sync.rs`. Integration tests: `:e` in the review's view opens the file in the code tab and leaves the review in its view, a goto against rust-analyzer does the same once its answer comes (in the ignored `rust_analyzer.rs`), and `:vs` with a file stays in the review tab. Book: `keymap.md` (Review). |
 | 4 | Done | Add :tab to switch tabs. | Section 6. The command row and `cargo xtask docgen`. Integration tests: `:tab code` and `:tab review` switch, and `:tab review` with no review fails with its message. Book: `keymap.md` (Review), generated `typable-cmd.md`. |
 | 5 | Done | Leave the review out of the buffer lists. | Section 7. Integration tests: `:bn` skips the review from code and leaves it from the review, and `:bca` leaves it open. Book: `keymap.md` (Review). |
-| 6 | | Name the review buffer. | Section 8. Integration test: the statusline's drawn row says `[review]`, read as `align-message`'s test reads it. |
+| 6 | Done | Name the review buffer. | Section 8. Integration test: the statusline's drawn row says `[review]`, read as `align-message`'s test reads it. |
 
 Phase 1 is the riskiest, and everything else stands on it. Phase 3 is next, since its check runs on every frame. Phases 5 and 6 don't depend on each other.
 
@@ -151,3 +151,6 @@ Phase 1 is the riskiest, and everything else stands on it. Phase 3 is next, sinc
   `a_saved_file_closes_with_the_review_that_left_it_its_view` is gone. With the new view taking listed buffers only, closing `a.txt` from the review gives the code tab a new scratch buffer, and the test ran the same path as `closing_the_review_closes_the_saved_files_it_opened`.
   The bufferline, the buffer picker, and `:buffer`'s completion have no test. Each is one filter, and a picker's items aren't reachable from the tests.
   `buffer_commands_pass_over_the_review` fails with `goto_buffer`'s filter or `buffer_gather_all_impl`'s taken out.
+- Phase 6: the name is `Document::name_without_path`, a `&'static str` that starts as `[scratch]`, so `%{buffer_name}` still borrows it with no allocation.
+  The bufferline, the buffer picker, and `:buffer`'s completion still print `[scratch]` for a buffer with no path. They show listed buffers only, and no listed buffer has another name.
+  The test reads `%{buffer_name}` and the drawn statusline, and fails with the review's name taken out. `book/src/command-line.md` names `[review]` beside `[scratch]` for `buffer_name`.

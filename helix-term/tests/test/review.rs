@@ -1744,6 +1744,29 @@ fn three_hunks() -> TempDir {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn the_review_goes_by_its_name() -> anyhow::Result<()> {
+    let repo = seventh_changed();
+    let mut app = app_on(repo.path().join("a.txt"))?;
+    start_review(&mut app).await?;
+
+    test_key_sequence(
+        &mut app,
+        Some(":echo %{buffer_name}<ret>"),
+        Some(&|app| {
+            assert_eq!(status(app), "[review]");
+            let buffer = app.terminal_buffer();
+            let y = buffer.area.bottom() - 2;
+            let statusline: String = (0..buffer.area.width)
+                .map(|x| buffer.get(x, y).unwrap().symbol.to_string())
+                .collect();
+            assert!(statusline.contains(" [review] "), "{statusline}");
+        }),
+        false,
+    )
+    .await
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn buffer_commands_pass_over_the_review() -> anyhow::Result<()> {
     let repo = three_hunks();
     let (a, b) = (repo.path().join("a.txt"), repo.path().join("b.txt"));

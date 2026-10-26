@@ -216,6 +216,9 @@ pub struct Document {
     /// Whether the buffer lists show it: the bufferline, the buffer picker,
     /// `:bn`, and `:bca`. A feature's own buffer, like the review, isn't.
     pub listed: bool,
+    /// What the buffer is called while it has no path: `[scratch]`, or a
+    /// feature's own name, like the review's `[review]`.
+    pub name_without_path: &'static str,
 
     pub previous_diagnostic_ids: HashMap<LanguageServerId, String>,
 
@@ -768,6 +771,7 @@ impl Document {
             focused_at: std::time::Instant::now(),
             readonly: false,
             listed: true,
+            name_without_path: SCRATCH_BUFFER_NAME,
             jump_labels: HashMap::new(),
             document_highlights: HashMap::new(),
             code_action_hints: HashSet::new(),
@@ -2135,8 +2139,10 @@ impl Document {
     }
 
     pub fn display_name(&self) -> Cow<'_, str> {
-        self.relative_path()
-            .map_or_else(|| SCRATCH_BUFFER_NAME.into(), |path| path.to_string_lossy())
+        self.relative_path().map_or_else(
+            || self.name_without_path.into(),
+            |path| path.to_string_lossy(),
+        )
     }
 
     // transact(Fn) ?

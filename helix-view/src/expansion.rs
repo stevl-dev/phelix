@@ -264,7 +264,7 @@ fn expand_variable(editor: &Editor, variable: Variable) -> Result<Cow<'static, s
             if let Some(path) = doc.relative_path() {
                 Ok(Cow::Owned(path.to_string_lossy().into_owned()))
             } else {
-                Ok(Cow::Borrowed(crate::document::SCRATCH_BUFFER_NAME))
+                Ok(Cow::Borrowed(doc.name_without_path))
             }
         }
         Variable::FilePathAbsolute => {
