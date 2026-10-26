@@ -473,6 +473,7 @@ The gutter shows each row's old and new line numbers, then `+` for an added line
 
 The review opens in a tab of its own, a layout with its own splits, beside the code tab Helix starts in.
 `Enter` on a row switches to the code tab and opens the file there, and `:review` switches back. A goto, a picker, or `:e` in the review's view opens in the code tab too, while a split you open on a file stays beside the review.
+`:tab code` and `:tab review` switch between the two tabs without opening anything, and `:tab` says which one you're in. Bind them to keys like any typable command.
 `:bc` in the review closes it and its tab.
 `:q` on the tab's last view quits Helix, as in the code tab.
 

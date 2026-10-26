@@ -9,6 +9,17 @@ pub enum Tab {
     Review,
 }
 
+impl Tab {
+    pub const ALL: [Tab; 2] = [Tab::Code, Tab::Review];
+
+    pub fn name(self) -> &'static str {
+        match self {
+            Tab::Code => "code",
+            Tab::Review => "review",
+        }
+    }
+}
+
 #[derive(Debug)]
 struct Hidden {
     tab: Tab,
@@ -342,6 +353,13 @@ impl Tree {
 
     pub fn tab(&self) -> Tab {
         self.tab
+    }
+
+    /// The open tabs, in `Tab::ALL`'s order.
+    pub fn tabs(&self) -> impl Iterator<Item = Tab> + '_ {
+        Tab::ALL
+            .into_iter()
+            .filter(|&tab| self.root_of_tab(tab).is_some())
     }
 
     /// The view `tab` last focused, or `None` when it isn't open.

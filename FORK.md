@@ -135,15 +135,17 @@ Each entry says what the feature adds, and where its code, tests, and book pages
 
 ### tabs
 
-- Plan: `fork/tabs.md`, done through phase 3.
+- Plan: `fork/tabs.md`, done through phase 4.
 - Adds: tabs, each a layout of its own with its own splits and focus. Features open them, one of each kind: `code`, where Helix starts, and `review`.
   `:q`, `:q!`, and `Ctrl-w q` on a tab's last view quit Helix, from any tab. A buffer close that takes a tab's last view closes that tab and goes back to `code`. The code tab never closes, and gets a new view instead, as the editor did.
-  `:review` opens the review tab (`review-stream`).
+  `:review` opens the review tab (`review-stream`). `:tab <name>` switches to an open tab, and `:tab` names the active one.
 - Code: `Tab` and the tabs in `helix-view/src/tree.rs`. Every tab's root container is in the tree's one node map, and `root` and `focus` are the active tab's. `Editor::open_tab`, `switch_tab`, and `quit_view` in `helix-view/src/editor.rs`.
   It hooks in at:
   - `helix-view/src/editor.rs`: `focus` switches to a hidden view's tab, `close_document` gives the code tab a view, `should_close` checks every tab, and `switch` keeps a scratch buffer that a view in another tab shows.
   - `helix-term/src/commands/typed.rs`: `quit` and `force_quit` call `quit_view`. `helix-term/src/commands.rs`: so does `wclose`, and `wonly` closes the active tab's views only.
   - `helix-term/src/ui/editor.rs`: the draw loop and the mouse's hit tests walk the active tab.
+  - `:tab` is `tab` in `typed.rs`, and its completer `completers::tab` in `helix-term/src/ui/mod.rs`.
+- Book: `book/src/keymap.md` (Review), and `book/src/generated/typable-cmd.md`, generated.
 - Tests: unit tests in `tree.rs`, integration tests in `helix-term/tests/test/tabs.rs`.
 - Relies on: `Tree::views` walks every tab's views, and `Tree::traverse` the active tab's. Upstream code that walks `views()` for what's on screen, as a cherry-pick may add, has to use `traverse()`.
 - Rulings:

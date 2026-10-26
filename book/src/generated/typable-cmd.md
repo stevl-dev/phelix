@@ -69,6 +69,7 @@
 | `:vsplit-new`, `:vnew` | Open a scratch buffer in a vertical split. |
 | `:hsplit`, `:hs`, `:sp` | Open the file in a horizontal split. |
 | `:hsplit-new`, `:hnew` | Open a scratch buffer in a horizontal split. |
+| `:tab` | Switch to an open tab: code, or review while a review is open. Without a name, say which tab is active. |
 | `:tutor` | Open the tutorial. |
 | `:goto`, `:g` | Goto line number. |
 | `:set-language`, `:lang` | Set the language of current buffer (show current language if no value specified). |

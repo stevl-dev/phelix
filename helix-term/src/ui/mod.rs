@@ -429,6 +429,7 @@ pub mod completers {
     use helix_core::syntax::config::LanguageServerFeature;
     use helix_view::document::SCRATCH_BUFFER_NAME;
     use helix_view::theme;
+    use helix_view::tree::Tab;
     use helix_view::{editor::Config, Editor};
     use std::borrow::Cow;
     use std::collections::BTreeSet;
@@ -439,6 +440,13 @@ pub mod completers {
 
     pub fn none(_editor: &Editor, _input: &str) -> Vec<Completion> {
         Vec::new()
+    }
+
+    pub fn tab(editor: &Editor, input: &str) -> Vec<Completion> {
+        fuzzy_match(input, editor.tree.tabs().map(Tab::name), false)
+            .into_iter()
+            .map(|(name, _)| ((0..), name.into()))
+            .collect()
     }
 
     pub fn buffer(editor: &Editor, input: &str) -> Vec<Completion> {

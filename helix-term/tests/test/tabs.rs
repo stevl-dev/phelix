@@ -1,5 +1,6 @@
-//! What closing views and buffers does with a second tab open. No command
-//! opens one yet, so the tests open it through the editor.
+//! Tabs: switching between them, and what closing views and buffers does with
+//! a second tab open. The review needs a repository, so the tests open its tab
+//! through the editor, on a scratch buffer.
 
 use helix_core::diagnostic::Severity;
 use helix_stdx::path;
@@ -100,4 +101,57 @@ async fn closing_the_hidden_code_tabs_last_buffer_leaves_it_a_view() -> anyhow::
         false,
     )
     .await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn tab_switches_to_an_open_tab_and_names_the_active_one() -> anyhow::Result<()> {
+    let mut app = AppBuilder::new().build()?;
+    open_review_tab(&mut app);
+    test_key_sequences(
+        &mut app,
+        vec![
+            (
+                Some(":tab code<ret>"),
+                Some(&|app| assert_eq!(Tab::Code, app.editor.tree.tab())),
+            ),
+            (
+                Some(":tab review<ret>"),
+                Some(&|app| assert_eq!(Tab::Review, app.editor.tree.tab())),
+            ),
+            (
+                Some(":tab<ret>"),
+                Some(&|app| {
+                    let (message, _) = app.editor.get_status().unwrap();
+                    assert_eq!("In the review tab", message);
+                }),
+            ),
+        ],
+        false,
+    )
+    .await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn tab_refuses_a_tab_that_isnt_open_or_doesnt_exist() -> anyhow::Result<()> {
+    for (keys, refusal) in [
+        (":tab review<ret>", "'tab': The review tab isn't open"),
+        (
+            ":tab git<ret>",
+            "'tab': 'git' is not a tab. The tabs are code and review",
+        ),
+    ] {
+        test_key_sequence(
+            &mut AppBuilder::new().build()?,
+            Some(keys),
+            Some(&|app| {
+                let (message, severity) = app.editor.get_status().unwrap();
+                assert_eq!(Severity::Error, *severity);
+                assert_eq!(refusal, message);
+                assert_eq!(Tab::Code, app.editor.tree.tab());
+            }),
+            false,
+        )
+        .await?;
+    }
+    Ok(())
 }

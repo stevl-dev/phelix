@@ -14,6 +14,7 @@ use helix_stdx::path::home_dir;
 use helix_view::document::{read_to_string, DEFAULT_LANGUAGE_NAME};
 use helix_view::editor::{CloseError, ConfigEvent};
 use helix_view::expansion;
+use helix_view::tree::Tab;
 use serde_json::Value;
 use ui::completers::{self, Completer};
 
@@ -2129,6 +2130,27 @@ fn hsplit_new(cx: &mut compositor::Context, _args: Args, event: PromptEvent) -> 
     Ok(())
 }
 
+fn tab(cx: &mut compositor::Context, args: Args, event: PromptEvent) -> anyhow::Result<()> {
+    if event != PromptEvent::Validate {
+        return Ok(());
+    }
+
+    let Some(name) = args.first() else {
+        let tab = cx.editor.tree.tab();
+        cx.editor.set_status(format!("In the {} tab", tab.name()));
+        return Ok(());
+    };
+    let tab = Tab::ALL
+        .into_iter()
+        .find(|tab| tab.name() == name)
+        .ok_or_else(|| anyhow!("'{name}' is not a tab. The tabs are code and review"))?;
+    if !cx.editor.switch_tab(tab) {
+        bail!("The {name} tab isn't open");
+    }
+
+    Ok(())
+}
+
 fn debug_eval(cx: &mut compositor::Context, args: Args, event: PromptEvent) -> anyhow::Result<()> {
     if event != PromptEvent::Validate {
         return Ok(());
@@ -3782,6 +3804,17 @@ pub const TYPABLE_COMMAND_LIST: &[TypableCommand] = &[
         completer: CommandCompleter::none(),
         signature: Signature {
             positionals: (0, Some(0)),
+            ..Signature::DEFAULT
+        },
+    },
+    TypableCommand {
+        name: "tab",
+        aliases: &[],
+        doc: "Switch to an open tab: code, or review while a review is open. Without a name, say which tab is active.",
+        fun: tab,
+        completer: CommandCompleter::positional(&[completers::tab]),
+        signature: Signature {
+            positionals: (0, Some(1)),
             ..Signature::DEFAULT
         },
     },
