@@ -16,6 +16,7 @@ use helix_view::document::from_reader;
 use helix_view::document::Mode;
 use helix_view::editor::Action;
 use helix_view::review::{self, Content, Row, Section, Stream};
+use helix_view::tree::Tab;
 use helix_view::{align_view, current, current_ref, doc, view, Align, Editor};
 
 mod lsp;
@@ -54,7 +55,7 @@ pub(super) fn review(
     let open = open_stream(cx.editor).map(|stream| (stream.doc, stream.scope));
     match (open, scope) {
         (Some((doc, open)), scope) if scope.is_none_or(|scope| scope == open) => {
-            cx.editor.switch(doc, Action::Replace);
+            review::switch_to(cx.editor, doc);
             cx.editor
                 .set_status(format!("Reviewing {} changes", open.label()));
         }
@@ -122,7 +123,7 @@ pub(super) fn jump(cx: &mut compositor::Context, scope: ChangeView, path: &Path)
         .filter(|stream| stream.scope == scope)
         .map(|stream| stream.doc)
     {
-        cx.editor.switch(doc, Action::Replace);
+        review::switch_to(cx.editor, doc);
         if review::focus_file(cx.editor, path) {
             return;
         }
@@ -324,6 +325,7 @@ pub(super) fn open(cx: &mut Context) {
     let line = target.line;
     let column = target.same_line.then(|| cursor - text.line_to_char(row));
 
+    cx.editor.switch_tab(Tab::Code);
     let (view, doc) = current!(cx.editor);
     push_jump(view, doc);
     if let Err(err) = cx.editor.open(&path, Action::Replace) {

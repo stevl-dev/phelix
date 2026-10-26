@@ -10,6 +10,7 @@ use helix_term::application::Application;
 use helix_view::document::Mode;
 use helix_view::input::parse_macro;
 use helix_view::review::{self, Stream};
+use helix_view::tree::Tab;
 use helix_view::{current_ref, doc, view};
 use tempfile::TempDir;
 use tokio_stream::wrappers::UnboundedReceiverStream;
@@ -505,7 +506,7 @@ async fn typing_in_a_row_edits_the_files_buffer_and_the_rows_follow() -> anyhow:
                 }),
             ),
             (
-                Some("<C-o>"),
+                Some(":review<ret>"),
                 Some(&|app| {
                     assert_eq!(
                         stream_text(app),
@@ -570,6 +571,8 @@ async fn closing_the_review_closes_the_saved_files_it_opened() -> anyhow::Result
                 Some("/^C<ret>ix<esc>:buffer-close<ret>"),
                 Some(&|app| {
                     assert!(app.editor.review.stream().is_none());
+                    assert_eq!(app.editor.tree.tab(), Tab::Code, "its tab closes with it");
+                    assert_eq!(app.editor.tree.tab_focus(Tab::Review), None);
                     assert!(
                         app.editor.document_by_path(path("b.txt")).is_none(),
                         "saved, so it closes"
@@ -597,8 +600,9 @@ async fn a_saved_file_closes_with_the_review_that_left_it_its_view() -> anyhow::
     let (a, b) = (repo.path().join("a.txt"), repo.path().join("b.txt"));
     let mut app = app_on(a.clone())?;
     start_review(&mut app).await?;
-    // WHY: with `a.txt` closed, the review's view has nothing to go back to,
-    // so closing the review gives it the only buffer left, `b.txt`.
+    // WHY: with `a.txt` closed, the code tab's view takes the review, so
+    // closing the review leaves the code tab a view of the only buffer left,
+    // `b.txt`.
     let edit = format!(":buffer-close {}<ret>/^B<ret>ix<esc>:wa<ret>", a.display());
 
     test_key_sequences(
@@ -630,7 +634,7 @@ async fn a_file_opened_from_the_review_stays_open_after_it() -> anyhow::Result<(
         vec![
             (Some("/^B<ret>ix<esc>:wa<ret>"), None),
             (
-                Some("<ret><C-o>:buffer-close<ret>"),
+                Some("<ret>:review<ret>:buffer-close<ret>"),
                 Some(&|app| {
                     assert!(app.editor.review.stream().is_none());
                     assert!(app.editor.document_by_path(&b).is_some());
@@ -897,7 +901,7 @@ async fn u_in_the_review_stops_at_a_file_that_moved_on() -> anyhow::Result<()> {
         &mut app,
         vec![
             (
-                Some("/^seven<ret>ix<esc><ret>Ay<esc><C-o>u"),
+                Some("/^seven<ret>ix<esc><ret>Ay<esc>:review<ret>u"),
                 Some(&|app| {
                     assert!(in_stream(app));
                     assert_eq!(
@@ -911,7 +915,7 @@ async fn u_in_the_review_stops_at_a_file_that_moved_on() -> anyhow::Result<()> {
                 }),
             ),
             (
-                Some("<ret>u<C-o>u"),
+                Some("<ret>u:review<ret>u"),
                 Some(&|app| {
                     assert_eq!(
                         buffer_text(app, &file).as_deref(),
@@ -921,7 +925,7 @@ async fn u_in_the_review_stops_at_a_file_that_moved_on() -> anyhow::Result<()> {
                 }),
             ),
             (
-                Some("<ret>Az<esc>u<C-o>U"),
+                Some("<ret>Az<esc>u:review<ret>U"),
                 Some(&|app| {
                     assert_eq!(
                         status(app),
@@ -1119,7 +1123,7 @@ async fn files_diagnostics_land_on_their_rows_open_or_not() -> anyhow::Result<()
         "none on the hidden line, and one across two rows"
     );
 
-    run_until(&mut app, "/^seven<ret><ret>IX<esc><C-o>", |app| {
+    run_until(&mut app, "/^seven<ret><ret>IX<esc>:review<ret>", |app| {
         in_stream(app) && stream_text(app).contains("Xseven")
     })
     .await?;
@@ -1338,7 +1342,7 @@ async fn w_in_the_review_writes_the_files_it_shows_with_unsaved_changes() -> any
     .await?;
 
     let keys = format!(
-        "/^two<ret>Ax<esc>/^B<ret><ret>Ay<esc><C-o>:w {}<ret>",
+        "/^two<ret>Ax<esc>/^B<ret><ret>Ay<esc>:review<ret>:w {}<ret>",
         elsewhere.display()
     );
     let refused = "'write': The review writes each file to its own path";
@@ -1444,7 +1448,7 @@ async fn u_after_w_in_the_review_undoes_the_format_first() -> anyhow::Result<()>
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn ret_opens_the_file_at_the_row_and_c_o_comes_back() -> anyhow::Result<()> {
+async fn ret_opens_the_file_in_the_code_tab_and_review_comes_back() -> anyhow::Result<()> {
     let repo = repo(
         &[("a.txt", TEN)],
         &[("a.txt", Some("1\n2\n3\n4\n5\n6\n7\nnew\n8\n9\nTEN\n"))],
@@ -1453,13 +1457,30 @@ async fn ret_opens_the_file_at_the_row_and_c_o_comes_back() -> anyhow::Result<()
     let mut app = app_on(file.clone())?;
     start_review(&mut app).await?;
     let in_file = |app: &Application| doc!(app.editor).path() == Some(&file);
+    let code_tab_doc = |app: &Application| {
+        let view = app.editor.tree.tab_focus(Tab::Code).unwrap();
+        app.editor.tree.get(view).doc
+    };
 
     test_key_sequences(
         &mut app,
         vec![
             (
+                None,
+                Some(&|app| {
+                    assert_eq!(app.editor.tree.tab(), Tab::Review);
+                    assert!(in_stream(app));
+                    assert_eq!(
+                        app.editor.document(code_tab_doc(app)).unwrap().path(),
+                        Some(file.as_path()),
+                        "the code tab keeps its view on the file"
+                    );
+                }),
+            ),
+            (
                 Some("/new<ret><ret>"),
                 Some(&|app| {
+                    assert_eq!(app.editor.tree.tab(), Tab::Code);
                     assert!(in_file(app));
                     assert_eq!(
                         cursor(app),
@@ -1470,9 +1491,15 @@ async fn ret_opens_the_file_at_the_row_and_c_o_comes_back() -> anyhow::Result<()
                 }),
             ),
             (
-                Some("<C-o>"),
+                Some(":review<ret>"),
                 Some(&|app| {
+                    assert_eq!(app.editor.tree.tab(), Tab::Review);
                     assert!(in_stream(app));
+                    assert_eq!(
+                        Some(cursor(app).0),
+                        stream_text(app).lines().position(|row| row == "new"),
+                        "the cursor is on the row it left"
+                    );
                     assert_eq!(
                         view!(app.editor).gutters.line_numbers.min_width,
                         stream(app).gutter_width()
@@ -1520,7 +1547,7 @@ async fn an_edit_in_the_file_shows_when_you_come_back() -> anyhow::Result<()> {
         &mut app,
         vec![
             (
-                Some("/seven<ret><ret>Ix<esc><C-o>"),
+                Some("/seven<ret><ret>Ix<esc>:review<ret>"),
                 Some(&|app| {
                     assert!(in_stream(app));
                     assert_eq!(
@@ -1531,7 +1558,7 @@ async fn an_edit_in_the_file_shows_when_you_come_back() -> anyhow::Result<()> {
                 }),
             ),
             (
-                Some("/^5$<ret><ret>Ix<esc><C-o>"),
+                Some("/^5$<ret><ret>Ix<esc>:review<ret>"),
                 Some(&|app| {
                     assert_eq!(
                         stream_text(app),
@@ -1597,7 +1624,7 @@ async fn ret_on_a_gap_shows_its_lines_and_they_stay_shown() -> anyhow::Result<()
                 }),
             ),
             (
-                Some("/seven<ret><ret>Ix<esc><C-o>"),
+                Some("/seven<ret><ret>Ix<esc>:review<ret>"),
                 Some(&|app| assert_eq!(stream_text(app), opened("xseven"))),
             ),
         ],
@@ -1850,7 +1877,7 @@ async fn a_staged_review_ignores_edits_to_the_file() -> anyhow::Result<()> {
 
     test_key_sequence(
         &mut app,
-        Some("/two<ret><ret>Ix<esc><C-o>"),
+        Some("/two<ret><ret>Ix<esc>:review<ret>"),
         Some(&|app| {
             assert!(in_stream(app));
             assert_eq!(stream_text(app), before);

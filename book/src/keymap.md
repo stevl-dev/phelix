@@ -471,6 +471,10 @@ you to selectively add search terms to your selections.
 Each file starts with a row naming it and how it changed. Its hunks follow with 3 lines of context, and a row counts the unchanged lines left out between them.
 The gutter shows each row's old and new line numbers, then `+` for an added line or `-` for a removed one.
 
+The review opens in a tab of its own, a layout with its own splits, beside the code tab Helix starts in.
+`Enter` on a row switches to the code tab and opens the file there, and `:review` switches back. `:bc` in the review closes it and its tab.
+`:q` on the tab's last view quits Helix, as in the code tab.
+
 An edit to added or unchanged lines goes to the file's buffer as you type, new and deleted lines too, and the rows follow it: an edited line gets its old version above it.
 A file that isn't open gets a buffer in the background, which closes with the review unless you opened it in a view meanwhile, or it holds unsaved changes. Nothing is saved until you write it.
 `:w` in the review writes every file it shows that has unsaved changes, however they were made. `:x` and `:update` write nothing there, since the review itself never has unsaved changes.
@@ -506,7 +510,7 @@ And it adds these keys:
 
 | Key     | Command            | Description                                                                                                 |
 | -----   | -----              | -------------                                                                                               |
-| `Enter` | `review_open`      | Open the row's file at that line, to edit it. `Ctrl-o` comes back. On a row of unchanged lines, show them  |
+| `Enter` | `review_open`      | Open the row's file at that line in the code tab, to edit it. `:review` comes back. On a row of unchanged lines, show them |
 | `]F`    | `review_next_file` | Go to the next file's header                                                                                |
 | `[F`    | `review_prev_file` | Go to the header of the file the cursor is in, or the one before                                            |
 

@@ -19,6 +19,7 @@ use helix_core::{Rope, RopeSlice, Selection};
 use helix_vcs::{ChangeView, FileChange, Hunk};
 
 use crate::editor::Action;
+use crate::tree::Tab;
 use crate::{align_view, Align, DocumentId, Editor, ViewId};
 use reconcile::Key;
 
@@ -524,7 +525,7 @@ pub fn show(editor: &mut Editor, root: PathBuf, scope: ChangeView, sections: Vec
         .map(|stream| stream.doc)
         .filter(|doc| editor.documents.contains_key(doc));
     if let Some(doc) = open {
-        editor.switch(doc, Action::Replace);
+        switch_to(editor, doc);
         let mut was_empty = false;
         if let Some(stream) = editor.review.stream.as_mut() {
             stream.root = root;
@@ -542,7 +543,8 @@ pub fn show(editor: &mut Editor, root: PathBuf, scope: ChangeView, sections: Vec
         return;
     }
 
-    let doc_id = editor.new_file(Action::Replace);
+    let doc_id = editor.new_file(Action::Load);
+    switch_to(editor, doc_id);
     let doc = editor.documents.get_mut(&doc_id).expect("just opened");
     // WHY: upstream only uses the flag for writes. Here it shows in the
     // statusline that a staged review takes no edits.
@@ -569,6 +571,16 @@ pub fn show(editor: &mut Editor, root: PathBuf, scope: ChangeView, sections: Vec
     });
     update(editor, sections.into_iter().map(File::from).collect(), None);
     to_top(editor, doc_id);
+}
+
+/// Switches to the review tab, opening it on the stream `doc` if it isn't open,
+/// and shows the stream in the tab's focused view.
+pub fn switch_to(editor: &mut Editor, doc: DocumentId) {
+    if !editor.switch_tab(Tab::Review) {
+        editor.open_tab(Tab::Review, doc);
+    } else if editor.tree.get(editor.tree.focus).doc != doc {
+        editor.switch(doc, Action::Replace);
+    }
 }
 
 /// Applies `transaction` to a file's buffer from the review's `view`. The next
