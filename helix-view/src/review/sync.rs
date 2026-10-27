@@ -13,7 +13,7 @@ use super::{complete, diagnostics, edit_file, forward, layout, log, update, Cont
 use crate::document::{from_reader, DocumentOpenError, Mode};
 use crate::editor::Action;
 use crate::tree::{Tab, Tree};
-use crate::{align_view, current, Align, Document, DocumentId, Editor, ViewId};
+use crate::{align_view, Align, Document, DocumentId, Editor, ViewId};
 
 /// `completing` is whether a completion menu is open.
 pub fn sync(editor: &mut Editor, completing: bool) {
