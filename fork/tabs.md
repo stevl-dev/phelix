@@ -156,3 +156,4 @@ Phase 1 is the riskiest, and everything else stands on it. Phase 3 is next, sinc
   The test reads `%{buffer_name}` and the drawn statusline, and fails with the review's name taken out. `book/src/command-line.md` names `[review]` beside `[scratch]` for `buffer_name`.
 - After phase 6, at the manual check: `:q` refused over unsaved files from the review landed in the code tab, through the switch phase 1's notes name. By the human's call, the refusals of `:q`, `:bca`, and `:bco` now skip that switch in the review, and you stay there.
   The test checks both refusals in one app. A second app in the same test never gets the review's read, since the job queue in `helix-term/src/job.rs` is set once per tokio runtime, and each test runs in one.
+- After the plan: `review::close` closes every view of the review tab before the stream, which closes phase 2's gap. A split you opened on a file goes with the tab, and its buffer stays open.

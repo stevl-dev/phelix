@@ -621,6 +621,17 @@ pub fn close(editor: &mut Editor, force: bool) -> Result<(), Vec<(DocumentId, St
             return Err(unsaved);
         }
     }
+    // WHY: closing the buffer closes only the views that show it, so a split
+    // you opened on a file would keep the tab open after the review.
+    let views: Vec<_> = editor
+        .tree
+        .views()
+        .filter(|(view, _)| editor.tree.tab_of(view.id) == Tab::Review)
+        .map(|(view, _)| view.id)
+        .collect();
+    for view in views {
+        editor.close(view);
+    }
     let _ = editor.close_document(doc, force);
     let loaded = editor.review.stream.take().map(|stream| stream.loaded);
     sync::close_loaded(editor, loaded.unwrap_or_default(), force);

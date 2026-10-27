@@ -1709,10 +1709,11 @@ async fn a_file_opened_in_the_reviews_view_lands_in_the_code_tab() -> anyhow::Re
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn a_split_opened_on_a_file_in_the_review_tab_stays_there() -> anyhow::Result<()> {
+async fn a_split_opened_on_a_file_in_the_review_tab_stays_there_until_the_review_closes(
+) -> anyhow::Result<()> {
     let repo = seventh_changed();
-    let other = repo.path().join("other.txt");
-    let mut app = app_on(repo.path().join("a.txt"))?;
+    let (file, other) = (repo.path().join("a.txt"), repo.path().join("other.txt"));
+    let mut app = app_on(file.clone())?;
     start_review(&mut app).await?;
     std::fs::write(&other, "other\n")?;
 
@@ -1727,9 +1728,20 @@ async fn a_split_opened_on_a_file_in_the_review_tab_stays_there() -> anyhow::Res
                     assert_eq!(app.editor.tree.traverse().count(), 2);
                 }),
             ),
-            (Some(":quit-all!<ret>"), None),
+            (
+                Some("<C-w>w:buffer-close<ret>"),
+                Some(&|app| {
+                    assert!(app.editor.review.stream().is_none());
+                    assert_eq!(app.editor.tree.tabs().collect::<Vec<_>>(), [Tab::Code]);
+                    assert!(doc!(app.editor).path() == Some(&file));
+                    assert!(
+                        app.editor.document_by_path(&other).is_some(),
+                        "only the split's view closes"
+                    );
+                }),
+            ),
         ],
-        true,
+        false,
     )
     .await
 }
