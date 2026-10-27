@@ -474,13 +474,13 @@ The gutter shows each row's old and new line numbers, then `+` for an added line
 The review opens in a tab of its own, a layout with its own splits, beside the code tab Helix starts in.
 `Enter` on a row switches to the code tab and opens the file there, and `:review` switches back. A goto, a picker, or `:e` in the review's view opens in the code tab too, while a split you open on a file stays beside the review.
 `:tab code` and `:tab review` switch between the two tabs without opening anything, and `:tab` says which one you're in. Bind them to keys like any typable command.
-`:bc` in the review closes it and its tab.
+`:bc` in the review closes it and its tab. It refuses while a file the review shows has unsaved changes, as `:bc` refuses a modified buffer. `:bc!` closes it anyway, and drops the changes of the files it opened in the background.
 `:q` on the tab's last view quits Helix, as in the code tab.
-When `:q`, `:bca`, or `:bco` refuses over unsaved files, you stay in the review, which shows their changes, and `:w` there writes them.
+When `:bc`, `:q`, `:bca`, or `:bco` refuses over unsaved files, you stay in the review, which shows their changes, and `:w` there writes them.
 The review stays out of the buffer lists: the bufferline, `Space b`, and `:buffer`'s completion don't show it, and `:bn`, `:bp`, `:bca`, and `:bco` pass over it. The statusline calls it `[review]`.
 
 An edit to added or unchanged lines goes to the file's buffer as you type, new and deleted lines too, and the rows follow it: an edited line gets its old version above it.
-A file that isn't open gets a buffer in the background, which closes with the review unless you opened it in a view meanwhile, or it holds unsaved changes. Nothing is saved until you write it.
+A file that isn't open gets a buffer in the background, which closes with the review unless you opened it in a view meanwhile. Nothing is saved until you write it.
 `:w` in the review writes every file it shows that has unsaved changes, however they were made. `:x` and `:update` write nothing there, since the review itself never has unsaved changes.
 `u` in the review undoes its last edit in every file the edit changed, and `U` redoes it. One command, or one insert, is one step, and so is a `:review-restore`.
 When one of those files changed since in another way, in its own view for example, nothing is undone, and the status line names the file. `u` in that file undoes there.

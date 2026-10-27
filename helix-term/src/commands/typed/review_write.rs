@@ -43,12 +43,7 @@ fn write_files(
     if path.is_some() {
         bail!("The review writes each file to its own path");
     }
-    let docs: Vec<DocumentId> = stream
-        .paths()
-        .filter_map(|path| cx.editor.document_by_path(path))
-        .filter(|doc| doc.is_modified())
-        .map(|doc| doc.id())
-        .collect();
+    let docs = review::unsaved(cx.editor);
     if docs.is_empty() {
         cx.editor
             .set_status("No file in the review has unsaved changes");

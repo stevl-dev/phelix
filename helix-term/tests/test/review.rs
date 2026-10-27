@@ -549,16 +549,20 @@ async fn an_edit_loads_a_file_that_isnt_open() -> anyhow::Result<()> {
     .await
 }
 
-#[tokio::test(flavor = "multi_thread")]
-async fn closing_the_review_closes_the_saved_files_it_opened() -> anyhow::Result<()> {
-    let repo = repo(
+fn three_changed() -> TempDir {
+    repo(
         &[("a.txt", "a\n"), ("b.txt", "b\n"), ("c.txt", "c\n")],
         &[
             ("a.txt", Some("A\n")),
             ("b.txt", Some("B\n")),
             ("c.txt", Some("C\n")),
         ],
-    );
+    )
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn closing_the_review_waits_for_its_files_and_closes_those_it_opened() -> anyhow::Result<()> {
+    let repo = three_changed();
     let path = |name| repo.path().join(name);
     let mut app = app_on(path("a.txt"))?;
     start_review(&mut app).await?;
@@ -566,21 +570,30 @@ async fn closing_the_review_closes_the_saved_files_it_opened() -> anyhow::Result
     test_key_sequences(
         &mut app,
         vec![
-            (Some("/^B<ret>ix<esc>:wa<ret>"), None),
             (
-                Some("/^C<ret>ix<esc>:buffer-close<ret>"),
+                Some("/^A<ret>ix<esc>/^C<ret>ix<esc>:buffer-close<ret>"),
+                Some(&|app| {
+                    assert_eq!(
+                        status(app),
+                        format!(
+                            "'buffer-close': 2 unsaved buffers remaining: [{:?}, {:?}]",
+                            shown(path("a.txt")),
+                            shown(path("c.txt"))
+                        )
+                    );
+                    assert_eq!(app.editor.tree.tab(), Tab::Review);
+                    assert!(in_stream(app));
+                }),
+            ),
+            (
+                Some(":w<ret>:buffer-close<ret>"),
                 Some(&|app| {
                     assert!(app.editor.review.stream().is_none());
                     assert_eq!(app.editor.tree.tab(), Tab::Code, "its tab closes with it");
                     assert_eq!(app.editor.tree.tab_focus(Tab::Review), None);
                     assert!(
-                        app.editor.document_by_path(path("b.txt")).is_none(),
-                        "saved, so it closes"
-                    );
-                    assert_eq!(
-                        buffer_text(app, &path("c.txt")).as_deref(),
-                        Some("xC\n"),
-                        "unsaved, so it stays"
+                        app.editor.document_by_path(path("c.txt")).is_none(),
+                        "it opened it, so it closes"
                     );
                     assert!(
                         app.editor.document_by_path(path("a.txt")).is_some(),
@@ -589,6 +602,56 @@ async fn closing_the_review_closes_the_saved_files_it_opened() -> anyhow::Result
                 }),
             ),
         ],
+        false,
+    )
+    .await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn force_closing_the_review_drops_the_changes_of_the_files_it_opened() -> anyhow::Result<()> {
+    let repo = three_changed();
+    let path = |name| repo.path().join(name);
+    let mut app = app_on(path("a.txt"))?;
+    start_review(&mut app).await?;
+
+    test_key_sequence(
+        &mut app,
+        Some("/^A<ret>ix<esc>/^C<ret>ix<esc>:buffer-close!<ret>"),
+        Some(&|app| {
+            assert!(app.editor.review.stream().is_none());
+            assert_eq!(app.editor.tree.tab(), Tab::Code);
+            assert!(app.editor.document_by_path(path("c.txt")).is_none());
+            assert_eq!(read(&path("c.txt")), "C\n");
+            assert_eq!(
+                buffer_text(app, &path("a.txt")).as_deref(),
+                Some("xA\n"),
+                "the review didn't open it, so it keeps its changes"
+            );
+        }),
+        false,
+    )
+    .await
+}
+
+// WHY: a staged review shows the index, not the buffers, so an unsaved buffer
+// isn't the review's to wait for.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_staged_review_closes_over_unsaved_files() -> anyhow::Result<()> {
+    let repo = staged_and_unstaged();
+    let file = repo.path().join("a.txt");
+    let mut app = app_on(file.clone())?;
+    run_until(&mut app, ":review staged<ret>", |app| {
+        app.editor.review.stream().is_some()
+    })
+    .await?;
+
+    test_key_sequence(
+        &mut app,
+        Some("/two<ret><ret>Ix<esc>:tab review<ret>:buffer-close<ret>"),
+        Some(&|app| {
+            assert!(app.editor.review.stream().is_none());
+            assert!(app.editor.document_by_path(&file).unwrap().is_modified());
+        }),
         false,
     )
     .await

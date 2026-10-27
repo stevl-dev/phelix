@@ -190,11 +190,16 @@ fn buffer_close_by_ids_impl(
 
     let (modified_ids, modified_names): (Vec<_>, Vec<_>) = doc_ids
         .iter()
-        .filter_map(|&doc_id| {
-            if let Err(CloseError::BufferModified(name)) = cx.editor.close_document(doc_id, force) {
-                Some((doc_id, name))
-            } else {
-                None
+        .flat_map(|&doc_id| {
+            // WHY: the review's buffer is never modified. Its files are.
+            if cx.editor.review.stream_of(doc_id).is_some() {
+                return helix_view::review::close(cx.editor, force)
+                    .err()
+                    .unwrap_or_default();
+            }
+            match cx.editor.close_document(doc_id, force) {
+                Err(CloseError::BufferModified(name)) => vec![(doc_id, name)],
+                _ => Vec::new(),
             }
         })
         .unzip();

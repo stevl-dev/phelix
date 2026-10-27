@@ -588,6 +588,45 @@ pub fn switch_to(editor: &mut Editor, doc: DocumentId) {
     }
 }
 
+/// The buffers of the files it shows that have unsaved changes. A staged review
+/// shows the index, not the buffers, so none.
+pub fn unsaved(editor: &Editor) -> Vec<DocumentId> {
+    let Some(stream) = editor.review.stream.as_ref() else {
+        return Vec::new();
+    };
+    if stream.scope == ChangeView::Staged {
+        return Vec::new();
+    }
+    stream
+        .paths()
+        .filter_map(|path| editor.document_by_path(path))
+        .filter(|doc| doc.is_modified())
+        .map(|doc| doc.id())
+        .collect()
+}
+
+/// Closes the review and the files' buffers it loaded. Refused with the
+/// `unsaved` files and their names, unless `force`, which drops the changes of
+/// those it loaded. A file you opened keeps its own.
+pub fn close(editor: &mut Editor, force: bool) -> Result<(), Vec<(DocumentId, String)>> {
+    let Some(doc) = editor.review.stream.as_ref().map(|stream| stream.doc) else {
+        return Ok(());
+    };
+    if !force {
+        let unsaved: Vec<_> = unsaved(editor)
+            .into_iter()
+            .map(|doc| (doc, editor.documents[&doc].display_name().into_owned()))
+            .collect();
+        if !unsaved.is_empty() {
+            return Err(unsaved);
+        }
+    }
+    let _ = editor.close_document(doc, force);
+    let loaded = editor.review.stream.take().map(|stream| stream.loaded);
+    sync::close_loaded(editor, loaded.unwrap_or_default(), force);
+    Ok(())
+}
+
 /// Applies `transaction` to a file's buffer from the review's `view`. The next
 /// sync outside insert mode commits it, as part of one step of the review's
 /// undo log.

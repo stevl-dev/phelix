@@ -23,7 +23,7 @@ pub fn sync(editor: &mut Editor, completing: bool) {
     };
     if !editor.documents.contains_key(&doc_id) {
         let loaded = editor.review.stream.take().map(|stream| stream.loaded);
-        close_loaded(editor, loaded.unwrap_or_default());
+        close_loaded(editor, loaded.unwrap_or_default(), false);
         fit_gutters(editor);
         return;
     }
@@ -151,11 +151,11 @@ fn keep_shown(editor: &mut Editor) {
 }
 
 // WHY: no view showed these while the review was open. One may show now, since
-// the sync runs after Helix gives the closed review's view to another buffer,
-// so a view doesn't keep it. Unsaved changes do: the close is refused.
-fn close_loaded(editor: &mut Editor, loaded: Vec<DocumentId>) {
+// they close after Helix gives the closed review's view to another buffer, so a
+// view doesn't keep it. Unsaved changes do, unless `force` drops them.
+pub(super) fn close_loaded(editor: &mut Editor, loaded: Vec<DocumentId>, force: bool) {
     for doc in loaded {
-        let _ = editor.close_document(doc, false);
+        let _ = editor.close_document(doc, force);
     }
 }
 
