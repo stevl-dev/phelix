@@ -501,8 +501,8 @@ The review swaps these commands for its own, on whatever keys they're bound to:
 | `[g` | `goto_prev_change`  | `review_prev_hunk`: select the previous hunk |
 | `]G` | `goto_last_change`  | `review_last_hunk`: select the last hunk   |
 | `[G` | `goto_first_change` | `review_first_hunk`: select the first hunk |
-| `gn` | `goto_next_buffer`  | Go to the next file's header, as `]F` does. So does `:bn` |
-| `gp` | `goto_previous_buffer` | Go to the header of the file the cursor is in, or the one before, as `[F` does. So does `:bp` |
+| `gn` | `goto_next_buffer`  | Go to the next file's header. So does `:bn` |
+| `gp` | `goto_previous_buffer` | Go to the header of the file the cursor is in, or the one before. So does `:bp` |
 | `u`  | `undo`              | `review_undo`: undo the review's last edit in the files it changed |
 | `U`  | `redo`              | `review_redo`: redo the review's last undone edit |
 | `Alt-u` | `earlier`        | `review_undo`                              |
@@ -512,13 +512,11 @@ The review swaps these commands for its own, on whatever keys they're bound to:
 | `Space a` | `code_action`  | Ask the language server of the row's file, about the selection |
 | `Space r` | `rename_symbol` | Rename in the row's file, through the review's own prompt. `u` in the review undoes it |
 
-And it adds these keys:
+And it adds one key:
 
 | Key     | Command            | Description                                                                                                 |
 | -----   | -----              | -------------                                                                                               |
 | `Enter` | `review_open`      | Open the row's file at that line in the code tab, to edit it. `:review` comes back. On a row of unchanged lines, show them |
-| `]F`    | `review_next_file` | Go to the next file's header                                                                                |
-| `[F`    | `review_prev_file` | Go to the header of the file the cursor is in, or the one before                                            |
 
 ## Picker
 

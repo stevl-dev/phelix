@@ -438,14 +438,6 @@ fn select_rows(
     Range::new(range.anchor, head)
 }
 
-pub(super) fn next_file(cx: &mut Context) {
-    step_file(cx.editor, Direction::Forward, cx.count());
-}
-
-pub(super) fn prev_file(cx: &mut Context) {
-    step_file(cx.editor, Direction::Backward, cx.count());
-}
-
 pub(super) fn step_file(editor: &mut Editor, direction: Direction, count: usize) {
     let count = count - 1;
     editor.apply_motion(move |editor| {

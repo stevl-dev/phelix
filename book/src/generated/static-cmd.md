@@ -115,8 +115,6 @@
 | `review_prev_hunk` | Select the previous hunk of the review |  |
 | `review_first_hunk` | Select the first hunk of the review |  |
 | `review_last_hunk` | Select the last hunk of the review |  |
-| `review_next_file` | Go to the next file of the review |  |
-| `review_prev_file` | Go to the previous file of the review |  |
 | `review_undo` | Undo the review's last edit in the files it changed |  |
 | `review_redo` | Redo the review's last undone edit in the files it changed |  |
 | `select_references_to_symbol_under_cursor` | Select symbol references | normal: `` <space>h ``, select: `` <space>h `` |

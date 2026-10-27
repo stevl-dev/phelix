@@ -419,8 +419,6 @@ impl MappableCommand {
         review_prev_hunk, "Select the previous hunk of the review",
         review_first_hunk, "Select the first hunk of the review",
         review_last_hunk, "Select the last hunk of the review",
-        review_next_file, "Go to the next file of the review",
-        review_prev_file, "Go to the previous file of the review",
         review_undo, "Undo the review's last edit in the files it changed",
         review_redo, "Redo the review's last undone edit in the files it changed",
         select_references_to_symbol_under_cursor, "Select symbol references",
@@ -3527,14 +3525,6 @@ fn review_first_hunk(cx: &mut Context) {
 
 fn review_last_hunk(cx: &mut Context) {
     review::last_hunk(cx);
-}
-
-fn review_next_file(cx: &mut Context) {
-    review::next_file(cx);
-}
-
-fn review_prev_file(cx: &mut Context) {
-    review::prev_file(cx);
 }
 
 fn review_undo(cx: &mut Context) {

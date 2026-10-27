@@ -72,12 +72,6 @@ fn replace_commands(keys: &mut KeyTrie) {
 fn bindings() -> HashMap<Mode, KeyTrie> {
     let keys = keymap!({ "Review"
         "ret" => review_open,
-        "[" => { "Left bracket"
-            "F" => review_prev_file,
-        },
-        "]" => { "Right bracket"
-            "F" => review_next_file,
-        },
     });
     hashmap!(
         Mode::Normal => keys.clone(),

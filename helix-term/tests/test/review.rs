@@ -1922,6 +1922,7 @@ async fn buffer_motions_in_the_review_step_through_its_files() -> anyhow::Result
         vec![
             (Some("gggn"), Some(&|app| at(app, 13))),
             (Some(":bn<ret>"), Some(&|app| at(app, 13))),
+            (Some("jgp"), Some(&|app| at(app, 13))),
             (Some(":bp<ret>"), Some(&|app| at(app, 0))),
             (Some("gp"), Some(&|app| at(app, 0))),
         ],
@@ -1931,7 +1932,7 @@ async fn buffer_motions_in_the_review_step_through_its_files() -> anyhow::Result
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn hunk_and_file_motions_cross_files() -> anyhow::Result<()> {
+async fn hunk_motions_cross_files() -> anyhow::Result<()> {
     let repo = three_hunks();
     let mut app = app_on(repo.path().join("a.txt"))?;
     start_review(&mut app).await?;
@@ -1960,12 +1961,6 @@ async fn hunk_and_file_motions_cross_files() -> anyhow::Result<()> {
                 Some(&|app| assert_eq!(selected(app), "2\ntwo\n")),
             ),
             (Some("]G"), Some(&|app| assert_eq!(selected(app), "b\nB\n"))),
-            (Some("gg]F"), Some(&|app| assert_eq!(cursor(app), (13, 0)))),
-            (
-                Some("j[F"),
-                Some(&|app| assert_eq!(cursor(app), (13, 0), "a row's previous header is its own")),
-            ),
-            (Some("[F"), Some(&|app| assert_eq!(cursor(app), (0, 0)))),
         ],
         false,
     )
