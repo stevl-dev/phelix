@@ -926,6 +926,9 @@ fn goto_previous_buffer(cx: &mut Context) {
 
 fn goto_buffer(editor: &mut Editor, direction: Direction, count: usize) {
     let current = view!(editor).doc;
+    if editor.review.stream_of(current).is_some() {
+        return review::step_file(editor, direction, count);
+    }
     if !editor.documents.values().any(|doc| doc.listed) {
         return;
     }

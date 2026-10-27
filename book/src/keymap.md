@@ -501,6 +501,8 @@ The review swaps these commands for its own, on whatever keys they're bound to:
 | `[g` | `goto_prev_change`  | `review_prev_hunk`: select the previous hunk |
 | `]G` | `goto_last_change`  | `review_last_hunk`: select the last hunk   |
 | `[G` | `goto_first_change` | `review_first_hunk`: select the first hunk |
+| `gn` | `goto_next_buffer`  | Go to the next file's header, as `]F` does. So does `:bn` |
+| `gp` | `goto_previous_buffer` | Go to the header of the file the cursor is in, or the one before, as `[F` does. So does `:bp` |
 | `u`  | `undo`              | `review_undo`: undo the review's last edit in the files it changed |
 | `U`  | `redo`              | `review_redo`: redo the review's last undone edit |
 | `Alt-u` | `earlier`        | `review_undo`                              |

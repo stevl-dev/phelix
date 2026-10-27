@@ -1880,21 +1880,7 @@ async fn buffer_commands_pass_over_the_review() -> anyhow::Result<()> {
         &mut app,
         vec![
             (
-                Some(&format!(
-                    ":tab code<ret>:open {}<ret>:tab review<ret>:bn<ret>",
-                    b.display()
-                )),
-                Some(&|app| {
-                    assert_eq!(app.editor.tree.tab(), Tab::Code);
-                    assert!(
-                        doc!(app.editor).path() == Some(&b),
-                        "from the review, the buffer after it, in the code tab"
-                    );
-                    assert_eq!(review_tab_doc(app), stream(app).doc);
-                }),
-            ),
-            (
-                Some(":bn<ret>"),
+                Some(&format!(":tab code<ret>:open {}<ret>:bn<ret>", b.display())),
                 Some(&|app| assert!(doc!(app.editor).path() == Some(&a))),
             ),
             (
@@ -1915,6 +1901,29 @@ async fn buffer_commands_pass_over_the_review() -> anyhow::Result<()> {
                     assert!(app.editor.tree.tab_focus(Tab::Review).is_some());
                 }),
             ),
+        ],
+        false,
+    )
+    .await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn buffer_motions_in_the_review_step_through_its_files() -> anyhow::Result<()> {
+    let repo = three_hunks();
+    let mut app = app_on(repo.path().join("a.txt"))?;
+    start_review(&mut app).await?;
+    let at = |app: &Application, row| {
+        assert!(in_stream(app), "still in the review");
+        assert_eq!(cursor(app), (row, 0));
+    };
+
+    test_key_sequences(
+        &mut app,
+        vec![
+            (Some("gggn"), Some(&|app| at(app, 13))),
+            (Some(":bn<ret>"), Some(&|app| at(app, 13))),
+            (Some(":bp<ret>"), Some(&|app| at(app, 0))),
+            (Some("gp"), Some(&|app| at(app, 0))),
         ],
         false,
     )

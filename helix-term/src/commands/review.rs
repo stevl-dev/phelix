@@ -439,16 +439,16 @@ fn select_rows(
 }
 
 pub(super) fn next_file(cx: &mut Context) {
-    step_file(cx, Direction::Forward);
+    step_file(cx.editor, Direction::Forward, cx.count());
 }
 
 pub(super) fn prev_file(cx: &mut Context) {
-    step_file(cx, Direction::Backward);
+    step_file(cx.editor, Direction::Backward, cx.count());
 }
 
-fn step_file(cx: &mut Context, direction: Direction) {
-    let count = cx.count() - 1;
-    cx.editor.apply_motion(move |editor| {
+pub(super) fn step_file(editor: &mut Editor, direction: Direction, count: usize) {
+    let count = count - 1;
+    editor.apply_motion(move |editor| {
         let Some(headers) = stream_rows(editor, |stream| stream.headers().collect::<Vec<_>>())
         else {
             return;

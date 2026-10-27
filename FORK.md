@@ -96,7 +96,7 @@ Each entry says what the feature adds, and where its code, tests, and book pages
   Completion in the review offers the items of the row's file's language servers and opens on their trigger characters. Selecting an item there doesn't preview it in the text. An item's other edits, like an import, go to the file after the item, in the same undo step. Signature help in the review asks the row's file's language server, and opens on its trigger characters.
   The review has a tab of its own (`tabs`). `Enter` in it (`review_open`) switches to the code tab and opens the row's file at that line, and `:review` comes back. On a row of unchanged lines, `Enter` shows them. A goto, a picker, or `:e` in the review's view opens in the code tab too, and a split opened on a file stays in the review's tab. `:bc` in the review closes it and its tab, and refuses while a file it shows has unsaved changes. `:bc!` closes it anyway, and drops the changes of the files it loaded. It stays out of the buffer lists, and goes by `[review]` (`tabs`).
   An edit to a file's buffer shows in the review, with the cursor kept on its line. With a review open, `:review` switches to it, and `:review-refresh` lists and reads the changes again.
-  In the review, `goto_next_change` and the other change motions select the review's hunks across files, on whatever keys they're bound to, and `]F`/`[F` go between files.
+  In the review, `goto_next_change` and the other change motions select the review's hunks across files, on whatever keys they're bound to, and `]F`/`[F` go between files, as do `goto_next_buffer`, `goto_previous_buffer`, `:bn`, and `:bp`.
   `:stage-hunk` and `:unstage-hunk` write the hunks the selection touches to the index through the `git` binary, in a trusted workspace.
   `:review-restore` puts the base's text back over them in the files' buffers. `:review-context` sets the lines of context.
   In the changed-file picker, `review_jump` (`Alt-r`) jumps to the selected file in the review of the list's changes.
@@ -111,6 +111,7 @@ Each entry says what the feature adds, and where its code, tests, and book pages
   - `helix-term/src/handlers/completion.rs`: the file's trigger characters in `trigger_auto_completion`.
   - `helix-term/src/ui/completion.rs`: previews off for the review in `Completion::new`, and `review::accept_item` in the menu's accept arm.
   - `helix-term/src/handlers/signature_help.rs`: the lend at the top of `request_signature_help`, and the file's trigger characters in `signature_help_post_insert_char_hook`.
+  - `helix-term/src/commands.rs`: the review's branch at the top of `goto_buffer`, behind `gn`, `gp`, `:bn`, and `:bp`.
   - `helix-term/src/commands/typed.rs`: the seam at the top of `write_impl` that sends `:w` in the review to `typed/review_write.rs`. And a condition in `buffers_remaining_impl` and `buffer_close_by_ids_impl` that keeps the review in its view when `:q`, `:bca`, or `:bco` refuses over unsaved files. `buffer_close_by_ids_impl` closes the review's buffer through `review::close`, since the buffer itself is never modified.
   - `helix-term/src/ui/picker.rs`: the `on_review_jump` hook, its builder, and its key arm.
     `picker_keys.rs` (`picker-keys`) has `ReviewJump` and its `Alt-r` default, and `changed_file.rs` (`changed-files-views`) sets the hook.
@@ -133,6 +134,7 @@ Each entry says what the feature adds, and where its code, tests, and book pages
   - `u` in the review walks the review's own log of the files' revisions, since the stream's history is cleared on every sync. When a file moved on since a step, the undo stops and names it, rather than undoing the file's own latest change.
   - A refusal over unsaved files leaves you in the review, by the human's call. Upstream switches the view to the first unsaved buffer, which in the review's view would move it to the code tab.
   - `:bc` in the review refuses while a file it shows has unsaved changes, the files `:w` there writes, by the human's call. It used to close and leave the files it loaded open and out of sight, with no message. `:bc!` drops the changes of the files it loaded, and a file you had open keeps its own.
+  - `gn`, `gp`, `:bn`, and `:bp` in the review go between its files, and stop at the first and the last as `]F` and `[F` do, by the human's call. They used to put a listed buffer in the review's view, which the sync then moved to the code tab.
   - What opens in the review's view moves to the code tab through a check in the sync, which reads what the review tab's views show, not which command ran. So it covers a goto whose answer comes after the key, the pickers, and typable commands, with no hook in each.
 
 ### tabs
