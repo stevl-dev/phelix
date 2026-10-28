@@ -24,6 +24,7 @@
 - [`[editor.inline-diagnostics]` Section](#editorinline-diagnostics-section)
 - [`[editor.word-completion]` Section](#editorword-completion-section)
 - [`[editor.workspace-trust]` Section](#editorworkspace-trust-section)
+- [`[editor.review]` Section](#editorreview-section)
 
 ### `[editor]` Section
 
@@ -566,3 +567,14 @@ level = "servers"
 # under a matching path. `~` and environment variables are expanded.
 trusted = ["~/src/github.com/me/*"]
 ```
+
+### `[editor.review]` Section
+
+Which of the theme's diff styles the [review](./keymap.md#review) draws. The colors come from the theme's `diff` [scopes](./themes.md#syntax-highlighting).
+
+| Key | Description | Default |
+|--|--|---------|
+| `row-background` | Tint added and removed rows with `diff.plus.view` and `diff.minus.view`. When `false`, removed rows keep their syntax colors, and only the gutter's `-` marks them | `true` |
+| `word-background` | Mark changed words with `diff.delta.view.text` | `true` |
+
+`:toggle review.row-background` turns the tints off and on while Helix runs.

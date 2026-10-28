@@ -9,6 +9,9 @@
 //! - `ui.review.header` falls back to `markup.heading`, and `ui.review.gap` to
 //!   `comment`. The rule after a header takes its color from `ui.window`.
 //!
+//! `[editor.review]`'s `row-background` and `word-background` turn the row
+//! styles and the word marks off. Removed rows then keep their syntax colors.
+//!
 //! Syntax colors come first, from parses of each file's two sides, so these
 //! styles patch over them.
 
@@ -32,11 +35,13 @@ pub fn render<'a>(
     let Some(stream) = editor.review.stream_of(doc.id()) else {
         return;
     };
+    let config = editor.config().review;
     // WHY: syntax colors on removed rows show only when `diff.minus.view` sets
     // no text color. Most themes fall back to `diff.minus`, a text color.
-    let base = theme
-        .try_get("diff.minus.view")
-        .is_none_or(|style| style.fg.is_none());
+    let base = !config.row_background
+        || theme
+            .try_get("diff.minus.view")
+            .is_none_or(|style| style.fg.is_none());
     let text = doc.text();
     let first = text.char_to_line(doc.view_offset(view.id).anchor.min(text.len_chars()));
     let height = view.inner_area(doc).height as usize;
@@ -61,21 +66,26 @@ pub fn render<'a>(
             });
         }
     };
-    overlay(theme.find_highlight("diff.minus.view"), &ranges.removed);
+    if config.row_background {
+        overlay(theme.find_highlight("diff.minus.view"), &ranges.removed);
+    }
     overlay(
         either("ui.review.header", "markup.heading"),
         &ranges.headers,
     );
     overlay(either("ui.review.gap", "comment"), &ranges.gaps);
-    overlay(
-        theme.find_highlight_exact("diff.delta.view.text"),
-        &ranges.words,
-    );
+    if config.word_background {
+        overlay(
+            theme.find_highlight_exact("diff.delta.view.text"),
+            &ranges.words,
+        );
+    }
 
     // WHY: exact lookups. `diff.plus` and `diff.minus` are text colors in most
     // themes, and a tint is a background.
-    let added = theme.try_get_exact("diff.plus.view");
-    let removed = theme.try_get_exact("diff.minus.view");
+    let tint = |scope| theme.try_get_exact(scope).filter(|_| config.row_background);
+    let added = tint("diff.plus.view");
+    let removed = tint("diff.minus.view");
     let rule = rule_style(theme.get("ui.window"));
     decorations.add_decoration(move |renderer: &mut TextRenderer, pos: LinePos| {
         let viewport = renderer.viewport;

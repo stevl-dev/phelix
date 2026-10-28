@@ -8,6 +8,7 @@ use helix_lsp::util::generate_transaction_from_edits;
 use helix_lsp::{lsp, OffsetEncoding};
 use helix_term::application::Application;
 use helix_view::document::Mode;
+use helix_view::graphics::Color;
 use helix_view::input::parse_macro;
 use helix_view::review::{self, Stream};
 use helix_view::tree::Tab;
@@ -1876,6 +1877,55 @@ async fn the_review_goes_by_its_name() -> anyhow::Result<()> {
                 .collect();
             assert!(statusline.contains(" [review] "), "{statusline}");
         }),
+        false,
+    )
+    .await
+}
+
+/// Which of the diff theme's backgrounds the screen shows.
+fn diff_backgrounds(app: &Application) -> Vec<Color> {
+    let cells = app.terminal_buffer().content();
+    [Color::Green, Color::Red, Color::Blue]
+        .into_iter()
+        .filter(|color| cells.iter().any(|cell| cell.bg == *color))
+        .collect()
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn review_backgrounds_follow_their_keys() -> anyhow::Result<()> {
+    let repo = repo(&[("a.txt", "one two\n")], &[("a.txt", Some("one three\n"))]);
+    let mut app = app_on(repo.path().join("a.txt"))?;
+    app.editor.set_theme(toml::from_str(
+        r#"
+        "ui.selection" = { bg = "yellow" }
+        "diff.plus.view" = { bg = "green" }
+        "diff.minus.view" = { bg = "red" }
+        "diff.delta.view.text" = { bg = "blue" }
+        "#,
+    )?)?;
+    start_review(&mut app).await?;
+
+    let (added, removed, words) = (Color::Green, Color::Red, Color::Blue);
+    test_key_sequences(
+        &mut app,
+        vec![
+            (
+                None,
+                Some(&|app| assert_eq!(diff_backgrounds(app), [added, removed, words])),
+            ),
+            (
+                Some(":set review.row-background false<ret>"),
+                Some(&|app| assert_eq!(diff_backgrounds(app), [words])),
+            ),
+            (
+                Some(":set review.word-background false<ret>"),
+                Some(&|app| assert_eq!(diff_backgrounds(app), [])),
+            ),
+            (
+                Some(":set review.row-background true<ret>"),
+                Some(&|app| assert_eq!(diff_backgrounds(app), [added, removed])),
+            ),
+        ],
         false,
     )
     .await
