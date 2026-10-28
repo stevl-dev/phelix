@@ -53,8 +53,8 @@
 | `:show-directory`, `:pwd` | Show the current working directory. |
 | `:encoding` | Set encoding. Based on `https://encoding.spec.whatwg.org`. |
 | `:character-info`, `:char` | Get info about the character under the primary cursor. |
-| `:reload`, `:rl` | Discard changes and reload from the source file. |
-| `:reload-all`, `:rla` | Discard changes and reload all documents from the source files. |
+| `:reload`, `:rl` | Discard changes and reload from the source file. In the review, list and read its changes again. |
+| `:reload-all`, `:rla` | Discard changes and reload all documents from the source files, then list and read an open review's changes again. |
 | `:update`, `:u` | Write changes only if the file has been modified. |
 | `:lsp-workspace-command` | Open workspace command picker |
 | `:lsp-restart` | Restarts the given language servers, or all language servers that are used by the current file if no arguments are supplied |
@@ -101,7 +101,6 @@
 | `:unstage-hunk` | Unstage the hunks the selections touch in the review |
 | `:review-restore` | Put the base's text back over the hunks the selections touch in the review, in each file's buffer |
 | `:review-context` | Show the given number of unchanged lines around each hunk of the review, or say how many it shows |
-| `:review-refresh` | List the changed files again and read them from disk, keeping the review's place |
 | `:read`, `:r` | Load a file into buffer |
 | `:echo` | Prints the given arguments to the statusline. |
 | `:noop` | Does nothing. |

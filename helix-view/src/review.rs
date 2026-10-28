@@ -527,7 +527,17 @@ pub fn show(editor: &mut Editor, root: PathBuf, scope: ChangeView, sections: Vec
         .map(|stream| stream.doc)
         .filter(|doc| editor.documents.contains_key(doc));
     if let Some(doc) = open {
-        switch_to(editor, doc);
+        // WHY: a read of the changes it already shows leaves you in your tab,
+        // for `:reload-all` from the code tab. The changed-file picker's
+        // `review_jump` switches before it reads them.
+        if editor
+            .review
+            .stream
+            .as_ref()
+            .is_some_and(|stream| stream.scope != scope)
+        {
+            switch_to(editor, doc);
+        }
         if let Some(stream) = editor.review.stream.as_mut() {
             stream.root = root;
             stream.scope = scope;

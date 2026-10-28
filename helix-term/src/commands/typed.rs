@@ -1616,6 +1616,11 @@ fn reload(cx: &mut compositor::Context, _args: Args, event: PromptEvent) -> anyh
         return Ok(());
     }
 
+    // WHY: the review's buffer has no file to reload from. Its changes do.
+    if cx.editor.review.stream_of(doc!(cx.editor).id()).is_some() {
+        super::review::reload(cx);
+        return Ok(());
+    }
     let scrolloff = cx.editor.config().scrolloff;
     let trust_full = doc_trust_full(cx.editor);
     let (view, doc) = current!(cx.editor);
@@ -1700,6 +1705,7 @@ fn reload_all(cx: &mut compositor::Context, _args: Args, event: PromptEvent) -> 
         }
     }
 
+    super::review::reload(cx);
     Ok(())
 }
 
@@ -3650,7 +3656,7 @@ pub const TYPABLE_COMMAND_LIST: &[TypableCommand] = &[
     TypableCommand {
         name: "reload",
         aliases: &["rl"],
-        doc: "Discard changes and reload from the source file.",
+        doc: "Discard changes and reload from the source file. In the review, list and read its changes again.",
         fun: reload,
         completer: CommandCompleter::none(),
         signature: Signature {
@@ -3661,7 +3667,7 @@ pub const TYPABLE_COMMAND_LIST: &[TypableCommand] = &[
     TypableCommand {
         name: "reload-all",
         aliases: &["rla"],
-        doc: "Discard changes and reload all documents from the source files.",
+        doc: "Discard changes and reload all documents from the source files, then list and read an open review's changes again.",
         fun: reload_all,
         completer: CommandCompleter::none(),
         signature: Signature {
@@ -4177,17 +4183,6 @@ pub const TYPABLE_COMMAND_LIST: &[TypableCommand] = &[
         completer: CommandCompleter::none(),
         signature: Signature {
             positionals: (0, Some(1)),
-            ..Signature::DEFAULT
-        },
-    },
-    TypableCommand {
-        name: "review-refresh",
-        aliases: &[],
-        doc: "List the changed files again and read them from disk, keeping the review's place",
-        fun: super::review::review_refresh,
-        completer: CommandCompleter::none(),
-        signature: Signature {
-            positionals: (0, Some(0)),
             ..Signature::DEFAULT
         },
     },

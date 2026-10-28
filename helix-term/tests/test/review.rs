@@ -247,7 +247,7 @@ async fn review_says_when_nothing_changed() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn a_refresh_with_no_changes_closes_the_review_and_names_unsaved_files() -> anyhow::Result<()>
+async fn a_reload_with_no_changes_closes_the_review_and_names_unsaved_files() -> anyhow::Result<()>
 {
     let repo = repo(
         &[("a.txt", TEN), ("b.txt", TEN)],
@@ -267,7 +267,7 @@ async fn a_refresh_with_no_changes_closes_the_review_and_names_unsaved_files() -
         repo.path(),
         &["commit", "--quiet", "--all", "--message", "work"],
     );
-    run_until(&mut app, ":review-refresh<ret>", |app| {
+    run_until(&mut app, ":reload<ret>", |app| {
         app.editor.review.stream().is_none()
     })
     .await?;
@@ -1828,7 +1828,7 @@ async fn review_switches_to_the_open_review() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn review_refresh_reads_the_changes_again_and_keeps_the_place() -> anyhow::Result<()> {
+async fn reload_in_the_review_reads_the_changes_again_and_keeps_the_place() -> anyhow::Result<()> {
     let repo = seventh_changed();
     let mut app = app_on(repo.path().join("b.txt"))?;
     start_review(&mut app).await?;
@@ -1838,7 +1838,7 @@ async fn review_refresh_reads_the_changes_again_and_keeps_the_place() -> anyhow:
         "1\n2\n3\n4\n5\n6\nseven\n8\n9\nten\n",
     )?;
     std::fs::write(repo.path().join("new.txt"), "fresh\n")?;
-    run_until(&mut app, ":review-refresh<ret>", |app| {
+    run_until(&mut app, ":reload<ret>", |app| {
         stream_text(app).contains("fresh")
     })
     .await?;
@@ -1863,6 +1863,32 @@ async fn review_refresh_reads_the_changes_again_and_keeps_the_place() -> anyhow:
         false,
     )
     .await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn reload_all_reads_the_review_again_from_the_code_tab() -> anyhow::Result<()> {
+    let repo = seventh_changed();
+    let a = repo.path().join("a.txt");
+    let mut app = app_on(a.clone())?;
+    start_review(&mut app).await?;
+    run_until(&mut app, ":tab code<ret>", |app| {
+        app.editor.tree.tab() == Tab::Code
+    })
+    .await?;
+    std::fs::write(&a, "1\n2\n3\n4\n5\n6\nSEVEN\n8\n9\n10\n")?;
+    std::fs::write(repo.path().join("new.txt"), "fresh\n")?;
+    run_until(&mut app, ":reload-all<ret>", |app| {
+        stream_text(app).contains("fresh")
+    })
+    .await?;
+
+    assert_eq!(app.editor.tree.tab(), Tab::Code);
+    assert_eq!(doc!(app.editor).path(), Some(a.as_path()));
+    assert!(
+        stream_text(&app).contains("\nSEVEN\n"),
+        "the review shows the reloaded buffer"
+    );
+    Ok(())
 }
 
 /// Two hunks in `a.txt`, one in `b.txt`. Hunks are rows 2–3, 10–11, and 14–15,

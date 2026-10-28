@@ -492,8 +492,8 @@ Each file's diagnostics show on its rows, from its buffer when it's open, or els
 In insert mode, completion offers the items of the row's file's language servers too, and their trigger characters, like `.`, open it. Selecting an item doesn't put it in the text, as with `preview-completion-insert = false`, and `Enter` accepts it. An item's other edits, like an import, go to the file with it, and `u` in the review takes out both.
 Signature help comes from the server of the row's file too, and its trigger characters, like `(`, open it. The signature and completion's docs show without the file's syntax colors.
 The language server keys above work on added and unchanged lines. They open the row's file in the background, which closes with the review, and the first key can find its server still starting.
-With a review open, `:review` switches to it, and the status line says which changes it shows. `:review-refresh` lists the changed files again and rereads the ones that aren't open, for changes made outside Helix.
-When `:review-refresh`, or staging the last hunk, finds no changes left, the review closes, and the status line names any file it showed that has unsaved changes. That file's buffer stays open. `:review` with a scope that has no changes leaves the open review as it is.
+With a review open, `:review` switches to it, and the status line says which changes it shows. `:reload` in the review lists the changed files again and rereads the ones that aren't open, for changes made outside Helix, such as a commit. `:reload-all` reloads every buffer, then does the same for an open review, and leaves you in the tab you're in.
+When that read, or staging the last hunk, finds no changes left, the review closes, and the status line names any file it showed that has unsaved changes. That file's buffer stays open. `:review` with a scope that has no changes leaves the open review as it is.
 The review swaps these commands for its own, on whatever keys they're bound to:
 
 | Key  | Command             | In the review                              |

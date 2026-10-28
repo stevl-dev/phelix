@@ -71,16 +71,12 @@ pub(super) fn complete_scope(_editor: &Editor, input: &str) -> Vec<Completion> {
         .collect()
 }
 
-pub(super) fn review_refresh(
-    cx: &mut compositor::Context,
-    _args: Args,
-    event: PromptEvent,
-) -> anyhow::Result<()> {
-    if event == PromptEvent::Validate {
-        let scope = open_stream(cx.editor).map_or(ChangeView::All, |stream| stream.scope);
+/// `:reload` in the review, and `:reload-all`: lists and reads the open
+/// review's changes again.
+pub(super) fn reload(cx: &mut compositor::Context) {
+    if let Some(scope) = open_stream(cx.editor).map(|stream| stream.scope) {
         read_changes(cx, scope, None, None);
     }
-    Ok(())
 }
 
 pub(super) fn review_context(
