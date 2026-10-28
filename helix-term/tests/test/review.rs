@@ -247,6 +247,63 @@ async fn review_says_when_nothing_changed() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn a_refresh_with_no_changes_closes_the_review_and_names_unsaved_files() -> anyhow::Result<()>
+{
+    let repo = repo(
+        &[("a.txt", TEN), ("b.txt", TEN)],
+        &[
+            ("a.txt", Some("1\n2\n3\n4\n5\n6\nseven\n8\n9\n10\n")),
+            ("b.txt", Some("1\n2\nthree\n4\n5\n6\n7\n8\n9\n10\n")),
+        ],
+    );
+    let a = repo.path().join("a.txt");
+    let mut app = app_on(repo.path().join("b.txt"))?;
+    start_review(&mut app).await?;
+    run_until(&mut app, "/^seven<ret>ix<esc>", |app| {
+        buffer_text(app, &a).is_some_and(|text| text.contains("xseven"))
+    })
+    .await?;
+    git(
+        repo.path(),
+        &["commit", "--quiet", "--all", "--message", "work"],
+    );
+    run_until(&mut app, ":review-refresh<ret>", |app| {
+        app.editor.review.stream().is_none()
+    })
+    .await?;
+
+    assert_eq!(
+        status(&app),
+        format!(
+            "There are no changes to review. {} has unsaved changes",
+            shown(a.clone())
+        )
+    );
+    assert_eq!(app.editor.tree.tabs().collect::<Vec<_>>(), [Tab::Code]);
+    let file = app.editor.document_by_path(&a).expect("kept open");
+    assert!(file.is_modified());
+    assert_eq!(file.text(), "1\n2\n3\n4\n5\n6\nxseven\n8\n9\n10\n");
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_scope_with_no_changes_leaves_the_open_review() -> anyhow::Result<()> {
+    let repo = seventh_changed();
+    let mut app = app_on(repo.path().join("a.txt"))?;
+    start_review(&mut app).await?;
+    let before = stream_text(&app);
+    run_until(&mut app, ":review staged<ret>", |app| {
+        status(app) == "There are no staged changes to review"
+    })
+    .await?;
+
+    assert!(in_stream(&app));
+    assert_eq!(stream(&app).scope, helix_vcs::ChangeView::All);
+    assert_eq!(stream_text(&app), before);
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn edits_outside_a_files_lines_are_put_back() -> anyhow::Result<()> {
     let repo = repo(&[("a.txt", TEN)], &[("a.txt", Some("1\n2\nthree\n4\n"))]);
     let file = repo.path().join("a.txt");
@@ -1021,8 +1078,9 @@ async fn a_staged_review_refuses_undo_and_lsp_keys() -> anyhow::Result<()> {
     let file = repo.path().join("a.txt");
     let mut app = app_on(file.clone())?;
     start_review(&mut app).await?;
+    git(repo.path(), &["add", "a.txt"]);
     run_until(&mut app, "/^seven<ret>ix<esc>:review staged<ret>", |app| {
-        status(app) == "There are no staged changes to review"
+        status(app) == "Reviewing staged changes"
     })
     .await?;
 
@@ -2324,7 +2382,7 @@ async fn a_new_file_can_be_staged_and_unstaged() -> anyhow::Result<()> {
     })
     .await?;
     assert_eq!(index_text(&repo, "c.txt").unwrap(), "c1\nc2\n");
-    assert_eq!(stream_text(&app), "");
+    assert!(app.editor.review.stream().is_none());
 
     run_until(&mut app, ":review staged<ret>", |app| {
         stream_text(app).contains("c1")

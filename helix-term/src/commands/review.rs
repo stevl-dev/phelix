@@ -188,27 +188,39 @@ fn read_changes(
                 editor.set_error(format!("Failed to list the changed files: {err}"));
                 return;
             }
-            let empty = files.is_empty();
-            if !empty || editor.review.stream().is_some() {
-                let sections = files.into_iter().map(|file| file.section(editor)).collect();
-                review::show(editor, root, scope, sections);
-                if let Some(path) = focus {
-                    review::focus_file(editor, &path);
-                }
+            if files.is_empty() {
+                no_changes(editor, scope);
+                return;
             }
-            match (empty, scope, done) {
-                (true, ChangeView::All, _) => editor.set_status("There are no changes to review"),
-                (true, scope, _) => {
-                    editor.set_status(format!("There are no {} changes to review", scope.label()))
-                }
-                (false, _, Some(done)) => editor.set_status(done),
-                (false, scope, None) => {
-                    editor.set_status(format!("Reviewing {} changes", scope.label()))
-                }
+            let sections = files.into_iter().map(|file| file.section(editor)).collect();
+            review::show(editor, root, scope, sections);
+            if let Some(path) = focus {
+                review::focus_file(editor, &path);
             }
+            editor
+                .set_status(done.unwrap_or_else(|| format!("Reviewing {} changes", scope.label())));
         };
         Ok(Callback::Editor(Box::new(show)))
     });
+}
+
+/// Says there are no `scope` changes, and closes the open review if it shows
+/// them. A review of other changes stays.
+fn no_changes(editor: &mut Editor, scope: ChangeView) {
+    let unsaved = if open_stream(editor).is_some_and(|stream| stream.scope == scope) {
+        review::close_empty(editor)
+    } else {
+        Vec::new()
+    };
+    let none = match scope {
+        ChangeView::All => "There are no changes to review".to_string(),
+        scope => format!("There are no {} changes to review", scope.label()),
+    };
+    match unsaved.as_slice() {
+        [] => editor.set_status(none),
+        [name] => editor.set_status(format!("{none}. {name} has unsaved changes")),
+        names => editor.set_status(format!("{none}. {} have unsaved changes", names.join(", "))),
+    }
 }
 
 /// The bytes of both sides of a changed file, read off the main thread.

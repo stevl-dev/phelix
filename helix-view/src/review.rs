@@ -528,20 +528,14 @@ pub fn show(editor: &mut Editor, root: PathBuf, scope: ChangeView, sections: Vec
         .filter(|doc| editor.documents.contains_key(doc));
     if let Some(doc) = open {
         switch_to(editor, doc);
-        let mut was_empty = false;
         if let Some(stream) = editor.review.stream.as_mut() {
             stream.root = root;
             stream.scope = scope;
-            was_empty = stream.rows.is_empty();
         }
         if let Some(doc) = editor.documents.get_mut(&doc) {
             doc.readonly = scope == ChangeView::Staged;
         }
         update(editor, sections.into_iter().map(File::from).collect(), None);
-        // WHY: rows inserted into an empty stream push the cursor past them.
-        if was_empty {
-            to_top(editor, doc);
-        }
         return;
     }
 
@@ -609,18 +603,38 @@ pub fn unsaved(editor: &Editor) -> Vec<DocumentId> {
 /// `unsaved` files and their names, unless `force`, which drops the changes of
 /// those it loaded. A file you opened keeps its own.
 pub fn close(editor: &mut Editor, force: bool) -> Result<(), Vec<(DocumentId, String)>> {
-    let Some(doc) = editor.review.stream.as_ref().map(|stream| stream.doc) else {
-        return Ok(());
-    };
     if !force {
-        let unsaved: Vec<_> = unsaved(editor)
-            .into_iter()
-            .map(|doc| (doc, editor.documents[&doc].display_name().into_owned()))
-            .collect();
+        let unsaved = unsaved_names(editor);
         if !unsaved.is_empty() {
             return Err(unsaved);
         }
     }
+    shut(editor, force);
+    Ok(())
+}
+
+/// Closes the review once a read of its changes finds none. The files it
+/// showed with unsaved changes keep their buffers, and come back by name.
+pub fn close_empty(editor: &mut Editor) -> Vec<String> {
+    let unsaved = unsaved_names(editor)
+        .into_iter()
+        .map(|(_, name)| name)
+        .collect();
+    shut(editor, false);
+    unsaved
+}
+
+fn unsaved_names(editor: &Editor) -> Vec<(DocumentId, String)> {
+    unsaved(editor)
+        .into_iter()
+        .map(|doc| (doc, editor.documents[&doc].display_name().into_owned()))
+        .collect()
+}
+
+fn shut(editor: &mut Editor, force: bool) {
+    let Some(doc) = editor.review.stream.as_ref().map(|stream| stream.doc) else {
+        return;
+    };
     // WHY: closing the buffer closes only the views that show it, so a split
     // you opened on a file would keep the tab open after the review.
     let views: Vec<_> = editor
@@ -635,7 +649,6 @@ pub fn close(editor: &mut Editor, force: bool) -> Result<(), Vec<(DocumentId, St
     let _ = editor.close_document(doc, force);
     let loaded = editor.review.stream.take().map(|stream| stream.loaded);
     sync::close_loaded(editor, loaded.unwrap_or_default(), force);
-    Ok(())
 }
 
 /// Applies `transaction` to a file's buffer from the review's `view`. The next
