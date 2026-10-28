@@ -39,11 +39,11 @@ Each entry says what the feature adds, and where its code, tests, and book pages
 ### picker-keys
 
 - Adds: `[keys.picker]` in `config.toml`.
-  The built-in picker bindings stay, entries override them, and `nop` returns a key to the query prompt.
+  The built-in picker bindings stay, entries override them, and `no_op` returns a key to the query prompt.
 - Code: the table in `helix-view/src/editor/picker_keys.rs`, re-exported from `editor.rs` beside the `Config::picker_keys` field.
   `helix-term/src/config.rs` parses `[keys.picker]` and merges it over the defaults, and the key handler in `helix-term/src/ui/picker.rs` looks commands up in the table.
 - Book: `book/src/keymap.md`.
-- Tests: `picker_keys_overlay_defaults_and_nop_unbinds` in `config.rs`. No integration test.
+- Tests: `picker_keys_overlay_defaults_and_no_op_unbinds` in `config.rs`. No integration test.
 
 ### changed-files-views
 

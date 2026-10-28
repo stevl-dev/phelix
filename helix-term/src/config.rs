@@ -278,7 +278,7 @@ mod tests {
     }
 
     #[test]
-    fn picker_keys_overlay_defaults_and_nop_unbinds() {
+    fn picker_keys_overlay_defaults_and_no_op_unbinds() {
         use helix_view::editor::PickerCommand;
         use helix_view::input::KeyEvent;
         use std::str::FromStr;
@@ -287,7 +287,7 @@ mod tests {
             r#"
             [keys.picker]
             C-k = "previous"
-            C-p = "nop"
+            C-p = "no_op"
             "#,
         );
         let keys = &config.editor.picker_keys;

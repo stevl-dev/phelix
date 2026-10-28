@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use crate::input::KeyEvent;
 use crate::keyboard::{KeyCode, KeyModifiers};
 
-/// What a key does inside a picker. `Nop` removes a default binding so the
+/// What a key does inside a picker. `NoOp` removes a default binding so the
 /// key is handled by the picker prompt instead.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PickerCommand {
@@ -25,7 +25,7 @@ pub enum PickerCommand {
     /// Jump from the changed-file picker into the review, at the selected
     /// file. Other pickers pass this key through to the prompt.
     ReviewJump,
-    Nop,
+    NoOp,
 }
 
 impl PickerCommand {
@@ -45,7 +45,7 @@ impl PickerCommand {
             "close" => Self::Close,
             "cycle_changes" => Self::CycleChanges,
             "review_jump" => Self::ReviewJump,
-            "nop" => Self::Nop,
+            "no_op" => Self::NoOp,
             _ => return None,
         })
     }
@@ -126,7 +126,7 @@ pub fn overlay_picker_keys(
     overlay: HashMap<KeyEvent, PickerCommand>,
 ) {
     for (key, command) in overlay {
-        if command == PickerCommand::Nop {
+        if command == PickerCommand::NoOp {
             keys.remove(&key);
         } else {
             keys.insert(key, command);

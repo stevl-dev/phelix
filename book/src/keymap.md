@@ -520,7 +520,7 @@ And it adds one key:
 
 ## Picker
 
-Keys to use within picker. Override them in `[keys.picker]`. A binding of `nop` drops that key so the [prompt](#prompt) handles it. Other prompt keys work in pickers except where a picker binding takes them.
+Keys to use within picker. Override them in `[keys.picker]`. A binding of `no_op` drops that key so the [prompt](#prompt) handles it. Other prompt keys work in pickers except where a picker binding takes them.
 See the documentation page on [pickers](./pickers.md) for more info.
 
 The changed-file picker opens on unstaged changes. `cycle_changes` switches that list to staged changes, then to both. The current list is named before the match count. Other pickers pass that key through to the prompt.

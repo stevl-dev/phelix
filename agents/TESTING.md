@@ -37,7 +37,7 @@ If you add a second test of one rule anyway, put one `// WHY:` line above it.
 
 - Boundaries: the last line, a line with no trailing newline, an empty file, a count of zero.
 - Both sides of a threshold.
-- Config: the default, an override, and an unbind (`nop`), parsed from TOML written in the test.
+- Config: the default, an override, and an unbind (`no_op`), parsed from TOML written in the test.
 - Git state: build the repository the case needs, with staged, unstaged, untracked, renamed, deleted, or conflicted files.
 - Error paths: set up the condition and assert the exact message.
 - Async work: force the order under test. Never sleep to order events.
@@ -74,7 +74,7 @@ Upstream's tests are the fork's own. A change that makes one wrong updates or de
 - Build a git fixture in a temporary directory, as `empty_git_repo` and `create_commit` in `helix-vcs/src/git/test.rs` do.
 
 `splits.rs` shows the closure style.
-`config.rs`'s `picker_keys_overlay_defaults_and_nop_unbinds` and `git/test.rs`'s `changed_files_include_staged_and_unstaged` are the fork's unit examples.
+`config.rs`'s `picker_keys_overlay_defaults_and_no_op_unbinds` and `git/test.rs`'s `changed_files_include_staged_and_unstaged` are the fork's unit examples.
 
 ## Running
 

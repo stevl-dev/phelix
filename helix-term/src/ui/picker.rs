@@ -1230,8 +1230,8 @@ impl<I: 'static + Send + Sync, D: 'static + Send + Sync> Component for Picker<I,
                     self.prompt_handle_event(event, ctx);
                 }
             },
-            // `nop` and unbound keys edit the query.
-            Some(PickerCommand::Nop) | None => {
+            // `no_op` and unbound keys edit the query.
+            Some(PickerCommand::NoOp) | None => {
                 self.prompt_handle_event(event, ctx);
             }
         }
