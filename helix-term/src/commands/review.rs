@@ -455,36 +455,6 @@ fn select_rows(
     Range::new(range.anchor, head)
 }
 
-pub(super) fn step_file(editor: &mut Editor, direction: Direction, count: usize) {
-    let count = count - 1;
-    editor.apply_motion(move |editor| {
-        let Some(headers) = stream_rows(editor, |stream| stream.headers().collect::<Vec<_>>())
-        else {
-            return;
-        };
-        let extend = editor.mode == Mode::Select;
-        let (view, doc) = current!(editor);
-        let text = doc.text().slice(..);
-        let selection = doc.selection(view.id).clone().transform(|range| {
-            let row = range.cursor_line(text);
-            let beyond: Vec<_> = match direction {
-                Direction::Forward => headers.iter().filter(|&&header| header > row).collect(),
-                Direction::Backward => headers
-                    .iter()
-                    .rev()
-                    .filter(|&&header| header < row)
-                    .collect(),
-            };
-            let Some(&header) = beyond.get(count).or(beyond.last()).copied() else {
-                return range;
-            };
-            range.put_cursor(text, text.line_to_char(header), extend)
-        });
-        push_jump(view, doc);
-        doc.set_selection(view.id, selection);
-    });
-}
-
 pub(super) fn undo(cx: &mut Context) {
     if stream_rows(cx.editor, |_| ()).is_some() {
         review::undo(cx.editor, cx.count());

@@ -105,12 +105,11 @@ Each entry says what the feature adds, and where its code, tests, and book pages
   `[editor.review]`'s `row-background` and `word-background` turn the tints and the marks off.
 - Code: `helix-view/src/review.rs` and `review/{layout,reconcile,forward,gutter,diagnostics,source,log,sync,syntax,words,complete}.rs`, `helix-term/src/commands/review.rs` and `review/{lsp,stage,restore}.rs`, `helix-term/src/commands/typed/review_write.rs`, `helix-term/src/keymap/review.rs`, `helix-term/src/ui/text_decorations/review.rs`, and `helix-vcs/src/git/index.rs` with the `helix-vcs/src/index.rs` facade.
   It hooks in at:
-  - `helix-view/src/editor.rs`: the `Editor::review` field, `ReviewConfig` in `Config::review`, and a condition in `Editor::switch` that keeps the stream when you switch away from it. Without it, switching away deletes the stream, an unmodified buffer with no path. `replace_document_in_view` is crate-visible, so the sync can put the stream back in its view.
+  - `helix-view/src/editor.rs`: the `Editor::review` field, and `ReviewConfig` in `Config::review`. `replace_document_in_view` is crate-visible, so the sync can put the stream back in its view.
   - `helix-view/src/gutter.rs`: the stream's branch at the top of `line_numbers`, `diff`, and `diagnostic`.
   - `helix-term/src/ui/editor.rs`: the `review_keys` field, the keymap swap at the top of `handle_event`, and the review's decoration and overlays in `render_view`.
   - `helix-term/src/handlers.rs`: `setup` calls `commands::review::register_hooks`, which runs `review::sync` on `EditorWillUpdate` (`feature-hooks`).
-  - `helix-term/src/commands.rs`: the review's branch at the top of `goto_buffer`, behind `gn`, `gp`, `:bn`, and `:bp`.
-  - `helix-term/src/commands/typed.rs`: the seam at the top of `write_impl` that sends `:w` in the review to `typed/review_write.rs`. And a condition in `buffers_remaining_impl` and `buffer_close_by_ids_impl` that keeps the review in its view when `:q`, `:bca`, or `:bco` refuses over unsaved files. `buffer_close_by_ids_impl` closes the review's buffer through `review::close`, since the buffer itself is never modified.
+  - `helix-term/src/commands/typed.rs`: the seam at the top of `write_impl` that sends `:w` in the review to `typed/review_write.rs`.
     The review's branch at the top of `reload`, since the review's buffer has no file, and the read of an open review at the end of `reload_all`.
   - `helix-term/src/ui/picker.rs`: the `on_review_jump` hook, its builder, and its key arm.
     `picker_keys.rs` (`picker-keys`) has `ReviewJump` and its `Alt-r` default, and `changed_file.rs` (`changed-files-views`) sets the hook.
@@ -162,7 +161,7 @@ Each entry says what the feature adds, and where its code, tests, and book pages
 
 ### feature-hooks
 
-- Plan: `fork/feature-hooks.md`, done through phase 3.
+- Plan: `fork/feature-hooks.md`, done through phase 4.
 - Adds: general hooks the core calls where it used to check for a feature. Nothing the user sees.
 - Hooks:
   - `EditorWillUpdate { editor, completing }`, an event before each key and each frame. Defined in `helix-term/src/events.rs`, and dispatched at the top of `EditorView::handle_event`, before the keymap swap, and of `EditorView::render`, in `helix-term/src/ui/editor.rs`. `completing` is whether a completion menu is open.
@@ -172,5 +171,10 @@ Each entry says what the feature adds, and where its code, tests, and book pages
   - `BufferKind::source_open`, the open source under the cursor, without loading it. `Editor::source_open` returns the view's own buffer, or asks its kind. Trigger characters come from its servers: `trigger_auto_completion` in `handlers/completion.rs` and `signature_help_post_insert_char_hook` in `handlers/signature_help.rs`. They read the focused buffer's text before the cursor, so a kind's buffer has to match its source there.
   - `BufferKind::previews_completion`, read by `Completion::new` in `helix-term/src/ui/completion.rs`, and `BufferKind::accept_completion`, which the menu's accept arm calls on a resolved item before turning it into a transaction.
   - `request_incomplete_completion_list` dispatches `EditorWillUpdate { completing: true }` before it asks again, since it runs inside the key that typed the char, before the frame's.
+  - `BufferKind::close`, which `buffer_close_by_ids_impl` in `helix-term/src/commands/typed.rs` calls for a kind's buffer, behind `:bc`, `:bca` and `:bco`. Refused with the buffers that hold it open. The default closes the buffer as the core does.
+  - `BufferKind::goto_buffer`, which `goto_buffer` in `helix-term/src/commands.rs` asks first, behind `gn`, `gp`, `:bn` and `:bp`. `false` cycles the buffers as usual.
+- Core rules for a kind's buffer:
+  - A refused close or quit doesn't swap it out of its view to show the first unsaved buffer: `buffer_close_by_ids_impl` and `buffers_remaining_impl` in `typed.rs`.
+  - `Editor::switch` in `helix-view/src/editor.rs` never discards it as an empty scratch buffer.
 - Relies on:
   - A language feature that asks a server reads its buffer through `Editor::source`. A cherry-pick that adds one, or that adds a read of the focused buffer to a request in one, asks from the source instead.

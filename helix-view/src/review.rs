@@ -13,12 +13,14 @@ use std::sync::OnceLock;
 use helix_core::encoding::Encoding;
 use helix_core::indent::{auto_detect_indent_style, IndentStyle};
 use helix_core::line_ending::{auto_detect_line_ending, get_line_ending, LineEnding};
+use helix_core::movement::Direction;
 use helix_core::syntax::Loader;
 use helix_core::{Assoc, ChangeSet, Language, Transaction};
 use helix_core::{Rope, RopeSlice, Selection};
 use helix_lsp::{lsp, OffsetEncoding};
 use helix_vcs::{ChangeView, FileChange, Hunk};
 
+use crate::document::Mode;
 use crate::editor::Action;
 use crate::kind::BufferKind;
 use crate::tree::Tab;
@@ -72,6 +74,58 @@ impl BufferKind for Kind {
         let doc = &editor.documents[&editor.tree.get(view).doc];
         complete::accept_item(&mut editor.review, doc, view, item, encoding);
     }
+
+    // WHY: the review's buffer is never modified. Its files are.
+    fn close(
+        &self,
+        editor: &mut Editor,
+        _doc: DocumentId,
+        force: bool,
+    ) -> Result<(), Vec<(DocumentId, String)>> {
+        close(editor, force)
+    }
+
+    fn goto_buffer(&self, editor: &mut Editor, direction: Direction, count: usize) -> bool {
+        step_file(editor, direction, count);
+        true
+    }
+}
+
+/// Moves each cursor `count` file headers on.
+fn step_file(editor: &mut Editor, direction: Direction, count: usize) {
+    let count = count - 1;
+    editor.apply_motion(move |editor| {
+        let view = editor.tree.get(editor.tree.focus);
+        let Some(headers) = editor
+            .review
+            .stream_of(view.doc)
+            .map(|stream| stream.headers().collect::<Vec<_>>())
+        else {
+            return;
+        };
+        let extend = editor.mode == Mode::Select;
+        let (view, doc) = current!(editor);
+        let text = doc.text().slice(..);
+        let selection = doc.selection(view.id).clone().transform(|range| {
+            let row = range.cursor_line(text);
+            let beyond: Vec<_> = match direction {
+                Direction::Forward => headers.iter().filter(|&&header| header > row).collect(),
+                Direction::Backward => headers
+                    .iter()
+                    .rev()
+                    .filter(|&&header| header < row)
+                    .collect(),
+            };
+            let Some(&header) = beyond.get(count).or(beyond.last()).copied() else {
+                return range;
+            };
+            range.put_cursor(text, text.line_to_char(header), extend)
+        });
+        doc.append_changes_to_history(view);
+        let jump = (doc.id(), doc.selection(view.id).clone());
+        view.push_jump(doc, jump);
+        doc.set_selection(view.id, selection);
+    });
 }
 
 /// What a line of the stream shows.

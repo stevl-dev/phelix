@@ -3,8 +3,10 @@
 //! `Document::kind` on the buffers it makes. A buffer with no kind takes the
 //! core's own path.
 
+use helix_core::movement::Direction;
 use helix_lsp::{lsp, OffsetEncoding};
 
+use crate::editor::CloseError;
 use crate::{Document, DocumentId, Editor, ViewId};
 
 pub trait BufferKind: 'static {
@@ -33,5 +35,25 @@ pub trait BufferKind: 'static {
         _item: &mut lsp::CompletionItem,
         _encoding: OffsetEncoding,
     ) {
+    }
+
+    /// Closes the buffer `doc`. Refused with the buffers that hold it open,
+    /// and their names.
+    fn close(
+        &self,
+        editor: &mut Editor,
+        doc: DocumentId,
+        force: bool,
+    ) -> Result<(), Vec<(DocumentId, String)>> {
+        match editor.close_document(doc, force) {
+            Err(CloseError::BufferModified(name)) => Err(vec![(doc, name)]),
+            _ => Ok(()),
+        }
+    }
+
+    /// Moves by `count` through the buffer, for `gn` and `gp`, or `false` to
+    /// cycle through the buffers as usual.
+    fn goto_buffer(&self, _editor: &mut Editor, _direction: Direction, _count: usize) -> bool {
+        false
     }
 }

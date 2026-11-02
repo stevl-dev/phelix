@@ -191,9 +191,10 @@ fn buffer_close_by_ids_impl(
     let (modified_ids, modified_names): (Vec<_>, Vec<_>) = doc_ids
         .iter()
         .flat_map(|&doc_id| {
-            // WHY: the review's buffer is never modified. Its files are.
-            if cx.editor.review.stream_of(doc_id).is_some() {
-                return helix_view::review::close(cx.editor, force)
+            let kind = cx.editor.documents.get(&doc_id).and_then(|doc| doc.kind);
+            if let Some(kind) = kind {
+                return kind
+                    .close(cx.editor, doc_id, force)
                     .err()
                     .unwrap_or_default();
             }
@@ -208,11 +209,8 @@ fn buffer_close_by_ids_impl(
         let current = doc!(cx.editor);
         // If the current document is unmodified, and there are modified
         // documents, switch focus to the first modified doc.
-        // WHY: not from the review, which shows their changes. Its view would
-        // hand the file to the code tab.
-        if !modified_ids.contains(&current.id())
-            && cx.editor.review.stream_of(current.id()).is_none()
-        {
+        // WHY: not from a feature's buffer, which keeps its view.
+        if !modified_ids.contains(&current.id()) && current.kind.is_none() {
             cx.editor.switch(*first, Action::Replace);
         }
         bail!(
@@ -853,10 +851,8 @@ pub(super) fn buffers_remaining_impl(editor: &mut Editor) -> anyhow::Result<()> 
         let current = doc!(editor);
         // If the current document is unmodified, and there are modified
         // documents, switch focus to the first modified doc.
-        // WHY: not from the review, which shows their changes. Its view would
-        // hand the file to the code tab.
-        if !modified_ids.contains(&current.id()) && editor.review.stream_of(current.id()).is_none()
-        {
+        // WHY: not from a feature's buffer, which keeps its view.
+        if !modified_ids.contains(&current.id()) && current.kind.is_none() {
             editor.switch(*first, Action::Replace);
         }
 

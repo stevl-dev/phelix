@@ -2008,7 +2008,8 @@ impl Editor {
                     && doc.path().is_none()
                     // If the buffer we are changing to is not this buffer
                     && id != doc.id
-                    && self.review.stream_of(doc.id).is_none()
+                    // A feature's buffer is its own to close.
+                    && doc.kind.is_none()
                     // Ensure the buffer is not displayed in any other splits, in any tab.
                     && !self
                         .tree
