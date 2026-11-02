@@ -1,5 +1,5 @@
 //! What a language server's completion needs from the review, past what
-//! `lend` gives it. A row holds its file's line char for char, so a place in
+//! `source` gives it. A row holds its file's line char for char, so a place in
 //! the file is the same character of the row that shows its line, in any
 //! offset encoding. An item's edit moves onto the stream by its line numbers
 //! alone. The edits it makes elsewhere, like an import, wait until the sync has
@@ -19,10 +19,10 @@ pub(super) struct Deferred {
     encoding: OffsetEncoding,
 }
 
-/// The open buffer of the file under the focused view's primary cursor, when
-/// the view shows the stream.
-pub fn file_at_cursor(editor: &Editor) -> Option<&Document> {
-    let view = editor.tree.get(editor.tree.focus);
+/// The open buffer of the file under `view`'s primary cursor, when the view
+/// shows the stream.
+pub(super) fn file_at_cursor(editor: &Editor, view: ViewId) -> Option<&Document> {
+    let view = editor.tree.get(view);
     let stream = editor.review.stream_of(view.doc)?;
     let file = file_on(stream, cursor_row(&editor.documents[&view.doc], view.id))?;
     editor.document_by_path(stream.files[file].change.path())
@@ -40,20 +40,10 @@ fn file_on(stream: &Stream, row: usize) -> Option<usize> {
     }
 }
 
-/// Whether the completion menu previews a selected item in the text. Not in
-/// the review: the sync would forward the preview to the file, and its server
-/// would then resolve items against text that holds it.
-pub fn previews_completion(editor: &Editor) -> bool {
-    editor
-        .review
-        .stream_of(editor.tree.get(editor.tree.focus).doc)
-        .is_none()
-}
-
 /// Moves an item being accepted onto the stream's rows when `doc` is the
 /// stream, and takes its other edits, to make in the file once the sync has
 /// forwarded the item.
-pub fn accept_item(
+pub(super) fn accept_item(
     review: &mut Review,
     doc: &Document,
     view: ViewId,

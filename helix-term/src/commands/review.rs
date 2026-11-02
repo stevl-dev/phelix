@@ -24,7 +24,7 @@ mod lsp;
 mod restore;
 mod stage;
 
-pub(crate) use lsp::lent;
+pub(crate) use lsp::replacement;
 pub(super) use restore::review_restore;
 pub(super) use stage::{stage_hunk, unstage_hunk};
 

@@ -19,6 +19,7 @@ use tokio::time::{timeout_at, Instant};
 
 use crate::compositor::Compositor;
 use crate::config::Config;
+use crate::events::EditorWillUpdate;
 use crate::handlers::completion::item::CompletionResponse;
 use crate::handlers::completion::path::path_completion;
 use crate::handlers::completion::{
@@ -29,8 +30,6 @@ use crate::ui;
 use crate::ui::editor::InsertEvent;
 
 use super::word;
-
-pub(super) mod review;
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub(super) enum TriggerKind {
@@ -191,66 +190,35 @@ fn request_completions(
     // rely on the trigger offset and primary cursor matching for multi-cursor completions so this
     // is definitely necessary from our side too.
     trigger.pos = cursor;
-    let doc = doc_mut!(editor, &doc.id());
-    let savepoint = doc.savepoint(view);
-    let text = doc.text();
-    let trigger_text = text.slice(..cursor);
+    let (view, doc) = (view.id, doc.id());
+    let savepoint = editor
+        .documents
+        .get_mut(&doc)
+        .unwrap()
+        .savepoint(editor.tree.get(view));
 
-    let mut seen_language_servers = HashSet::new();
-    let language_servers: Vec<_> = doc
-        .language_servers_with_feature(LanguageServerFeature::Completion)
-        .filter(|ls| seen_language_servers.insert(ls.id()))
-        .collect();
     let mut requests = JoinSet::new();
-    for (priority, ls) in language_servers.iter().enumerate() {
-        let context = if trigger.kind == TriggerKind::Manual {
-            lsp::CompletionContext {
-                trigger_kind: lsp::CompletionTriggerKind::INVOKED,
-                trigger_character: None,
-            }
-        } else {
-            let trigger_char =
-                ls.capabilities()
-                    .completion_provider
-                    .as_ref()
-                    .and_then(|provider| {
-                        provider
-                            .trigger_characters
-                            .as_deref()?
-                            .iter()
-                            .find(|&trigger| trigger_text.ends_with(trigger))
-                    });
-
-            if trigger_char.is_some() {
-                lsp::CompletionContext {
-                    trigger_kind: lsp::CompletionTriggerKind::TRIGGER_CHARACTER,
-                    trigger_character: trigger_char.cloned(),
-                }
-            } else {
-                lsp::CompletionContext {
-                    trigger_kind: lsp::CompletionTriggerKind::INVOKED,
-                    trigger_character: None,
-                }
-            }
-        };
-        requests.spawn(request_completions_from_language_server(
-            ls,
-            doc,
-            view.id,
-            context,
-            -(priority as i8),
-            savepoint.clone(),
-        ));
+    // WHY: the servers are the source's and ask from its buffer, while the
+    // savepoint is the focused buffer's, which the item goes into.
+    if let Ok(source) = editor.source(view) {
+        request_from_source(
+            editor,
+            view,
+            source,
+            trigger.kind,
+            &savepoint,
+            &mut requests,
+        );
     }
+    let doc = doc!(editor, &doc);
     if let Some(path_completion_request) = path_completion(
-        doc.selection(view.id).clone(),
+        doc.selection(view).clone(),
         doc,
         handle.clone(),
         savepoint.clone(),
     ) {
         requests.spawn_blocking(path_completion_request);
     }
-    review::request(editor, trigger.kind, &savepoint, &mut requests);
     if let Some(word_completion_request) =
         word::completion(editor, trigger, handle.clone(), savepoint)
     {
@@ -290,6 +258,65 @@ fn request_completions(
         }
     };
     tokio::spawn(cancelable_future(request_completions, handle));
+}
+
+fn request_from_source(
+    editor: &Editor,
+    view: ViewId,
+    source: DocumentId,
+    kind: TriggerKind,
+    savepoint: &Arc<SavePoint>,
+    requests: &mut JoinSet<CompletionResponse>,
+) {
+    let doc = &editor.documents[&source];
+    let text = doc.text();
+    let trigger_text = text.slice(..doc.selection(view).primary().cursor(text.slice(..)));
+
+    let mut seen_language_servers = HashSet::new();
+    let language_servers: Vec<_> = doc
+        .language_servers_with_feature(LanguageServerFeature::Completion)
+        .filter(|ls| seen_language_servers.insert(ls.id()))
+        .collect();
+    for (priority, ls) in language_servers.iter().enumerate() {
+        let context = if kind == TriggerKind::Manual {
+            lsp::CompletionContext {
+                trigger_kind: lsp::CompletionTriggerKind::INVOKED,
+                trigger_character: None,
+            }
+        } else {
+            let trigger_char =
+                ls.capabilities()
+                    .completion_provider
+                    .as_ref()
+                    .and_then(|provider| {
+                        provider
+                            .trigger_characters
+                            .as_deref()?
+                            .iter()
+                            .find(|&trigger| trigger_text.ends_with(trigger))
+                    });
+
+            if trigger_char.is_some() {
+                lsp::CompletionContext {
+                    trigger_kind: lsp::CompletionTriggerKind::TRIGGER_CHARACTER,
+                    trigger_character: trigger_char.cloned(),
+                }
+            } else {
+                lsp::CompletionContext {
+                    trigger_kind: lsp::CompletionTriggerKind::INVOKED,
+                    trigger_character: None,
+                }
+            }
+        };
+        requests.spawn(request_completions_from_language_server(
+            ls,
+            doc,
+            view,
+            context,
+            -(priority as i8),
+            savepoint.clone(),
+        ));
+    }
 }
 
 fn request_completions_from_language_server(
@@ -342,35 +369,57 @@ fn request_completions_from_language_server(
 }
 
 pub fn request_incomplete_completion_list(editor: &mut Editor, handle: TaskHandle) {
-    if review::request_incomplete(editor, &handle) {
+    let incomplete: Vec<_> = editor
+        .handlers
+        .completions
+        .active_completions
+        .iter()
+        .filter(|(_, context)| context.is_incomplete)
+        .filter_map(|(&provider, context)| match provider {
+            CompletionProvider::Lsp(ls_id) => Some((ls_id, context.priority)),
+            _ => {
+                log::error!("non-lsp incomplete completion lists");
+                None
+            }
+        })
+        .collect();
+    if incomplete.is_empty() {
         return;
     }
-    let handler = &mut editor.handlers.completions;
+    // WHY: this runs inside the key that typed the char, before the frame's
+    // update. The menu is open, so a feature knows its buffer is completing.
+    helix_event::dispatch(EditorWillUpdate {
+        editor,
+        completing: true,
+    });
+    let view = editor.tree.focus;
+    let Ok(source) = editor.source(view) else {
+        return;
+    };
+    let savepoint = {
+        let doc = editor.tree.get(view).doc;
+        editor
+            .documents
+            .get_mut(&doc)
+            .unwrap()
+            .savepoint(editor.tree.get(view))
+    };
+    let doc = &editor.documents[&source];
     let mut requests = JoinSet::new();
-    let mut savepoint = None;
-    for (&provider, context) in &handler.active_completions {
-        if !context.is_incomplete {
-            continue;
-        }
-        let CompletionProvider::Lsp(ls_id) = provider else {
-            log::error!("non-lsp incomplete completion lists");
-            continue;
-        };
+    for (ls_id, priority) in incomplete {
         let Some(ls) = editor.language_servers.get_by_id(ls_id) else {
             continue;
         };
-        let (view, doc) = current!(editor);
-        let savepoint = savepoint.get_or_insert_with(|| doc.savepoint(view)).clone();
         let request = request_completions_from_language_server(
             ls,
             doc,
-            view.id,
+            view,
             CompletionContext {
                 trigger_kind: CompletionTriggerKind::TRIGGER_FOR_INCOMPLETE_COMPLETIONS,
                 trigger_character: None,
             },
-            context.priority,
-            savepoint,
+            priority,
+            savepoint.clone(),
         );
         requests.spawn(request);
     }

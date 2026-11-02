@@ -125,15 +125,16 @@ pub fn trigger_auto_completion(editor: &Editor, trigger_char_only: bool) {
     let cursor = doc.selection(view.id).primary().cursor(text);
     text = doc.text().slice(..cursor);
 
-    let is_trigger_char = doc
-        .language_servers_with_feature(LanguageServerFeature::Completion)
-        .any(|ls| {
-            matches!(&ls.capabilities().completion_provider, Some(lsp::CompletionOptions {
+    let is_trigger_char = editor.source_open(view.id).is_some_and(|source| {
+        source
+            .language_servers_with_feature(LanguageServerFeature::Completion)
+            .any(|ls| {
+                matches!(&ls.capabilities().completion_provider, Some(lsp::CompletionOptions {
                         trigger_characters: Some(triggers),
                         ..
                     }) if triggers.iter().any(|trigger| text.ends_with(trigger)))
-        });
-    let is_trigger_char = is_trigger_char || request::review::is_trigger(editor, text);
+            })
+    });
 
     let cursor_char = text
         .get_bytes_at(text.len_bytes())

@@ -10,7 +10,7 @@ use helix_term::application::Application;
 use helix_view::document::Mode;
 use helix_view::graphics::Color;
 use helix_view::input::parse_macro;
-use helix_view::review::{self, Stream};
+use helix_view::review::Stream;
 use helix_view::tree::Tab;
 use helix_view::{current_ref, doc, view};
 use tempfile::TempDir;
@@ -837,13 +837,10 @@ fn accept(app: &mut Application, more: Vec<lsp::TextEdit>) {
         ..Default::default()
     };
     let (view, doc) = (view!(app.editor).id, stream(app).doc);
-    review::accept_item(
-        &mut app.editor.review,
-        &app.editor.documents[&doc],
-        view,
-        &mut item,
-        OffsetEncoding::Utf8,
-    );
+    let kind = app.editor.documents[&doc]
+        .kind
+        .expect("the review's buffer has a kind");
+    kind.accept_completion(&mut app.editor, view, &mut item, OffsetEncoding::Utf8);
     assert_eq!(item.additional_text_edits, None, "the file gets them");
     let Some(lsp::CompletionTextEdit::Edit(edit)) = item.text_edit else {
         panic!("the item keeps its edit");
@@ -1299,7 +1296,7 @@ async fn signature_help_in_the_review_asks_from_the_rows_file() -> anyhow::Resul
         .build()?;
     start_review(&mut app).await?;
 
-    // WHY: a lend that moves the file's selection asks signature help again,
+    // WHY: a source that moves the file's selection asks signature help again,
     // and the loop would never go idle.
     let keys = tokio::time::timeout(
         std::time::Duration::from_secs(10),

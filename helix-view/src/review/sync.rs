@@ -139,8 +139,7 @@ fn fit_file_style(editor: &mut Editor, doc_id: DocumentId) {
 }
 
 // WHY: a view shows a buffer the review loaded only once you open it there, as
-// by `Enter`, so from then on it's yours, not the review's to close. A lent
-// view never counts, since the sync doesn't run inside a key.
+// by `Enter`, so from then on it's yours, not the review's to close.
 fn keep_shown(editor: &mut Editor) {
     let Some(stream) = editor.review.stream.as_mut() else {
         return;

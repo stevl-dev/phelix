@@ -25,7 +25,7 @@ fn place(stream: &Stream, text: RopeSlice, pos: usize) -> Option<(usize, usize, 
 /// The buffer of the file under `view`'s primary cursor, loaded if need be,
 /// with the view's selection at the same place in it. Or why there's none to
 /// use.
-pub fn lend(editor: &mut Editor, view: ViewId) -> Result<DocumentId, String> {
+pub fn source(editor: &mut Editor, view: ViewId) -> Result<DocumentId, String> {
     let stream_doc = editor.tree.get(view).doc;
     let Some(stream) = editor.review.stream_of(stream_doc) else {
         return Err("This buffer isn't a review. Start one with :review".to_string());
@@ -34,7 +34,7 @@ pub fn lend(editor: &mut Editor, view: ViewId) -> Result<DocumentId, String> {
         return Err("A staged review shows the index, not the files. ret opens the file.".into());
     }
     let doc = &editor.documents[&stream_doc];
-    // WHY: a lend from a job, as a completion request's, can run before the
+    // WHY: a call from a job, as a completion request's, can run before the
     // sync has forwarded the last edit. The rows don't show the text then.
     if doc.version() != stream.version {
         return Err("The review hasn't caught up with the last edit".to_string());
@@ -94,8 +94,8 @@ pub fn lend(editor: &mut Editor, view: ViewId) -> Result<DocumentId, String> {
     let selection =
         Selection::single(selection.anchor, selection.head).ensure_invariants(doc.text().slice(..));
     // WHY: a new selection fires `SelectionDidChange`, which asks signature
-    // help again while it shows, which lends again. `set_selection` widens a
-    // point to a char, so the check compares the widened one.
+    // help again while it shows, which asks here again. `set_selection` widens
+    // a point to a char, so the check compares the widened one.
     if *doc.selection(view) != selection {
         doc.set_selection(view, selection);
     }

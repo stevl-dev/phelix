@@ -3,13 +3,13 @@
 Snapshot: `main` at `4a60f8c`, on upstream `master` at `ba40e547`.
 Goes in `fork/feature-hooks.md`. Feature slug: `feature-hooks`.
 
-Status: phases 0 to 2 done. Section 9's questions are answered under Decisions. Phase 3 is next.
+Status: phases 0 to 3 done. Section 9's questions are answered under Decisions. Phase 4 is next.
 
 ## Bottom line
 
 - **The rule:** the core names no feature. When a feature needs the core to act differently, the core grows a general hook. It never grows an `if` for that feature.
 - **Why now:** the review reaches into the core in 113 lines across 17 files. Tabs added 9 more checks. Each was reasonable alone, and the next feature would add its own set. The human chose to do this before the next feature.
-- **What changes for the user:** nothing, apart from `[editor.review]` becoming `[review]` (phase 8) and signature help's colors in the review (phase 3), as Decisions says. Every phase is a refactor that the review's 57 integration tests already pin.
+- **What changes for the user:** nothing, apart from `[editor.review]` becoming `[review]` (phase 8), as Decisions says. Every phase is a refactor that the review's 57 integration tests already pin.
 - **The hooks**, each from a check the review already needs:
   1. Events before each key and each frame.
   2. Buffer kinds. A buffer can carry a kind that answers for it: where a language feature asks from, close, reload, write, buffer motions, gutter, decorations, and keys.
@@ -144,7 +144,7 @@ fn accept_completion(&self, editor: &mut Editor, view: ViewId,
 - `rename_symbol` keeps the review's own version in `commands/review/lsp.rs`. The review records the rename as a step of its undo log, and upstream's rename doesn't. Phase 2 checks whether upstream's could take a hook for that. If it can't, the review's `lent()` is left handling only `rename_symbol`, and Found says why.
 - Not routed, as today: `symbol_picker`, the diagnostics pickers, `workspace_symbol_picker`, `select_references_to_symbol_under_cursor`. They aren't lent today either. The last one would need a map back from the file to the review's rows, which no hook has yet.
 - What goes: `commands/review/lsp.rs` apart from the rename, `handlers/completion/request/review.rs` (with its copy of the completion context), `handlers/signature_help/review.rs`, `review::previews_completion`, and the lend's `INVARIANT`s. `review/lend.rs` becomes the review's `source`.
-- Signature help's popup highlights with the source's language, not the review's (Decisions, 5). Today it shows the signature without colors in the review. Phase 3 adds a test for it.
+- Signature help's popup keeps reading the focused buffer's language, so in the review it still shows without colors (Decisions, 5).
 - `request_incomplete` calls `review::sync(editor, true)` today, because it runs inside the key that typed the character, before the frame's sync. The general path dispatches `EditorWillUpdate { completing: true }` there instead. That's why phase 1 comes first.
 
 ### 3.4 Close, motions, reload, write (phases 4, 5)
@@ -310,7 +310,7 @@ Each phase is one commit that builds and passes `tools/fork/land.sh --check`. Ea
 | 0 | done | Add the feature hooks plan. | This file, and the `feature-hooks` entry in `FORK.md`. |
 | 1 | done | Run the review before each key and frame through an event. | 3.1. `EditorWillUpdate`, its two dispatches, the review's hook. No test: the review's tests pin the sync, and wiring needs none. |
 | 2 | done | Add buffer kinds, and ask the LSP commands' file from them. | 3.2 and the commands half of 3.3. `helix-view/src/kind.rs`, `Document::kind`, `Editor::source`, `source_open`. The review's kind, with `source` from `review/lend.rs`. The `commands/lsp.rs` rows of 3.3's table. `lent()` keeps only the rename. Tests that must pass unchanged: `lsp_keys_in_the_review_ask_from_the_rows_file`, `lsp_keys_in_the_review_need_a_line_the_file_has`, `a_staged_review_refuses_undo_and_lsp_keys`, and the ignored `rust_analyzer` test at a manual run. |
-| 3 | | Ask completion and signature help from the buffer's source. | The rest of 3.3. Delete `request/review.rs` and `signature_help/review.rs`. `previews_completion` and `accept_completion` on the kind. Tests that must pass unchanged: the four completion tests in `review.rs` and `signature_help_in_the_review_asks_from_the_rows_file`. A new test that the signature help popup has the file's language (Decisions 5). |
+| 3 | done | Ask completion and signature help from the buffer's source. | The rest of 3.3. Delete `request/review.rs` and `signature_help/review.rs`. `previews_completion` and `accept_completion` on the kind. Tests that must pass unchanged: the four completion tests in `review.rs` and `signature_help_in_the_review_asks_from_the_rows_file`. No new test: Decisions 5 keeps the popup as it is. |
 | 4 | | Let a buffer kind close its buffer and step through it. | 3.4's `close` and `goto_buffer`, the two core rules, and `Editor::switch`'s scratch rule. Tests that must pass unchanged: the close and refusal tests, `buffer_motions_in_the_review_step_through_its_files`, `buffer_commands_pass_over_the_review`. |
 | 5 | | Let a buffer kind reload and write its buffer. | 3.4's `reload` and `write`. `helix-term/src/kind.rs` with `BufferKindUi` and its registry. The `:w` seam goes, and the save chain copy if it can. Tests that must pass unchanged: `w_in_the_review_writes_the_files_it_shows_with_unsaved_changes`, the two reload tests, `a_reload_with_no_changes_closes_the_review_and_names_unsaved_files`. |
 | 6 | | Give a buffer kind a keymap of its own. | 3.5. `kind_keys` replaces `review_keys`. Tests that must pass unchanged: `a_custom_key_for_goto_next_change_moves_by_review_hunk`, and every test that types in the review. |
@@ -396,7 +396,7 @@ By the human, before phase 1:
 2. **Feature config:** a top-level `[review]` table, as raw TOML handed to the review. Features register their table names, so an unknown top-level table is still an error. `[editor.review]` stops working.
 3. **`:tab` messages:** features register their tab names, and `:tab`'s two messages stay.
 4. **The review's integration tests:** in `helix-review/tests/integration.rs`, on a harness in `helix_term::test_support` behind the `integration` feature.
-5. **Signature help's highlights:** the popup uses the file's language. Phase 3 adds the test.
+5. **Signature help's highlights:** at first, the popup was to use the file's language, with a test. At phase 3 the test couldn't be written: the integration tests run with no language server, and the popup isn't reachable from `Application::editor`. The human dropped the fix, so the popup keeps the focused buffer's language, and shows without colors in the review as before.
 6. **Crate layout:** one `helix-review` crate, with the view part and the term part as two modules.
 
 ## Found
@@ -427,4 +427,14 @@ Each phase records here what it found, the count from section 7, and any hook si
 - `rename_symbol` keeps the review's own version, and `lent()` handles only it. Upstream's reads the focused buffer again when you confirm the prompt, and the review records the rename's edit as a step of its undo log. No hook yet runs code around a workspace edit, and adding one for rename alone would be a hook without a second user.
 - Completion and signature help still lend: `request/review.rs` and `signature_help/review.rs` call `review::lend` with the focused view. So `lend`'s name, its `WHY`s about jobs and signature help, and `keep_shown`'s note on lent views in `review/sync.rs` stay until phase 3.
 - The tests 3.3 names pass unchanged, and so does the ignored `rust_analyzer` test, run by hand.
+
+### Phase 3
+
+- The count from section 7 is 102, from 112. The review's calls went from `request.rs`, `completion.rs`, `signature_help.rs` and `ui/completion.rs`, with their `mod review` lines. `handlers/completion/request/review.rs` and `handlers/signature_help/review.rs` are deleted, and so is the copy of the completion context.
+- The signatures are as 3.3 has them. `source_open` and `accept_completion` take the asking view. `accept_completion` takes the editor, so the menu's accept arm copies `doc.kind` out first and takes the view and the document again after it.
+- The review's kind answers `source_open` with `file_at_cursor`, `previews_completion` with `false`, and `accept_completion` with `accept_item`, whose split borrow of `editor.review` and `editor.documents` now sits inside the review. The integration test's `accept` calls the kind, as the menu does, instead of `accept_item`.
+- `review::lend` is now `review::source`, in `review/source.rs`, since nothing lends the view any more. `lent()` in `commands/review/lsp.rs` is `replacement()`, since it only swaps in the rename. `keep_shown`'s note on lent views in `review/sync.rs` went.
+- `request_incomplete_completion_list` dispatches `EditorWillUpdate` for any buffer, not just a kind's, before it asks again. For an ordinary buffer the review's sync finds nothing to do. It returns early when no list is incomplete, before the dispatch, as the review's copy did.
+- Trigger characters read the focused buffer's text with the source's servers, as the review's copies did. That's now part of `source_open`'s contract: a kind's buffer has to match its source before the cursor.
+- The tests 3.3 names pass, and so does the ignored `rust_analyzer` test, run by hand. Signature help's colors stay as they were (Decisions 5).
 

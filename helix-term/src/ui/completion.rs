@@ -131,8 +131,10 @@ impl Completion {
 
     pub fn new(editor: &Editor, items: Vec<CompletionItem>, trigger_offset: usize) -> Self {
         let preview_completion_insert = editor.config().preview_completion_insert;
-        let preview_completion_insert =
-            preview_completion_insert && helix_view::review::previews_completion(editor);
+        let preview_completion_insert = preview_completion_insert
+            && doc!(editor)
+                .kind
+                .is_none_or(|kind| kind.previews_completion());
         let replace_mode = editor.config().completion_replace;
 
         let dir_style = editor.theme.get("ui.text.directory");
@@ -231,13 +233,13 @@ impl Completion {
                             };
 
                             let encoding = language_server.offset_encoding();
-                            helix_view::review::accept_item(
-                                &mut editor.review,
-                                doc,
-                                view.id,
-                                &mut item.item,
-                                encoding,
-                            );
+                            // INVARIANT: copied out of the document, so the
+                            // kind can take the editor.
+                            if let Some(kind) = doc.kind {
+                                let view = view.id;
+                                kind.accept_completion(editor, view, &mut item.item, encoding);
+                            }
+                            let (view, doc) = current!(editor);
                             let (transaction, snippet) = lsp_item_to_transaction(
                                 doc,
                                 view.id,
@@ -259,6 +261,7 @@ impl Completion {
                         }
                     };
 
+                    let (view, doc) = current!(editor);
                     doc.apply(&transaction, view.id);
                     let placeholder = snippet.is_some();
                     if let Some(snippet) = snippet {

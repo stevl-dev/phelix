@@ -20,8 +20,6 @@ use crate::ui::lsp::signature_help::{Signature, SignatureHelp};
 use crate::ui::Popup;
 use crate::{job, ui};
 
-mod review;
-
 #[derive(Debug, PartialEq, Eq)]
 enum State {
     Open,
@@ -106,16 +104,27 @@ pub fn request_signature_help(
     invoked: SignatureHelpInvoked,
     cancel: TaskHandle,
 ) {
-    if review::lend(editor, invoked, &cancel) {
-        return;
-    }
-    let (view, doc) = current!(editor);
+    let view = editor.tree.focus;
+    let doc = match editor.source(view) {
+        Ok(doc) => doc!(editor, &doc),
+        Err(refusal) => {
+            if invoked == SignatureHelpInvoked::Manual {
+                editor.set_error(refusal);
+            }
+            // WHY: the handler waits for an answer, and a signature still
+            // shown is from where the cursor was.
+            tokio::spawn(job::dispatch(move |editor, compositor| {
+                show_signature_help(editor, compositor, invoked, None)
+            }));
+            return;
+        }
+    };
 
     // TODO merge multiple language server signature help into one instead of just taking the first language server that supports it
     let future = doc
         .language_servers_with_feature(LanguageServerFeature::SignatureHelp)
         .find_map(|language_server| {
-            let pos = doc.position(view.id, language_server.offset_encoding());
+            let pos = doc.position(view, language_server.offset_encoding());
             language_server.text_document_signature_help(doc.identifier(), pos, None)
         });
 
@@ -300,15 +309,13 @@ fn signature_help_post_insert_char_hook(
     if !cx.editor.config().lsp.auto_signature_help {
         return Ok(());
     }
-    if review::trigger(cx.editor, tx) {
-        return Ok(());
-    }
-    let (view, doc) = current!(cx.editor);
+    let (view, doc) = current_ref!(cx.editor);
     // TODO support multiple language servers (not just the first that is found), likely by merging UI somehow
-    let Some(language_server) = doc
-        .language_servers_with_feature(LanguageServerFeature::SignatureHelp)
-        .next()
-    else {
+    let Some(language_server) = cx.editor.source_open(view.id).and_then(|source| {
+        source
+            .language_servers_with_feature(LanguageServerFeature::SignatureHelp)
+            .next()
+    }) else {
         return Ok(());
     };
 

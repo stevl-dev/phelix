@@ -1962,6 +1962,15 @@ impl Editor {
         }
     }
 
+    /// `source` without loading: the open buffer it would answer with, if any.
+    pub fn source_open(&self, view: ViewId) -> Option<&Document> {
+        let doc = &self.documents[&self.tree.get(view).doc];
+        match doc.kind {
+            None => Some(doc),
+            Some(kind) => kind.source_open(self, view),
+        }
+    }
+
     pub(crate) fn replace_document_in_view(&mut self, current_view: ViewId, doc_id: DocumentId) {
         let scrolloff = self.config().scrolloff;
         let view = self.tree.get_mut(current_view);

@@ -16,11 +16,13 @@ use helix_core::line_ending::{auto_detect_line_ending, get_line_ending, LineEndi
 use helix_core::syntax::Loader;
 use helix_core::{Assoc, ChangeSet, Language, Transaction};
 use helix_core::{Rope, RopeSlice, Selection};
+use helix_lsp::{lsp, OffsetEncoding};
 use helix_vcs::{ChangeView, FileChange, Hunk};
 
 use crate::editor::Action;
+use crate::kind::BufferKind;
 use crate::tree::Tab;
-use crate::{align_view, Align, DocumentId, Editor, ViewId};
+use crate::{align_view, Align, Document, DocumentId, Editor, ViewId};
 use reconcile::Key;
 
 mod complete;
@@ -28,29 +30,49 @@ mod diagnostics;
 mod forward;
 pub(crate) mod gutter;
 pub mod layout;
-mod lend;
 mod log;
 mod reconcile;
+mod source;
 mod sync;
 mod syntax;
 mod words;
 
-pub use complete::{accept_item, file_at_cursor, previews_completion};
-pub use lend::lend;
+pub use log::{log_step, redo, undo};
+pub use source::source;
+pub use sync::{load, sync};
+pub use syntax::overlays as syntax_overlays;
 
 /// The review's buffer kind, on the stream's buffer.
 struct Kind;
 
 static KIND: Kind = Kind;
 
-impl crate::kind::BufferKind for Kind {
+impl BufferKind for Kind {
     fn source(&self, editor: &mut Editor, view: ViewId) -> Result<DocumentId, String> {
-        lend(editor, view)
+        source(editor, view)
+    }
+
+    fn source_open<'e>(&self, editor: &'e Editor, view: ViewId) -> Option<&'e Document> {
+        complete::file_at_cursor(editor, view)
+    }
+
+    // WHY: the sync would forward the preview to the file, and its server
+    // would then resolve items against text that holds it.
+    fn previews_completion(&self) -> bool {
+        false
+    }
+
+    fn accept_completion(
+        &self,
+        editor: &mut Editor,
+        view: ViewId,
+        item: &mut lsp::CompletionItem,
+        encoding: OffsetEncoding,
+    ) {
+        let doc = &editor.documents[&editor.tree.get(view).doc];
+        complete::accept_item(&mut editor.review, doc, view, item, encoding);
     }
 }
-pub use log::{log_step, redo, undo};
-pub use sync::{load, sync};
-pub use syntax::overlays as syntax_overlays;
 
 /// What a line of the stream shows.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

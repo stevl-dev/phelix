@@ -12,7 +12,7 @@ use crate::ui::{self, PromptEvent};
 
 /// The review's version of `command`, swapped into the review's keymap.
 /// Built here rather than in the command table: it exists only as that swap.
-pub(crate) fn lent(command: &MappableCommand) -> Option<MappableCommand> {
+pub(crate) fn replacement(command: &MappableCommand) -> Option<MappableCommand> {
     match command {
         MappableCommand::Static {
             name: "rename_symbol",
@@ -32,7 +32,7 @@ pub(crate) fn lent(command: &MappableCommand) -> Option<MappableCommand> {
 // file and the place, and leaves out `prepareRename`.
 fn rename(cx: &mut Context) {
     let view = cx.editor.tree.focus;
-    let file = match review::lend(cx.editor, view) {
+    let file = match review::source(cx.editor, view) {
         Ok(file) => file,
         Err(refusal) => {
             cx.editor.set_error(refusal);

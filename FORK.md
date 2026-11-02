@@ -103,16 +103,12 @@ Each entry says what the feature adds, and where its code, tests, and book pages
   Rows get syntax colors from parses of each file's whole base and source.
   Removed and added rows get tints, headers a rule, and changed words a mark, from theme scopes: `diff.{plus,minus}.view`, `diff.delta.view.text`, and the fork's `ui.review.header` and `ui.review.gap`.
   `[editor.review]`'s `row-background` and `word-background` turn the tints and the marks off.
-- Code: `helix-view/src/review.rs` and `review/{layout,reconcile,forward,gutter,diagnostics,lend,log,sync,syntax,words,complete}.rs`, `helix-term/src/commands/review.rs` and `review/{lsp,stage,restore}.rs`, `helix-term/src/handlers/completion/request/review.rs`, `helix-term/src/handlers/signature_help/review.rs`, `helix-term/src/commands/typed/review_write.rs`, `helix-term/src/keymap/review.rs`, `helix-term/src/ui/text_decorations/review.rs`, and `helix-vcs/src/git/index.rs` with the `helix-vcs/src/index.rs` facade.
+- Code: `helix-view/src/review.rs` and `review/{layout,reconcile,forward,gutter,diagnostics,source,log,sync,syntax,words,complete}.rs`, `helix-term/src/commands/review.rs` and `review/{lsp,stage,restore}.rs`, `helix-term/src/commands/typed/review_write.rs`, `helix-term/src/keymap/review.rs`, `helix-term/src/ui/text_decorations/review.rs`, and `helix-vcs/src/git/index.rs` with the `helix-vcs/src/index.rs` facade.
   It hooks in at:
   - `helix-view/src/editor.rs`: the `Editor::review` field, `ReviewConfig` in `Config::review`, and a condition in `Editor::switch` that keeps the stream when you switch away from it. Without it, switching away deletes the stream, an unmodified buffer with no path. `replace_document_in_view` is crate-visible, so the sync can put the stream back in its view.
   - `helix-view/src/gutter.rs`: the stream's branch at the top of `line_numbers`, `diff`, and `diagnostic`.
   - `helix-term/src/ui/editor.rs`: the `review_keys` field, the keymap swap at the top of `handle_event`, and the review's decoration and overlays in `render_view`.
   - `helix-term/src/handlers.rs`: `setup` calls `commands::review::register_hooks`, which runs `review::sync` on `EditorWillUpdate` (`feature-hooks`).
-  - `helix-term/src/handlers/completion/request.rs`: the review's requests in `request_completions`, and its own re-request at the top of `request_incomplete_completion_list`.
-  - `helix-term/src/handlers/completion.rs`: the file's trigger characters in `trigger_auto_completion`.
-  - `helix-term/src/ui/completion.rs`: previews off for the review in `Completion::new`, and `review::accept_item` in the menu's accept arm.
-  - `helix-term/src/handlers/signature_help.rs`: the lend at the top of `request_signature_help`, and the file's trigger characters in `signature_help_post_insert_char_hook`.
   - `helix-term/src/commands.rs`: the review's branch at the top of `goto_buffer`, behind `gn`, `gp`, `:bn`, and `:bp`.
   - `helix-term/src/commands/typed.rs`: the seam at the top of `write_impl` that sends `:w` in the review to `typed/review_write.rs`. And a condition in `buffers_remaining_impl` and `buffer_close_by_ids_impl` that keeps the review in its view when `:q`, `:bca`, or `:bco` refuses over unsaved files. `buffer_close_by_ids_impl` closes the review's buffer through `review::close`, since the buffer itself is never modified.
     The review's branch at the top of `reload`, since the review's buffer has no file, and the read of an open review at the end of `reload_all`.
@@ -122,9 +118,6 @@ Each entry says what the feature adds, and where its code, tests, and book pages
 - Tests: unit tests in `review.rs`, `review/layout.rs`, `review/reconcile.rs`, `review/forward.rs`, `review/syntax.rs`, `review/words.rs`, `review/complete.rs`, `helix-vcs/src/git/index.rs`, and `commands/review/stage.rs`. Integration tests in `helix-term/tests/test/review.rs` over a temporary git repository. `review/rust_analyzer.rs` runs completion and a goto against rust-analyzer. It's ignored, since it changes the working directory, and runs alone at a manual check: `cargo integration-test -- --ignored rust_analyzer --test-threads=1`.
 - Relies on:
   - The review's rename in `commands/review/lsp.rs` follows `rename_symbol`'s request and edit, without `prepareRename`. A cherry-pick that changes them updates it.
-  - `request/review.rs` calls the private `request_completions_from_language_server`, and copies the completion context `request_completions` builds inline. A cherry-pick that changes either updates it.
-  - `review::accept_item` sits in `ui/completion.rs`'s accept arm. A cherry-pick that changes how the arm turns an item into a transaction rereads it.
-  - The signature help lend relies on `request_signature_help` reading the focused buffer only before its request goes out. A cherry-pick that changes that rereads it.
   - `typed/review_write.rs` copies `write_all_impl`'s save chain. A cherry-pick that changes the chain updates the copy.
   - `imara-diff` in `helix-view/Cargo.toml` moves together with helix-core's and helix-vcs's.
 - Rulings:
@@ -169,11 +162,15 @@ Each entry says what the feature adds, and where its code, tests, and book pages
 
 ### feature-hooks
 
-- Plan: `fork/feature-hooks.md`, done through phase 2.
+- Plan: `fork/feature-hooks.md`, done through phase 3.
 - Adds: general hooks the core calls where it used to check for a feature. Nothing the user sees.
 - Hooks:
   - `EditorWillUpdate { editor, completing }`, an event before each key and each frame. Defined in `helix-term/src/events.rs`, and dispatched at the top of `EditorView::handle_event`, before the keymap swap, and of `EditorView::render`, in `helix-term/src/ui/editor.rs`. `completing` is whether a completion menu is open.
   - `BufferKind` in `helix-view/src/kind.rs`, the answers a feature's buffer gives where the core would act on an ordinary one, and `Document::kind`, which points at one. A feature declares its kind as a `static`.
   - `BufferKind::source`, the buffer a language feature asks from. `Editor::source` returns the view's own buffer, or asks its kind. `source` in `helix-term/src/commands/lsp.rs` calls it for `goto_definition`, `goto_declaration`, `goto_type_definition`, `goto_implementation` (all through `goto_single_impl`), `goto_reference`, `hover`, and `code_action`. Their requests read the source, and their answers the focused view: the jump records where you were, and the popups open at its cursor.
+    `request_completions` and `request_incomplete_completion_list` in `helix-term/src/handlers/completion/request.rs` ask the source's servers, with the focused buffer's savepoint, since the item goes there. `request_signature_help` in `handlers/signature_help.rs` asks the source, and on a refusal closes a signature still shown. The popup keeps the focused buffer's language.
+  - `BufferKind::source_open`, the open source under the cursor, without loading it. `Editor::source_open` returns the view's own buffer, or asks its kind. Trigger characters come from its servers: `trigger_auto_completion` in `handlers/completion.rs` and `signature_help_post_insert_char_hook` in `handlers/signature_help.rs`. They read the focused buffer's text before the cursor, so a kind's buffer has to match its source there.
+  - `BufferKind::previews_completion`, read by `Completion::new` in `helix-term/src/ui/completion.rs`, and `BufferKind::accept_completion`, which the menu's accept arm calls on a resolved item before turning it into a transaction.
+  - `request_incomplete_completion_list` dispatches `EditorWillUpdate { completing: true }` before it asks again, since it runs inside the key that typed the char, before the frame's.
 - Relies on:
   - A language feature that asks a server reads its buffer through `Editor::source`. A cherry-pick that adds one, or that adds a read of the focused buffer to a request in one, asks from the source instead.
