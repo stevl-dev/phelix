@@ -166,3 +166,8 @@ Each entry says what the feature adds, and where its code, tests, and book pages
 - Rulings:
   - `:q` on a tab's last view quits Helix from any tab, by the human's call, where Vim's closes the tab.
   - The name is `tab`, by the human's call. "Space" reads as Space mode.
+
+### feature-hooks
+
+- Plan: `fork/feature-hooks.md`, done through phase 0.
+- Adds: nothing yet. Each phase adds the hook it makes, where it's defined, and where the core calls it.
