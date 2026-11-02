@@ -117,27 +117,49 @@ pub fn runtime_file(rel_path: impl AsRef<Path>) -> PathBuf {
     })
 }
 
-pub fn config_dir() -> PathBuf {
+/// The name of the editor's own config, cache, and data dirs.
+const DIR_NAME: &str = "phelix";
+
+/// Helix's dirs, which config and data fall back to until the user moves them.
+const HELIX_DIR_NAME: &str = "helix";
+
+static CONFIG_DIR: std::sync::LazyLock<PathBuf> = std::sync::LazyLock::new(|| {
     // TODO: allow env var override
     let strategy = choose_base_strategy().expect("Unable to find the config directory!");
-    let mut path = strategy.config_dir();
-    path.push("helix");
-    path
+    own_or_helix_dir(&strategy.config_dir())
+});
+
+static DATA_DIR: std::sync::LazyLock<PathBuf> = std::sync::LazyLock::new(|| {
+    let strategy = choose_base_strategy().expect("Unable to find the data directory!");
+    own_or_helix_dir(&strategy.data_dir())
+});
+
+/// `base/phelix` if it exists, else `base/helix` if that exists, else `base/phelix`.
+fn own_or_helix_dir(base: &Path) -> PathBuf {
+    let own = base.join(DIR_NAME);
+    if !own.exists() {
+        let helix = base.join(HELIX_DIR_NAME);
+        if helix.exists() {
+            return helix;
+        }
+    }
+    own
+}
+
+pub fn config_dir() -> PathBuf {
+    CONFIG_DIR.clone()
 }
 
 pub fn cache_dir() -> PathBuf {
     // TODO: allow env var override
     let strategy = choose_base_strategy().expect("Unable to find the cache directory!");
     let mut path = strategy.cache_dir();
-    path.push("helix");
+    path.push(DIR_NAME);
     path
 }
 
 pub fn data_dir() -> PathBuf {
-    let strategy = choose_base_strategy().expect("Unable to find the data directory!");
-    let mut path = strategy.data_dir();
-    path.push("helix");
-    path
+    DATA_DIR.clone()
 }
 
 pub fn config_file() -> PathBuf {
@@ -161,7 +183,7 @@ pub fn lang_config_file() -> PathBuf {
 }
 
 pub fn default_log_file() -> PathBuf {
-    cache_dir().join("helix.log")
+    cache_dir().join("phelix.log")
 }
 
 /// Merge two TOML documents, merging values from `right` onto `left`
@@ -282,6 +304,36 @@ fn ensure_parent_dir(path: &Path) {
     if let Some(parent) = path.parent() {
         if !parent.exists() {
             std::fs::create_dir_all(parent).ok();
+        }
+    }
+}
+
+#[cfg(test)]
+mod dir_tests {
+    use super::own_or_helix_dir;
+
+    #[test]
+    fn own_dir_wins_and_helix_dir_is_the_fallback() {
+        // (phelix exists, helix exists, chosen)
+        let cases = [
+            (false, false, "phelix"),
+            (false, true, "helix"),
+            (true, false, "phelix"),
+            (true, true, "phelix"),
+        ];
+        for (phelix, helix, chosen) in cases {
+            let base = tempfile::tempdir().unwrap();
+            if phelix {
+                std::fs::create_dir(base.path().join("phelix")).unwrap();
+            }
+            if helix {
+                std::fs::create_dir(base.path().join("helix")).unwrap();
+            }
+            assert_eq!(
+                own_or_helix_dir(base.path()),
+                base.path().join(chosen),
+                "phelix exists: {phelix}, helix exists: {helix}"
+            );
         }
     }
 }

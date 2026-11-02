@@ -2,8 +2,16 @@
 
 To override global configuration parameters, create a `config.toml` file located in your config directory:
 
-- Linux and Mac: `~/.config/helix/config.toml`
-- Windows: `%AppData%\helix\config.toml`
+- Linux and Mac: `~/.config/phelix/config.toml`
+- Windows: `%AppData%\phelix\config.toml`
+
+If that directory doesn't exist but Helix's does (`~/.config/helix`, or
+`%AppData%\helix` on Windows), Phelix reads Helix's instead. The data directory,
+which holds [workspace trust](./workspace-trust.md) grants, falls back the same
+way. To switch, move the directory, for example
+`mv ~/.config/helix ~/.config/phelix`. Don't create an empty one: an empty
+`phelix` directory wins over a full `helix` one. `hx --health` shows the config
+file in use.
 
 > 💡 You can easily open the config file by typing `:config-open` within Helix normal mode.
 

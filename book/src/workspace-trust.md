@@ -72,8 +72,8 @@ hash = sha256:abc123...
 excluded = false
 ```
 
-- Linux, macOS: `~/.local/share/helix/workspace_trust/`
-- Windows: `%AppData%\Roaming\helix\workspace_trust\`
+- Linux, macOS: `~/.local/share/phelix/workspace_trust/`
+- Windows: `%AppData%\Roaming\phelix\workspace_trust\`
 
 The one-file-per-workspace shape is safe under multiple concurrent Helix
 instances — different workspaces never write the same file.

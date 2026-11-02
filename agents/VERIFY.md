@@ -24,7 +24,7 @@ Usually 3–7 paths, not a tour of the editor.
 ## Manual verify
 
 - Build: `cargo install --path hx --locked`
-- Config, if the change needs one, in `~/.config/helix/config.toml`:
+- Config, if the change needs one, in `~/.config/phelix/config.toml`, or `~/.config/helix/config.toml` until it's moved:
   ```toml
   [keys.picker]
   C-n = "move_next"

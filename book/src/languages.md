@@ -16,7 +16,7 @@ There are three possible locations for a `languages.toml` file:
    auto-formatting for Rust:
 
    ```toml
-   # in <config_dir>/helix/languages.toml
+   # in <config_dir>/phelix/languages.toml
 
    [language-server.mylang-lsp]
    command = "mylang-lsp"

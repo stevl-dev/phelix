@@ -190,3 +190,11 @@ Each entry says what the feature adds, and where its code, tests, and book pages
   - `Editor::switch` in `helix-view/src/editor.rs` never discards it as an empty scratch buffer.
 - Relies on:
   - A language feature that asks a server reads its buffer through `Editor::source`. A cherry-pick that adds one, or that adds a read of the focused buffer to a request in one, asks from the source instead.
+
+### rename
+
+- Plan: `fork/rename.md`.
+- Adds: the name Phelix. Config, cache, and data live in `phelix` dirs. Config and data fall back to Helix's `helix` dirs while only those exist, each on its own. The log is `phelix.log`.
+- Code: `own_or_helix_dir`, `config_dir`, `cache_dir`, `data_dir`, and `default_log_file` in `helix-loader/src/lib.rs`, with the unit test in its `dir_tests`. The `.config/phelix/ignore` glob in `languages.toml`.
+- Book: `configuration.md` says how the fallback works and how to move. The pages that name the dirs: `building-from-source.md`, `editor.md`, `install.md`, `languages.md`, `remapping.md`, `themes.md`, `workspace-trust.md`, `guides/tags.md`, `guides/textobject.md`.
+- Relies on: every user dir going through `config_dir`, `cache_dir`, or `data_dir`. A cherry-pick that builds a dir from `etcetera` itself, or names `helix` in a user path, uses them instead.

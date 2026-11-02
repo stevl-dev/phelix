@@ -75,7 +75,7 @@ export HELIX_RUNTIME=~/src/helix/runtime
 Or, create a symbolic link:
 
 ```sh
-ln -Tsf $PWD/runtime ~/.config/helix/runtime
+ln -Tsf $PWD/runtime ~/.config/phelix/runtime
 ```
 
 #### Windows
@@ -91,12 +91,12 @@ setx HELIX_RUNTIME "%userprofile%\src\helix\runtime"
 > 💡 `%userprofile%` resolves to your user directory like
 > `C:\Users\Your-Name\` for example.
 
-Or, create a symlink in `%appdata%\helix\` that links to the source code directory:
+Or, create a symlink in `%appdata%\phelix\` that links to the source code directory:
 
 | Method     | Command                                                                                |
 | ---------- | -------------------------------------------------------------------------------------- |
-| PowerShell | `New-Item -ItemType Junction -Target "runtime" -Path "$Env:AppData\helix\runtime"`     |
-| Cmd        | `cd %appdata%\helix` <br/> `mklink /D runtime "%userprofile%\src\helix\runtime"`       |
+| PowerShell | `New-Item -ItemType Junction -Target "runtime" -Path "$Env:AppData\phelix\runtime"`    |
+| Cmd        | `cd %appdata%\phelix` <br/> `mklink /D runtime "%userprofile%\src\helix\runtime"`      |
 
 > 💡 On Windows, creating a symbolic link may require running PowerShell or
 > Cmd as an administrator.
@@ -132,7 +132,7 @@ script could follow are:
 1. `cp target/opt/hx $BUILD_DIR/usr/bin/hx`
 
 This way the resulting `hx` binary will always look for its runtime directory in
-`/usr/lib/helix/runtime` if the user has no custom runtime in `~/.config/helix`
+`/usr/lib/helix/runtime` if the user has no custom runtime in `~/.config/phelix`
 or `HELIX_RUNTIME`.
 
 ### Validating the installation
