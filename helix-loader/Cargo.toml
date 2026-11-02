@@ -10,10 +10,6 @@ categories.workspace = true
 repository.workspace = true
 homepage.workspace = true
 
-[[bin]]
-name = "hx-loader"
-path = "src/main.rs"
-
 [dependencies]
 helix-stdx = { path = "../helix-stdx" }
 
