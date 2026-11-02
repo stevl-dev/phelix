@@ -128,7 +128,9 @@ impl EditorView {
             inner.height,
             &text_annotations,
         ));
-        text_decorations::review::render(editor, doc, view, theme, &mut decorations, &mut overlays);
+        if let Some(ui) = crate::kind::ui(doc) {
+            ui.decorate(editor, doc, view, theme, &mut decorations, &mut overlays);
+        }
 
         if doc
             .language_config()

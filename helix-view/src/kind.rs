@@ -6,8 +6,9 @@
 use helix_core::movement::Direction;
 use helix_lsp::{lsp, OffsetEncoding};
 
-use crate::editor::CloseError;
-use crate::{Document, DocumentId, Editor, ViewId};
+use crate::editor::{CloseError, GutterType};
+use crate::gutter::GutterFn;
+use crate::{Document, DocumentId, Editor, Theme, ViewId};
 
 pub trait BufferKind: 'static {
     /// Names the kind, for the registry of its `helix-term` side.
@@ -58,5 +59,18 @@ pub trait BufferKind: 'static {
     /// cycle through the buffers as usual.
     fn goto_buffer(&self, _editor: &mut Editor, _direction: Direction, _count: usize) -> bool {
         false
+    }
+
+    /// The `gutter` column in the buffer's views, or `None` for the core's.
+    /// Asked for the line numbers, the diff signs, and the diagnostics.
+    fn gutter<'d>(
+        &self,
+        _editor: &'d Editor,
+        _doc: &'d Document,
+        _theme: &Theme,
+        _gutter: GutterType,
+        _focused: bool,
+    ) -> Option<GutterFn<'d>> {
+        None
     }
 }

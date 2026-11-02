@@ -11,7 +11,7 @@ use crate::{Document, Editor, Theme};
 
 use super::Row;
 
-pub(crate) fn line_numbers<'doc>(
+pub(super) fn line_numbers<'doc>(
     editor: &'doc Editor,
     doc: &'doc Document,
     theme: &Theme,
@@ -43,7 +43,7 @@ pub(crate) fn line_numbers<'doc>(
     ))
 }
 
-pub(crate) fn signs<'doc>(
+pub(super) fn signs<'doc>(
     editor: &'doc Editor,
     doc: &'doc Document,
     theme: &Theme,
@@ -66,7 +66,7 @@ pub(crate) fn signs<'doc>(
 
 /// Upstream's dots, without its filter by the buffer's own servers. The
 /// stream has none, and its diagnostics are its files'.
-pub(crate) fn diagnostics<'doc>(
+pub(super) fn diagnostics<'doc>(
     editor: &'doc Editor,
     doc: &'doc Document,
     theme: &Theme,

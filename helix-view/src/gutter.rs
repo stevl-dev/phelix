@@ -47,15 +47,25 @@ impl GutterType {
     }
 }
 
+fn kind_gutter<'doc>(
+    editor: &'doc Editor,
+    doc: &'doc Document,
+    theme: &Theme,
+    gutter: GutterType,
+    is_focused: bool,
+) -> Option<GutterFn<'doc>> {
+    doc.kind?.gutter(editor, doc, theme, gutter, is_focused)
+}
+
 pub fn diagnostic<'doc>(
-    _editor: &'doc Editor,
+    editor: &'doc Editor,
     doc: &'doc Document,
     _view: &View,
     theme: &Theme,
-    _is_focused: bool,
+    is_focused: bool,
 ) -> GutterFn<'doc> {
-    if let Some(dots) = crate::review::gutter::diagnostics(_editor, doc, theme) {
-        return dots;
+    if let Some(gutter) = kind_gutter(editor, doc, theme, GutterType::Diagnostics, is_focused) {
+        return gutter;
     }
     let warning = theme.get("warning");
     let error = theme.get("error");
@@ -93,14 +103,14 @@ pub fn diagnostic<'doc>(
 }
 
 pub fn diff<'doc>(
-    _editor: &'doc Editor,
+    editor: &'doc Editor,
     doc: &'doc Document,
     _view: &View,
     theme: &Theme,
-    _is_focused: bool,
+    is_focused: bool,
 ) -> GutterFn<'doc> {
-    if let Some(signs) = crate::review::gutter::signs(_editor, doc, theme) {
-        return signs;
+    if let Some(gutter) = kind_gutter(editor, doc, theme, GutterType::Diff, is_focused) {
+        return gutter;
     }
     let added = theme.get("diff.plus.gutter");
     let deleted = theme.get("diff.minus.gutter");
@@ -154,8 +164,8 @@ pub fn line_numbers<'doc>(
     theme: &Theme,
     is_focused: bool,
 ) -> GutterFn<'doc> {
-    if let Some(numbers) = crate::review::gutter::line_numbers(editor, doc, theme, is_focused) {
-        return numbers;
+    if let Some(gutter) = kind_gutter(editor, doc, theme, GutterType::LineNumbers, is_focused) {
+        return gutter;
     }
     let text = doc.text().slice(..);
     let width = line_numbers_width(view, doc);

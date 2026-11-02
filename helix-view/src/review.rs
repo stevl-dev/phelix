@@ -21,16 +21,17 @@ use helix_lsp::{lsp, OffsetEncoding};
 use helix_vcs::{ChangeView, FileChange, Hunk};
 
 use crate::document::Mode;
-use crate::editor::Action;
+use crate::editor::{Action, GutterType};
+use crate::gutter::GutterFn;
 use crate::kind::BufferKind;
 use crate::tree::Tab;
-use crate::{align_view, Align, Document, DocumentId, Editor, ViewId};
+use crate::{align_view, Align, Document, DocumentId, Editor, Theme, ViewId};
 use reconcile::Key;
 
 mod complete;
 mod diagnostics;
 mod forward;
-pub(crate) mod gutter;
+mod gutter;
 pub mod layout;
 mod log;
 mod reconcile;
@@ -95,6 +96,22 @@ impl BufferKind for Kind {
     fn goto_buffer(&self, editor: &mut Editor, direction: Direction, count: usize) -> bool {
         step_file(editor, direction, count);
         true
+    }
+
+    fn gutter<'d>(
+        &self,
+        editor: &'d Editor,
+        doc: &'d Document,
+        theme: &Theme,
+        gutter: GutterType,
+        focused: bool,
+    ) -> Option<GutterFn<'d>> {
+        match gutter {
+            GutterType::LineNumbers => gutter::line_numbers(editor, doc, theme, focused),
+            GutterType::Diff => gutter::signs(editor, doc, theme),
+            GutterType::Diagnostics => gutter::diagnostics(editor, doc, theme),
+            _ => None,
+        }
     }
 }
 

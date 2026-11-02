@@ -13,7 +13,7 @@ mod select;
 mod spinner;
 mod statusline;
 mod text;
-mod text_decorations;
+pub(crate) mod text_decorations;
 
 use crate::compositor::Compositor;
 use crate::filter_picker_entry;

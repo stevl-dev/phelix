@@ -10,6 +10,7 @@ use helix_core::command_line::Args;
 use helix_core::fuzzy::fuzzy_match;
 use helix_core::line_ending::line_end_char_index;
 use helix_core::movement::Direction;
+use helix_core::syntax::OverlayHighlights;
 use helix_core::{encoding, Range, Rope, RopeSlice, Selection};
 use helix_event::register_hook;
 use helix_loader::workspace_trust::TrustQuery;
@@ -19,7 +20,9 @@ use helix_view::document::Mode;
 use helix_view::editor::Action;
 use helix_view::review::{self, Content, Row, Section, Stream};
 use helix_view::tree::Tab;
-use helix_view::{align_view, current, current_ref, doc, view, Align, DocumentId, Editor};
+use helix_view::{
+    align_view, current, current_ref, doc, view, Align, Document, DocumentId, Editor, Theme, View,
+};
 
 mod lsp;
 mod restore;
@@ -35,6 +38,7 @@ use crate::commands::WriteOptions;
 use crate::events::EditorWillUpdate;
 use crate::keymap::KeyTrie;
 use crate::kind::{self, BufferKindUi};
+use crate::ui::text_decorations::DecorationManager;
 
 /// The `helix-term` side of the review's buffer kind.
 struct Ui;
@@ -58,6 +62,25 @@ impl BufferKindUi for Ui {
 
     fn keymap(&self, user: &HashMap<Mode, KeyTrie>) -> Option<HashMap<Mode, KeyTrie>> {
         Some(crate::keymap::review::keymap(user))
+    }
+
+    fn decorate<'a>(
+        &self,
+        editor: &'a Editor,
+        doc: &'a Document,
+        view: &View,
+        theme: &Theme,
+        decorations: &mut DecorationManager<'a>,
+        overlays: &mut Vec<OverlayHighlights>,
+    ) {
+        crate::ui::text_decorations::review::render(
+            editor,
+            doc,
+            view,
+            theme,
+            decorations,
+            overlays,
+        );
     }
 }
 

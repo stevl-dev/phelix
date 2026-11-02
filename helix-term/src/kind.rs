@@ -6,12 +6,14 @@ use std::collections::HashMap;
 use std::sync::RwLock;
 
 use arc_swap::access::Constant;
+use helix_core::syntax::OverlayHighlights;
 use helix_view::document::Mode;
-use helix_view::{view, Document, DocumentId, Editor};
+use helix_view::{view, Document, DocumentId, Editor, Theme, View};
 
 use crate::commands::WriteOptions;
 use crate::compositor;
 use crate::keymap::{KeyTrie, Keymaps};
+use crate::ui::text_decorations::DecorationManager;
 
 pub trait BufferKindUi: Sync + 'static {
     /// `:reload` on the buffer, and `:reload-all` with it open.
@@ -30,6 +32,19 @@ pub trait BufferKindUi: Sync + 'static {
     /// `None` to keep the user's.
     fn keymap(&self, _user: &HashMap<Mode, KeyTrie>) -> Option<HashMap<Mode, KeyTrie>> {
         None
+    }
+
+    /// Draws over the buffer in `view`: decorations, and overlays after its
+    /// syntax highlights.
+    fn decorate<'a>(
+        &self,
+        _editor: &'a Editor,
+        _doc: &'a Document,
+        _view: &View,
+        _theme: &Theme,
+        _decorations: &mut DecorationManager<'a>,
+        _overlays: &mut Vec<OverlayHighlights>,
+    ) {
     }
 }
 

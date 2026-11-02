@@ -3,7 +3,7 @@
 Snapshot: `main` at `4a60f8c`, on upstream `master` at `ba40e547`.
 Goes in `fork/feature-hooks.md`. Feature slug: `feature-hooks`.
 
-Status: phases 0 to 6 done. Section 9's questions are answered under Decisions. Phase 7 is next.
+Status: phases 0 to 7 done. Section 9's questions are answered under Decisions. Phase 8 is next.
 
 ## Bottom line
 
@@ -314,7 +314,7 @@ Each phase is one commit that builds and passes `tools/fork/land.sh --check`. Ea
 | 4 | done | Let a buffer kind close its buffer and step through it. | 3.4's `close` and `goto_buffer`, the two core rules, and `Editor::switch`'s scratch rule. Tests that must pass unchanged: the close and refusal tests, `buffer_motions_in_the_review_step_through_its_files`, `buffer_commands_pass_over_the_review`. |
 | 5 | done | Let a buffer kind reload and write its buffer. | 3.4's `reload` and `write`. `helix-term/src/kind.rs` with `BufferKindUi` and its registry. The `:w` seam goes, and the save chain copy if it can. Tests that must pass unchanged: `w_in_the_review_writes_the_files_it_shows_with_unsaved_changes`, the two reload tests, `a_reload_with_no_changes_closes_the_review_and_names_unsaved_files`. |
 | 6 | done | Give a buffer kind a keymap of its own. | 3.5. `kind_keys` replaces `review_keys`. Tests that must pass unchanged: `a_custom_key_for_goto_next_change_moves_by_review_hunk`, and every test that types in the review. |
-| 7 | | Draw a buffer kind's gutter and decorations through its hooks. | 3.6. Tests that must pass unchanged: `review_backgrounds_follow_their_keys`, `files_diagnostics_land_on_their_rows_open_or_not`, and the review's tests that read line numbers and signs. |
+| 7 | done | Draw a buffer kind's gutter and decorations through its hooks. | 3.6. Tests that must pass unchanged: `review_backgrounds_follow_their_keys`, `files_diagnostics_land_on_their_rows_open_or_not`, and the review's tests that read line numbers and signs. |
 | 8 | | Keep the review's state and config out of the editor's fields. | 3.7. `Editor::features`. `Config::review` moves to a top-level `[review]`, with the registered table names. Book: `book/src/editor.md`'s `[editor.review]` section becomes `[review]`. Tests in `config.rs`, parsed from TOML: `[review]`'s default and an override, an unknown key in it, an unregistered top-level table refused, and `[editor.review]` refused. |
 | 9 | | Name tabs by the features that open them. | 3.8, phase 9 half. `Tree::tabs` without `Tab::ALL`, and the registered tab names. Tests: `tree.rs`'s, with a test tab name, and one for `Tree::tabs`'s order; `tabs.rs` and the `:tab` tests in `review.rs` pass unchanged, since the messages stay. |
 | 10 | | Send what opens in a feature's tab to the code tab from the core. | 3.8, phase 10 half. `TabOptions`, the core check, `Editor::close_tab`. Tests that must pass unchanged: `a_file_opened_in_the_reviews_view_lands_in_the_code_tab`, `a_split_opened_on_a_file_in_the_review_tab_stays_there_until_the_review_closes`, `ret_opens_the_file_in_the_code_tab_and_review_comes_back`, and the goto in the `rust_analyzer` test at a manual run. |
@@ -462,4 +462,12 @@ Each phase records here what it found, the count from section 7, and any hook si
 - `KindKeys` is in `helix-term/src/kind.rs`, beside the registry. It keeps the user's `Keymaps` and the name of the kind whose keymap is in. On a switch from one kind's buffer to another's it puts the user's back before it builds the next kind's.
 - The review's `keymap` in `keymap/review.rs` is `ReviewKeys::swap`'s building of the map, with `replace_commands` and `bindings` as they were. As before, the map is built when the review takes focus, from the user's keymap at that moment.
 - The tests 3.5 names pass unchanged.
+
+### Phase 7
+
+- The count from section 7 is 79, from 83: the three gutter branches in `gutter.rs` and the decoration call in `ui/editor.rs`.
+- The signatures are as 3.6 has them. The core's three gutters share `kind_gutter` in `gutter.rs`, and `diagnostic` and `diff` now name their `editor` and `is_focused` parameters, since they pass them on.
+- The review's kind matches the gutter type to its own `line_numbers`, `signs` and `diagnostics`, so `review::gutter` is a private module now. The decoration is still `text_decorations::review::render`, which the review's UI kind calls. `ui::text_decorations` became `pub(crate)` for that and for `DecorationManager` in the hook's signature.
+- `fit_gutters` stays in the review's sync, as 3.6 says.
+- The tests 3.6 names pass unchanged.
 
