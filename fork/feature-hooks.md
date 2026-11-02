@@ -3,7 +3,7 @@
 Snapshot: `main` at `4a60f8c`, on upstream `master` at `ba40e547`.
 Goes in `fork/feature-hooks.md`. Feature slug: `feature-hooks`.
 
-Status: phases 0 to 11a done. Section 9's questions are answered under Decisions. Phase 11b is next.
+Status: phases 0 to 11b done. Section 9's questions are answered under Decisions. Phase 12 is next.
 
 ## Bottom line
 
@@ -319,7 +319,7 @@ Each phase is one commit that builds and passes `tools/fork/land.sh --check`. Ea
 | 9 | done | Name tabs by the features that open them. | 3.8, phase 9 half. `Tree::tabs` without `Tab::ALL`, and the registered tab names. Tests: `tree.rs`'s, with a test tab name, and one for `Tree::tabs`'s order; `tabs.rs` and the `:tab` tests in `review.rs` pass unchanged, since the messages stay. |
 | 10 | done | Send what opens in a feature's tab to the code tab from the core. | 3.8, phase 10 half. `TabOptions`, the core check, `Editor::close_tab`. Tests that must pass unchanged: `a_file_opened_in_the_reviews_view_lands_in_the_code_tab`, `a_split_opened_on_a_file_in_the_review_tab_stays_there_until_the_review_closes`, `ret_opens_the_file_in_the_code_tab_and_review_comes_back`, and the goto in the `rust_analyzer` test at a manual run. |
 | 11a | done | Let features register commands. | 3.9, commands. `helix-term/src/feature.rs`, the registry's users, the review's `Feature` with its commands. `cargo xtask docgen`. Test: a unit test parses `[keys.normal]` TOML that binds `review_open` by name. It fails if the review's commands aren't in the registry. The `keymap!` macro in the integration tests names commands as Rust paths, not strings, so they don't cover this. |
-| 11b | | Gather the review's tab, config table and hooks into its Feature. | 3.9, the rest. `TABS` and `FEATURE_TABLES` become `Feature::tabs` and `Feature::config`, and `handlers::setup` calls each feature's `register`. No new test: the tests of `:tab`, `[review]` and the review's hooks pin it. |
+| 11b | done | Gather the review's tab, config table and hooks into its Feature. | 3.9, the rest. `TABS` and `FEATURE_TABLES` become `Feature::tabs` and `Feature::config`, and `handlers::setup` calls each feature's `register`. No new test: the tests of `:tab`, `[review]` and the review's hooks pin it. |
 | 12 | | Let features add actions to the changed-file picker. | 3.9, picker actions. Tests: `picker_keys_overlay_defaults_and_no_op_unbinds` in `config.rs` with `review_jump` as a registered action, its default, an override, and `no_op`. |
 | 13 | | Move the binary into an hx crate. | 3.10, `hx`. Build files and the docs that name `--path helix-term`. No new test. `land.sh --check`, and `cargo install --path hx --locked` at the manual check. |
 | 14 | | Move the review into a helix-review crate. | 3.10, `helix-review`. The `pub` items, the harness, the tests, `AGENTS.md`, `agents/*.md`, `FORK.md`. Section 7's count reaches 0. |
@@ -514,4 +514,13 @@ Each phase records here what it found, the count from section 7, and any hook si
 - `CommandCompleter::none`, `positional` and `all` are `pub`, so a feature can build its typable rows.
 - `cargo xtask docgen` keeps every row of `static-cmd.md` and `typable-cmd.md`. The review's moved to the end of each table, after the core's.
 - The test is `keys_bind_the_reviews_commands_by_name` in `commands/review.rs`, not `config.rs`, since it names the review's commands. It binds `review_open` and `:review staged` and reads them back.
+
+### Phase 11b
+
+- The count from section 7 is 22, from 27: the review's row in `FEATURE_TABLES` in `config.rs`, `TABS` in `typed.rs`, and the call to its `register` in `handlers.rs`.
+- `Feature` gained `tabs: &'static [Tab]`, `config: Option<FeatureTable>` and `register: fn()`. `FeatureTable` stays in `config.rs`, beside the code that reads it.
+- `feature::tabs` lists the code tab, then each feature's, and `feature::config_tables` each feature's table. `:tab` and `Config::load` read them in place of the two `const`s, and `:tab`'s messages read as before.
+- `handlers::setup` calls each feature's `register` after the kept tabs' hook, so that hook still comes first.
+- `apply_config` and `register` are private to the review again, since only its `Feature` names them.
+- What the count still finds: the `mod review` lines in `commands.rs`, `keymap.rs`, `text_decorations.rs` and `helix-view/src/lib.rs`, which phase 14 moves; the picker action in `changed_file.rs`, `picker.rs` and `picker_keys.rs`, which phase 12 moves; `FEATURES`, which phase 13 moves; and the docs of `:reload`, `:reload-all` and `:tab`, and two doc comments in `document.rs`, which name the review for the user or as an example.
 

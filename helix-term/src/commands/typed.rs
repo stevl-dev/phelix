@@ -15,7 +15,6 @@ use helix_stdx::path::home_dir;
 use helix_view::document::{read_to_string, DEFAULT_LANGUAGE_NAME};
 use helix_view::editor::{CloseError, ConfigEvent};
 use helix_view::expansion;
-use helix_view::tree::Tab;
 use serde_json::Value;
 use ui::completers::{self, Completer};
 
@@ -2157,10 +2156,6 @@ fn hsplit_new(cx: &mut compositor::Context, _args: Args, event: PromptEvent) -> 
     Ok(())
 }
 
-/// The tabs features open, for `:tab` to tell a name no feature has from a tab
-/// that isn't open.
-const TABS: &[Tab] = &[Tab::CODE, helix_view::review::REVIEW_TAB];
-
 fn tab(cx: &mut compositor::Context, args: Args, event: PromptEvent) -> anyhow::Result<()> {
     if event != PromptEvent::Validate {
         return Ok(());
@@ -2171,12 +2166,12 @@ fn tab(cx: &mut compositor::Context, args: Args, event: PromptEvent) -> anyhow::
         cx.editor.set_status(format!("In the {} tab", tab.name()));
         return Ok(());
     };
-    let tab = TABS
-        .iter()
-        .copied()
+    // WHY: the tabs features open, so an unknown name and a tab that isn't
+    // open get messages of their own.
+    let tab = crate::feature::tabs()
         .find(|tab| tab.name() == name)
         .ok_or_else(|| {
-            let names: Vec<_> = TABS.iter().map(|tab| tab.name()).collect();
+            let names: Vec<_> = crate::feature::tabs().map(|tab| tab.name()).collect();
             let names = match names.split_last() {
                 Some((last, [])) => last.to_string(),
                 Some((last, rest)) => format!("{} and {last}", rest.join(", ")),

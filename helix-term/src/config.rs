@@ -1,3 +1,4 @@
+use crate::feature::config_tables;
 use crate::keymap;
 use crate::keymap::{merge_keys, KeyTrie};
 use helix_loader::merge_toml_values;
@@ -29,12 +30,6 @@ pub struct FeatureTable {
     pub name: &'static str,
     pub apply: fn(&mut Features, Option<&toml::Value>) -> Result<(), TomlError>,
 }
-
-/// The features' tables.
-const FEATURE_TABLES: &[FeatureTable] = &[FeatureTable {
-    name: "review",
-    apply: crate::commands::review::apply_config,
-}];
 
 /// The top-level tables of the core's own.
 const CORE_TABLES: &[&str] = &["theme", "keys", "editor"];
@@ -122,10 +117,10 @@ fn feature_tables(file: &str) -> Result<HashMap<&'static str, toml::Value>, Toml
         if CORE_TABLES.contains(&name.as_str()) {
             continue;
         }
-        let Some(feature) = FEATURE_TABLES.iter().find(|feature| feature.name == name) else {
+        let Some(feature) = config_tables().find(|feature| feature.name == name) else {
             let expected: Vec<_> = CORE_TABLES
                 .iter()
-                .chain(FEATURE_TABLES.iter().map(|feature| &feature.name))
+                .chain(config_tables().map(|feature| &feature.name))
                 .map(|name| format!("`{name}`"))
                 .collect();
             return Err(TomlError::custom(format!(
@@ -250,7 +245,7 @@ impl Config {
 
     /// Reads each feature's table into its state in `features`.
     pub fn apply_features(&self, features: &mut Features) -> Result<(), TomlError> {
-        for table in FEATURE_TABLES {
+        for table in config_tables() {
             (table.apply)(features, self.features.get(table.name))?;
         }
         Ok(())

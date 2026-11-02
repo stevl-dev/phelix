@@ -70,6 +70,8 @@ pub fn setup(config: Arc<ArcSwap<Config>>) -> Handlers {
         event.editor.send_out_of_kept_tabs();
         Ok(())
     });
-    crate::commands::review::register();
+    for feature in crate::feature::features() {
+        (feature.register)();
+    }
     handlers
 }

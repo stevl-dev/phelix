@@ -19,7 +19,9 @@ use helix_view::document::from_reader;
 use helix_view::document::Mode;
 use helix_view::editor::Action;
 use helix_view::features::Features;
-use helix_view::review::{self, Content, ReviewConfig, ReviewState, Row, Section, Stream};
+use helix_view::review::{
+    self, Content, ReviewConfig, ReviewState, Row, Section, Stream, REVIEW_TAB,
+};
 use helix_view::tree::Tab;
 use helix_view::{
     align_view, current, current_ref, doc, view, Align, Document, DocumentId, Editor, Theme, View,
@@ -38,6 +40,7 @@ use super::{push_jump, Context};
 use crate::commands::typed::{CommandCompleter, TypableCommand};
 use crate::commands::MappableCommand;
 use crate::commands::WriteOptions;
+use crate::config::FeatureTable;
 use crate::events::EditorWillUpdate;
 use crate::feature::Feature;
 use crate::keymap::KeyTrie;
@@ -50,6 +53,12 @@ pub(crate) const FEATURE: Feature = Feature {
     commands: &[
         OPEN, NEXT_HUNK, PREV_HUNK, FIRST_HUNK, LAST_HUNK, UNDO, REDO,
     ],
+    tabs: &[REVIEW_TAB],
+    config: Some(FeatureTable {
+        name: "review",
+        apply: apply_config,
+    }),
+    register,
     typable: &[
         TypableCommand {
             name: "review",
@@ -190,7 +199,7 @@ impl BufferKindUi for Ui {
 }
 
 /// Reads `[review]` into the review's state.
-pub(crate) fn apply_config(
+fn apply_config(
     features: &mut Features,
     table: Option<&toml::Value>,
 ) -> Result<(), toml::de::Error> {
@@ -203,7 +212,7 @@ pub(crate) fn apply_config(
 }
 
 /// Registers the review's hook and the UI part of its buffer kind.
-pub(crate) fn register() {
+fn register() {
     kind::register(review::KIND_NAME, &UI);
     register_hook!(move |event: &mut EditorWillUpdate<'_>| {
         review::sync(event.editor, event.completing);
