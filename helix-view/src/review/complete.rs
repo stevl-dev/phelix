@@ -9,6 +9,7 @@ use std::path::PathBuf;
 
 use helix_lsp::{lsp, util::generate_transaction_from_edits, OffsetEncoding};
 
+use super::ReviewState;
 use super::{edit_file, sync::view_of, Review, Row, Stream};
 use crate::{Document, Editor, ViewId};
 
@@ -23,7 +24,7 @@ pub(super) struct Deferred {
 /// shows the stream.
 pub(super) fn file_at_cursor(editor: &Editor, view: ViewId) -> Option<&Document> {
     let view = editor.tree.get(view);
-    let stream = editor.review.stream_of(view.doc)?;
+    let stream = editor.features.review().stream_of(view.doc)?;
     let file = file_on(stream, cursor_row(&editor.documents[&view.doc], view.id))?;
     editor.document_by_path(stream.files[file].change.path())
 }
@@ -121,7 +122,7 @@ fn ranges(edit: &mut lsp::CompletionTextEdit) -> Vec<&mut lsp::Range> {
 /// Makes the deferred edits in their file, after the sync forwarded the
 /// item, unless the forward was `refused`.
 pub(super) fn make_deferred(editor: &mut Editor, refused: bool) {
-    let Some(stream) = editor.review.stream.as_mut() else {
+    let Some(stream) = editor.features.review_mut().stream.as_mut() else {
         return;
     };
     let Some(Deferred {
@@ -132,7 +133,12 @@ pub(super) fn make_deferred(editor: &mut Editor, refused: bool) {
     else {
         return;
     };
-    let stream = editor.review.stream.as_ref().expect("checked above");
+    let stream = editor
+        .features
+        .review()
+        .stream
+        .as_ref()
+        .expect("checked above");
     let seen = stream
         .files
         .iter()

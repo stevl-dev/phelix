@@ -18,7 +18,8 @@ use helix_vcs::{index, visible_changes, ChangeKind, ChangeView, DiffProviderRegi
 use helix_view::document::from_reader;
 use helix_view::document::Mode;
 use helix_view::editor::Action;
-use helix_view::review::{self, Content, Row, Section, Stream};
+use helix_view::features::Features;
+use helix_view::review::{self, Content, ReviewConfig, ReviewState, Row, Section, Stream};
 use helix_view::tree::Tab;
 use helix_view::{
     align_view, current, current_ref, doc, view, Align, Document, DocumentId, Editor, Theme, View,
@@ -82,6 +83,19 @@ impl BufferKindUi for Ui {
             overlays,
         );
     }
+}
+
+/// Reads `[review]` into the review's state.
+pub(crate) fn apply_config(
+    features: &mut Features,
+    table: Option<&toml::Value>,
+) -> Result<(), toml::de::Error> {
+    let config = match table {
+        Some(table) => table.clone().try_into()?,
+        None => ReviewConfig::default(),
+    };
+    features.review_mut().set_config(config);
+    Ok(())
 }
 
 /// Registers the review's hook and the UI part of its buffer kind.
@@ -170,7 +184,8 @@ pub(super) fn review_context(
 
 fn open_stream(editor: &Editor) -> Option<&Stream> {
     editor
-        .review
+        .features
+        .review()
         .stream()
         .filter(|stream| editor.documents.contains_key(&stream.doc))
 }
@@ -373,7 +388,7 @@ fn decode(
 
 pub(super) fn open(cx: &mut Context) {
     let (view, doc) = current_ref!(cx.editor);
-    let Some(stream) = cx.editor.review.stream_of(doc.id()) else {
+    let Some(stream) = cx.editor.features.review().stream_of(doc.id()) else {
         not_a_review(cx.editor);
         return;
     };
@@ -523,7 +538,11 @@ pub(super) fn redo(cx: &mut Context) {
 }
 
 fn stream_rows<T>(editor: &mut Editor, rows: impl Fn(&Stream) -> T) -> Option<T> {
-    let rows = editor.review.stream_of(view!(editor).doc).map(rows);
+    let rows = editor
+        .features
+        .review()
+        .stream_of(view!(editor).doc)
+        .map(rows);
     if rows.is_none() {
         not_a_review(editor);
     }
@@ -532,4 +551,53 @@ fn stream_rows<T>(editor: &mut Editor, rows: impl Fn(&Stream) -> T) -> Option<T>
 
 fn not_a_review(editor: &mut Editor) {
     editor.set_error("This buffer isn't a review. Start one with :review");
+}
+
+#[cfg(test)]
+mod tests {
+    use helix_view::features::Features;
+    use helix_view::review::{ReviewConfig, ReviewState};
+
+    use crate::config::{Config, ConfigLoadError};
+
+    fn load(global: &str, local: Option<&str>) -> Result<Config, String> {
+        let local = local
+            .map(str::to_owned)
+            .ok_or_else(ConfigLoadError::default);
+        Config::load(Ok(&global.to_owned()), local).map_err(|err| err.to_string())
+    }
+
+    fn review(config: Config) -> ReviewConfig {
+        let mut features = Features::default();
+        config.apply_features(&mut features).unwrap();
+        features.review().config()
+    }
+
+    #[test]
+    fn review_table_reads_its_default_an_override_and_both_files() {
+        let both = |row_background, word_background| ReviewConfig {
+            row_background,
+            word_background,
+        };
+        assert_eq!(review(load("", None).unwrap()), both(true, true));
+        let global = "[review]\nrow-background = false";
+        assert_eq!(review(load(global, None).unwrap()), both(false, true));
+        let local = "[review]\nword-background = false";
+        assert_eq!(
+            review(load(global, Some(local)).unwrap()),
+            both(false, false),
+            "the workspace's table merges over the global one"
+        );
+    }
+
+    #[test]
+    fn review_table_refuses_an_unknown_key_and_the_old_place() {
+        let in_review = load("[review]\nrow-backgrounds = false", None).unwrap_err();
+        assert!(
+            in_review.contains("unknown field `row-backgrounds`"),
+            "{in_review}"
+        );
+        let in_editor = load("[editor.review]\nrow-background = false", None).unwrap_err();
+        assert!(in_editor.contains("unknown field `review`"), "{in_editor}");
+    }
 }

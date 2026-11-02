@@ -132,6 +132,7 @@ impl Application {
             workspace_trust,
         );
         Self::load_configured_theme(&mut editor, &config.load(), &mut terminal, theme_mode);
+        config.load().apply_features(&mut editor.features)?;
 
         let keys = Box::new(Map::new(Arc::clone(&config), |config: &Config| {
             &config.keys
@@ -456,6 +457,7 @@ impl Application {
             }
 
             self.terminal.reconfigure((&default_config.editor).into())?;
+            default_config.apply_features(&mut self.editor.features)?;
             // Store new config
             self.config.store(Arc::new(default_config));
             Ok(())

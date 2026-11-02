@@ -10,7 +10,7 @@ use helix_term::application::Application;
 use helix_view::document::Mode;
 use helix_view::graphics::Color;
 use helix_view::input::parse_macro;
-use helix_view::review::Stream;
+use helix_view::review::{ReviewState, Stream};
 use helix_view::tree::Tab;
 use helix_view::{current_ref, doc, view};
 use tempfile::TempDir;
@@ -101,13 +101,13 @@ async fn run_until(
 
 async fn start_review(app: &mut Application) -> anyhow::Result<()> {
     run_until(app, ":review<ret>", |app| {
-        app.editor.review.stream().is_some()
+        app.editor.features.review().stream().is_some()
     })
     .await
 }
 
 fn stream(app: &Application) -> &Stream {
-    app.editor.review.stream().unwrap()
+    app.editor.features.review().stream().unwrap()
 }
 
 fn stream_text(app: &Application) -> String {
@@ -242,7 +242,7 @@ async fn review_says_when_nothing_changed() -> anyhow::Result<()> {
         status(app) == "There are no changes to review"
     })
     .await?;
-    assert!(app.editor.review.stream().is_none());
+    assert!(app.editor.features.review().stream().is_none());
     Ok(())
 }
 
@@ -268,7 +268,7 @@ async fn a_reload_with_no_changes_closes_the_review_and_names_unsaved_files() ->
         &["commit", "--quiet", "--all", "--message", "work"],
     );
     run_until(&mut app, ":reload<ret>", |app| {
-        app.editor.review.stream().is_none()
+        app.editor.features.review().stream().is_none()
     })
     .await?;
 
@@ -646,7 +646,7 @@ async fn closing_the_review_waits_for_its_files_and_closes_those_it_opened() -> 
             (
                 Some(":w<ret>:buffer-close<ret>"),
                 Some(&|app| {
-                    assert!(app.editor.review.stream().is_none());
+                    assert!(app.editor.features.review().stream().is_none());
                     assert_eq!(app.editor.tree.tab(), Tab::Code, "its tab closes with it");
                     assert_eq!(app.editor.tree.tab_focus(Tab::Review), None);
                     assert!(
@@ -676,7 +676,7 @@ async fn force_closing_the_review_drops_the_changes_of_the_files_it_opened() -> 
         &mut app,
         Some("/^A<ret>ix<esc>/^C<ret>ix<esc>:buffer-close!<ret>"),
         Some(&|app| {
-            assert!(app.editor.review.stream().is_none());
+            assert!(app.editor.features.review().stream().is_none());
             assert_eq!(app.editor.tree.tab(), Tab::Code);
             assert!(app.editor.document_by_path(path("c.txt")).is_none());
             assert_eq!(read(&path("c.txt")), "C\n");
@@ -699,7 +699,7 @@ async fn a_staged_review_closes_over_unsaved_files() -> anyhow::Result<()> {
     let file = repo.path().join("a.txt");
     let mut app = app_on(file.clone())?;
     run_until(&mut app, ":review staged<ret>", |app| {
-        app.editor.review.stream().is_some()
+        app.editor.features.review().stream().is_some()
     })
     .await?;
 
@@ -707,7 +707,7 @@ async fn a_staged_review_closes_over_unsaved_files() -> anyhow::Result<()> {
         &mut app,
         Some("/two<ret><ret>Ix<esc>:tab review<ret>:buffer-close<ret>"),
         Some(&|app| {
-            assert!(app.editor.review.stream().is_none());
+            assert!(app.editor.features.review().stream().is_none());
             assert!(app.editor.document_by_path(&file).unwrap().is_modified());
         }),
         false,
@@ -729,7 +729,7 @@ async fn a_file_opened_from_the_review_stays_open_after_it() -> anyhow::Result<(
             (
                 Some("<ret>:review<ret>:buffer-close<ret>"),
                 Some(&|app| {
-                    assert!(app.editor.review.stream().is_none());
+                    assert!(app.editor.features.review().stream().is_none());
                     assert!(app.editor.document_by_path(&b).is_some());
                 }),
             ),
@@ -1428,7 +1428,7 @@ async fn w_in_the_review_writes_the_files_it_shows_with_unsaved_changes() -> any
     let (a, b, c, elsewhere) = (path("a.txt"), path("b.txt"), path("c.txt"), path("x.txt"));
     let mut app = app_on(c.clone())?;
     run_until(&mut app, "ic<esc>:review<ret>", |app| {
-        app.editor.review.stream().is_some()
+        app.editor.features.review().stream().is_some()
     })
     .await?;
 
@@ -1787,7 +1787,7 @@ async fn a_split_opened_on_a_file_in_the_review_tab_stays_there_until_the_review
             (
                 Some("<C-w>w:buffer-close<ret>"),
                 Some(&|app| {
-                    assert!(app.editor.review.stream().is_none());
+                    assert!(app.editor.features.review().stream().is_none());
                     assert_eq!(app.editor.tree.tabs().collect::<Vec<_>>(), [Tab::Code]);
                     assert!(doc!(app.editor).path() == Some(&file));
                     assert!(
@@ -1807,7 +1807,7 @@ async fn review_switches_to_the_open_review() -> anyhow::Result<()> {
     let repo = seventh_changed();
     let mut app = app_on(repo.path().join("a.txt"))?;
     run_until(&mut app, ":review unstaged<ret>", |app| {
-        app.editor.review.stream().is_some()
+        app.editor.features.review().stream().is_some()
     })
     .await?;
 
@@ -1972,10 +1972,17 @@ fn diff_backgrounds(app: &Application) -> Vec<Color> {
         .collect()
 }
 
-#[tokio::test(flavor = "multi_thread")]
-async fn review_backgrounds_follow_their_keys() -> anyhow::Result<()> {
+/// The diff backgrounds the review draws with `review` as its `[review]`.
+async fn backgrounds_with(review: &str) -> anyhow::Result<Vec<Color>> {
     let repo = repo(&[("a.txt", "one two\n")], &[("a.txt", Some("one three\n"))]);
-    let mut app = app_on(repo.path().join("a.txt"))?;
+    let mut config = test_config();
+    config
+        .features
+        .insert("review", toml::Value::Table(toml::from_str(review)?));
+    let mut app = AppBuilder::new()
+        .with_config(config)
+        .with_file(repo.path().join("a.txt"), None)
+        .build()?;
     app.editor.set_theme(toml::from_str(
         r#"
         "ui.selection" = { bg = "yellow" }
@@ -1985,31 +1992,29 @@ async fn review_backgrounds_follow_their_keys() -> anyhow::Result<()> {
         "#,
     )?)?;
     start_review(&mut app).await?;
+    test_key_sequences(&mut app, vec![(None, None)], false).await?;
+    Ok(diff_backgrounds(&app))
+}
 
+#[test]
+fn review_backgrounds_follow_their_keys() -> anyhow::Result<()> {
     let (added, removed, words) = (Color::Green, Color::Red, Color::Blue);
-    test_key_sequences(
-        &mut app,
-        vec![
-            (
-                None,
-                Some(&|app| assert_eq!(diff_backgrounds(app), [added, removed, words])),
-            ),
-            (
-                Some(":set review.row-background false<ret>"),
-                Some(&|app| assert_eq!(diff_backgrounds(app), [words])),
-            ),
-            (
-                Some(":set review.word-background false<ret>"),
-                Some(&|app| assert_eq!(diff_backgrounds(app), [])),
-            ),
-            (
-                Some(":set review.row-background true<ret>"),
-                Some(&|app| assert_eq!(diff_backgrounds(app), [added, removed])),
-            ),
-        ],
-        false,
-    )
-    .await
+    let cases: [(&str, &[Color]); 4] = [
+        ("", &[added, removed, words]),
+        ("row-background = false", &[words]),
+        ("row-background = false\nword-background = false", &[]),
+        ("word-background = false", &[added, removed]),
+    ];
+    for (review, expected) in cases {
+        // WHY: an `Application` registers its event hooks for the tokio
+        // runtime it runs in, so each case needs a runtime of its own.
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()?;
+        let backgrounds = runtime.block_on(backgrounds_with(review))?;
+        assert_eq!(backgrounds, expected, "[review] {review}");
+    }
+    Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -2201,7 +2206,7 @@ async fn a_staged_review_takes_no_edits() -> anyhow::Result<()> {
     let file = repo.path().join("a.txt");
     let mut app = app_on(file.clone())?;
     run_until(&mut app, ":review staged<ret>", |app| {
-        app.editor.review.stream().is_some()
+        app.editor.features.review().stream().is_some()
     })
     .await?;
     let before = stream_text(&app);
@@ -2233,7 +2238,7 @@ async fn a_staged_review_ignores_edits_to_the_file() -> anyhow::Result<()> {
     let file = repo.path().join("a.txt");
     let mut app = app_on(file.clone())?;
     run_until(&mut app, ":review staged<ret>", |app| {
-        app.editor.review.stream().is_some()
+        app.editor.features.review().stream().is_some()
     })
     .await?;
     let before = stream_text(&app);
@@ -2297,7 +2302,7 @@ async fn staging_takes_the_selected_hunk_out_of_an_unstaged_review() -> anyhow::
     let file = repo.path().join("a.txt");
     let mut app = app_on(file.clone())?;
     run_until(&mut app, ":review unstaged<ret>", |app| {
-        app.editor.review.stream().is_some()
+        app.editor.features.review().stream().is_some()
     })
     .await?;
     run_until(&mut app, "]g:stage-hunk<ret>", |app| {
@@ -2328,7 +2333,7 @@ async fn unstaging_puts_back_the_head_text() -> anyhow::Result<()> {
     let file = repo.path().join("a.txt");
     let mut app = app_on(file.clone())?;
     run_until(&mut app, ":review staged<ret>", |app| {
-        app.editor.review.stream().is_some()
+        app.editor.features.review().stream().is_some()
     })
     .await?;
     let staged_first_line = review_of(&file, "a1\nA1\na2\na3\n");
@@ -2397,7 +2402,7 @@ async fn a_new_file_can_be_staged_and_unstaged() -> anyhow::Result<()> {
     let repo = repo(&[("a.txt", "a1\n")], &[("c.txt", Some("c1\nc2\n"))]);
     let mut app = app_on(repo.path().join("a.txt"))?;
     run_until(&mut app, ":review unstaged<ret>", |app| {
-        app.editor.review.stream().is_some()
+        app.editor.features.review().stream().is_some()
     })
     .await?;
     run_until(&mut app, "]g:stage-hunk<ret>", |app| {
@@ -2405,7 +2410,7 @@ async fn a_new_file_can_be_staged_and_unstaged() -> anyhow::Result<()> {
     })
     .await?;
     assert_eq!(index_text(&repo, "c.txt").unwrap(), "c1\nc2\n");
-    assert!(app.editor.review.stream().is_none());
+    assert!(app.editor.features.review().stream().is_none());
 
     run_until(&mut app, ":review staged<ret>", |app| {
         stream_text(app).contains("c1")
@@ -2488,7 +2493,7 @@ async fn review_restore_leaves_the_index_to_unstage_hunk() -> anyhow::Result<()>
     let repo = staged_and_unstaged();
     let mut app = app_on(repo.path().join("a.txt"))?;
     run_until(&mut app, ":review staged<ret>", |app| {
-        app.editor.review.stream().is_some()
+        app.editor.features.review().stream().is_some()
     })
     .await?;
 

@@ -9,6 +9,7 @@ use helix_core::diagnostic::Severity;
 use crate::gutter::GutterFn;
 use crate::{Document, Editor, Theme};
 
+use super::ReviewState;
 use super::Row;
 
 pub(super) fn line_numbers<'doc>(
@@ -17,7 +18,7 @@ pub(super) fn line_numbers<'doc>(
     theme: &Theme,
     is_focused: bool,
 ) -> Option<GutterFn<'doc>> {
-    let stream = editor.review.stream_of(doc.id())?;
+    let stream = editor.features.review().stream_of(doc.id())?;
     let linenr = theme.get("ui.linenr");
     let linenr_select = theme.get("ui.linenr.selected");
     let [base_width, source_width] = stream.widths;
@@ -48,7 +49,7 @@ pub(super) fn signs<'doc>(
     doc: &'doc Document,
     theme: &Theme,
 ) -> Option<GutterFn<'doc>> {
-    let stream = editor.review.stream_of(doc.id())?;
+    let stream = editor.features.review().stream_of(doc.id())?;
     let added = theme.get("diff.plus.gutter");
     let removed = theme.get("diff.minus.gutter");
     Some(Box::new(
@@ -71,7 +72,7 @@ pub(super) fn diagnostics<'doc>(
     doc: &'doc Document,
     theme: &Theme,
 ) -> Option<GutterFn<'doc>> {
-    editor.review.stream_of(doc.id())?;
+    editor.features.review().stream_of(doc.id())?;
     let warning = theme.get("warning");
     let error = theme.get("error");
     let info = theme.get("info");

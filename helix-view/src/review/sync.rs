@@ -9,6 +9,7 @@ use helix_core::{diff::compare_ropes, history::History, Rope, Transaction};
 
 use helix_vcs::ChangeView;
 
+use super::ReviewState;
 use super::{complete, diagnostics, edit_file, forward, layout, log, update, Content, Row, Stream};
 use crate::document::{from_reader, DocumentOpenError, Mode};
 use crate::editor::Action;
@@ -17,12 +18,23 @@ use crate::{align_view, Align, Document, DocumentId, Editor, ViewId};
 
 /// `completing` is whether a completion menu is open.
 pub fn sync(editor: &mut Editor, completing: bool) {
-    let Some(doc_id) = editor.review.stream.as_ref().map(|stream| stream.doc) else {
+    let Some(doc_id) = editor
+        .features
+        .review()
+        .stream
+        .as_ref()
+        .map(|stream| stream.doc)
+    else {
         fit_gutters(editor);
         return;
     };
     if !editor.documents.contains_key(&doc_id) {
-        let loaded = editor.review.stream.take().map(|stream| stream.loaded);
+        let loaded = editor
+            .features
+            .review_mut()
+            .stream
+            .take()
+            .map(|stream| stream.loaded);
         close_loaded(editor, loaded.unwrap_or_default(), false);
         fit_gutters(editor);
         return;
@@ -68,7 +80,7 @@ pub fn sync(editor: &mut Editor, completing: bool) {
 // whose answer comes after the key, a picker, and `:e` alike. A split opened on
 // a file never showed the stream, so it stays.
 fn move_out(editor: &mut Editor, doc_id: DocumentId) {
-    let Some(stream) = editor.review.stream.as_ref() else {
+    let Some(stream) = editor.features.review().stream.as_ref() else {
         return;
     };
     let views: Vec<_> = stream
@@ -96,7 +108,7 @@ fn move_out(editor: &mut Editor, doc_id: DocumentId) {
 }
 
 fn note_views(editor: &mut Editor, doc_id: DocumentId) {
-    let Some(stream) = editor.review.stream.as_mut() else {
+    let Some(stream) = editor.features.review_mut().stream.as_mut() else {
         return;
     };
     stream.views = editor
@@ -112,8 +124,10 @@ fn note_views(editor: &mut Editor, doc_id: DocumentId) {
 // file's own.
 fn fit_file_style(editor: &mut Editor, doc_id: DocumentId) {
     let view = editor.tree.get(editor.tree.focus);
-    let (Some(stream), Some(doc)) = (editor.review.stream.as_ref(), editor.documents.get(&doc_id))
-    else {
+    let (Some(stream), Some(doc)) = (
+        editor.features.review().stream.as_ref(),
+        editor.documents.get(&doc_id),
+    ) else {
         return;
     };
     if view.doc != doc_id {
@@ -141,7 +155,7 @@ fn fit_file_style(editor: &mut Editor, doc_id: DocumentId) {
 // WHY: a view shows a buffer the review loaded only once you open it there, as
 // by `Enter`, so from then on it's yours, not the review's to close.
 fn keep_shown(editor: &mut Editor) {
-    let Some(stream) = editor.review.stream.as_mut() else {
+    let Some(stream) = editor.features.review_mut().stream.as_mut() else {
         return;
     };
     stream
@@ -162,7 +176,7 @@ pub(super) fn close_loaded(editor: &mut Editor, loaded: Vec<DocumentId>, force: 
 pub fn load(editor: &mut Editor, path: &Path) -> Result<DocumentId, DocumentOpenError> {
     let open = editor.document_by_path(path).map(|doc| doc.id());
     let doc = editor.open(path, Action::Load)?;
-    if let (None, Some(stream)) = (open, editor.review.stream.as_mut()) {
+    if let (None, Some(stream)) = (open, editor.features.review_mut().stream.as_mut()) {
         stream.loaded.push(doc);
     }
     Ok(doc)
@@ -180,7 +194,7 @@ pub(super) fn view_of(editor: &Editor, doc: DocumentId) -> Option<ViewId> {
 /// Forwards the stream's edits since the last sync to the files' buffers, or
 /// puts them back and says why. `None` when there were none.
 fn take_edits(editor: &mut Editor, doc_id: DocumentId) -> Option<Result<(), String>> {
-    let stream = editor.review.stream.as_ref()?;
+    let stream = editor.features.review().stream.as_ref()?;
     if editor.documents.get(&doc_id)?.version() == stream.version {
         return None;
     }
@@ -207,14 +221,20 @@ fn take_edits(editor: &mut Editor, doc_id: DocumentId) -> Option<Result<(), Stri
         settle(doc, &mut editor.tree, view);
         let version = doc.version();
         editor
-            .review
+            .features
+            .review_mut()
             .stream
             .as_mut()
             .expect("checked above")
             .version = version;
         return None;
     };
-    let stream = editor.review.stream.as_ref().expect("checked above");
+    let stream = editor
+        .features
+        .review()
+        .stream
+        .as_ref()
+        .expect("checked above");
     let forward = match forward::forward(stream, edit.changes()) {
         Ok(forward) => forward,
         Err(refusal) => return refuse(editor, refusal.message()),
@@ -256,7 +276,12 @@ fn take_edits(editor: &mut Editor, doc_id: DocumentId) -> Option<Result<(), Stri
         })
         .collect();
 
-    let stream = editor.review.stream.as_mut().expect("checked above");
+    let stream = editor
+        .features
+        .review_mut()
+        .stream
+        .as_mut()
+        .expect("checked above");
     stream.ranges.map(edit.changes());
     debug_assert_eq!(forward.text, text);
     stream.text = text;
@@ -347,7 +372,8 @@ fn rows_match_sources(stream: &Stream) -> bool {
 
 fn relayout(editor: &mut Editor) -> bool {
     let Some(stream) = editor
-        .review
+        .features
+        .review()
         .stream
         .as_ref()
         .filter(|stream| stream.relayout)
@@ -373,7 +399,7 @@ fn commit_files(editor: &mut Editor, doc_id: DocumentId) {
 /// step of the review's undo log.
 pub(super) fn commit_pending(editor: &mut Editor) {
     let focus = editor.tree.focus;
-    let Some(stream) = editor.review.stream.as_mut() else {
+    let Some(stream) = editor.features.review_mut().stream.as_mut() else {
         return;
     };
     let mut step = Vec::new();
@@ -394,8 +420,10 @@ pub(super) fn commit_pending(editor: &mut Editor) {
 }
 
 pub(super) fn save_selections(editor: &mut Editor, doc_id: DocumentId) {
-    let (Some(stream), Some(doc)) = (editor.review.stream.as_mut(), editor.documents.get(&doc_id))
-    else {
+    let (Some(stream), Some(doc)) = (
+        editor.features.review_mut().stream.as_mut(),
+        editor.documents.get(&doc_id),
+    ) else {
         return;
     };
     for (view, _) in editor.tree.views() {
@@ -408,8 +436,10 @@ pub(super) fn save_selections(editor: &mut Editor, doc_id: DocumentId) {
 }
 
 pub(super) fn put_back(editor: &mut Editor, doc_id: DocumentId) -> bool {
-    let (Some(stream), Some(doc)) = (editor.review.stream.as_ref(), editor.documents.get(&doc_id))
-    else {
+    let (Some(stream), Some(doc)) = (
+        editor.features.review().stream.as_ref(),
+        editor.documents.get(&doc_id),
+    ) else {
         return false;
     };
     if doc.version() == stream.version {
@@ -422,7 +452,7 @@ pub(super) fn put_back(editor: &mut Editor, doc_id: DocumentId) -> bool {
     }
 
     let (Some(stream), Some(doc)) = (
-        editor.review.stream.as_mut(),
+        editor.features.review_mut().stream.as_mut(),
         editor.documents.get_mut(&doc_id),
     ) else {
         return false;
@@ -453,7 +483,7 @@ pub(super) fn follow_sources(editor: &mut Editor, doc_id: DocumentId) -> bool {
     if !editor.tree.views().any(|(view, _)| view.doc == doc_id) {
         return false;
     }
-    let Some(stream) = editor.review.stream.as_ref() else {
+    let Some(stream) = editor.features.review().stream.as_ref() else {
         return false;
     };
     if stream.scope == ChangeView::Staged {
@@ -514,11 +544,12 @@ pub(super) fn settle(doc: &mut Document, tree: &mut Tree, view: ViewId) {
 // itself from the rows. This goes if upstream passes the editor there.
 fn fit_gutters(editor: &mut Editor) {
     let stream = editor
-        .review
+        .features
+        .review()
         .stream
         .as_ref()
         .map(|stream| (stream.doc, stream.gutter_width()));
-    if stream.is_none() && !editor.review.widened {
+    if stream.is_none() && !editor.features.review().widened {
         return;
     }
     let configured = editor.config().gutters.line_numbers.min_width;
@@ -528,5 +559,5 @@ fn fit_gutters(editor: &mut Editor) {
             _ => configured,
         };
     }
-    editor.review.widened = stream.is_some();
+    editor.features.review_mut().widened = stream.is_some();
 }

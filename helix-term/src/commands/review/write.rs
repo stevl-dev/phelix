@@ -8,6 +8,7 @@ use std::path::PathBuf;
 
 use anyhow::bail;
 use helix_vcs::ChangeView;
+use helix_view::review::ReviewState;
 use helix_view::{doc, doc_mut, review, view_mut, DocumentId, Editor};
 
 use crate::commands::typed::{
@@ -27,7 +28,8 @@ pub(super) fn write(
 ) -> anyhow::Result<()> {
     let stream = cx
         .editor
-        .review
+        .features
+        .review()
         .stream()
         .expect("the review's buffer is open");
     if stream.scope == ChangeView::Staged {

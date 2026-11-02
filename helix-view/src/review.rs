@@ -19,9 +19,11 @@ use helix_core::{Assoc, ChangeSet, Language, Transaction};
 use helix_core::{Rope, RopeSlice, Selection};
 use helix_lsp::{lsp, OffsetEncoding};
 use helix_vcs::{ChangeView, FileChange, Hunk};
+use serde::Deserialize;
 
 use crate::document::Mode;
 use crate::editor::{Action, GutterType};
+use crate::features::Features;
 use crate::gutter::GutterFn;
 use crate::kind::BufferKind;
 use crate::tree::Tab;
@@ -80,7 +82,7 @@ impl BufferKind for Kind {
         encoding: OffsetEncoding,
     ) {
         let doc = &editor.documents[&editor.tree.get(view).doc];
-        complete::accept_item(&mut editor.review, doc, view, item, encoding);
+        complete::accept_item(editor.features.review_mut(), doc, view, item, encoding);
     }
 
     // WHY: the review's buffer is never modified. Its files are.
@@ -121,7 +123,8 @@ fn step_file(editor: &mut Editor, direction: Direction, count: usize) {
     editor.apply_motion(move |editor| {
         let view = editor.tree.get(editor.tree.focus);
         let Some(headers) = editor
-            .review
+            .features
+            .review()
             .stream_of(view.doc)
             .map(|stream| stream.headers().collect::<Vec<_>>())
         else {
@@ -231,11 +234,66 @@ pub struct Review {
     stream: Option<Stream>,
     /// Whether a view may still have the stream's line number width.
     widened: bool,
+    config: ReviewConfig,
+}
+
+/// Which of the theme's diff styles the review draws, from `[review]`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(default, rename_all = "kebab-case", deny_unknown_fields)]
+pub struct ReviewConfig {
+    /// Tint added and removed rows. Defaults to `true`.
+    pub row_background: bool,
+    /// Mark changed words. Defaults to `true`.
+    pub word_background: bool,
+}
+
+impl ReviewConfig {
+    const DEFAULT: ReviewConfig = ReviewConfig {
+        row_background: true,
+        word_background: true,
+    };
+}
+
+impl Default for ReviewConfig {
+    fn default() -> Self {
+        Self::DEFAULT
+    }
+}
+
+// WHY: what the review reads before anything has stored its state.
+static NO_REVIEW: Review = Review {
+    stream: None,
+    widened: false,
+    config: ReviewConfig::DEFAULT,
+};
+
+/// The review's state in the editor's features.
+pub trait ReviewState {
+    fn review(&self) -> &Review;
+    fn review_mut(&mut self) -> &mut Review;
+}
+
+impl ReviewState for Features {
+    fn review(&self) -> &Review {
+        self.get().unwrap_or(&NO_REVIEW)
+    }
+
+    fn review_mut(&mut self) -> &mut Review {
+        self.get_or_default()
+    }
 }
 
 impl Review {
     pub fn stream(&self) -> Option<&Stream> {
         self.stream.as_ref()
+    }
+
+    pub fn config(&self) -> ReviewConfig {
+        self.config
+    }
+
+    pub fn set_config(&mut self, config: ReviewConfig) {
+        self.config = config;
     }
 
     pub fn stream_of(&self, doc: DocumentId) -> Option<&Stream> {
@@ -632,7 +690,8 @@ fn header(change: &FileChange, note: Option<&str>) -> String {
 
 pub fn show(editor: &mut Editor, root: PathBuf, scope: ChangeView, sections: Vec<Section>) {
     let open = editor
-        .review
+        .features
+        .review()
         .stream
         .as_ref()
         .map(|stream| stream.doc)
@@ -642,14 +701,15 @@ pub fn show(editor: &mut Editor, root: PathBuf, scope: ChangeView, sections: Vec
         // for `:reload-all` from the code tab. The changed-file picker's
         // `review_jump` switches before it reads them.
         if editor
-            .review
+            .features
+            .review()
             .stream
             .as_ref()
             .is_some_and(|stream| stream.scope != scope)
         {
             switch_to(editor, doc);
         }
-        if let Some(stream) = editor.review.stream.as_mut() {
+        if let Some(stream) = editor.features.review_mut().stream.as_mut() {
             stream.root = root;
             stream.scope = scope;
         }
@@ -669,7 +729,7 @@ pub fn show(editor: &mut Editor, root: PathBuf, scope: ChangeView, sections: Vec
     doc.listed = false;
     doc.name_without_path = "[review]";
     doc.kind = Some(&KIND);
-    editor.review.stream = Some(Stream {
+    editor.features.review_mut().stream = Some(Stream {
         doc: doc_id,
         root,
         scope,
@@ -707,7 +767,7 @@ pub fn switch_to(editor: &mut Editor, doc: DocumentId) {
 /// The buffers of the files it shows that have unsaved changes. A staged review
 /// shows the index, not the buffers, so none.
 pub fn unsaved(editor: &Editor) -> Vec<DocumentId> {
-    let Some(stream) = editor.review.stream.as_ref() else {
+    let Some(stream) = editor.features.review().stream.as_ref() else {
         return Vec::new();
     };
     if stream.scope == ChangeView::Staged {
@@ -754,7 +814,13 @@ fn unsaved_names(editor: &Editor) -> Vec<(DocumentId, String)> {
 }
 
 fn shut(editor: &mut Editor, force: bool) {
-    let Some(doc) = editor.review.stream.as_ref().map(|stream| stream.doc) else {
+    let Some(doc) = editor
+        .features
+        .review()
+        .stream
+        .as_ref()
+        .map(|stream| stream.doc)
+    else {
         return;
     };
     // WHY: closing the buffer closes only the views that show it, so a split
@@ -769,7 +835,12 @@ fn shut(editor: &mut Editor, force: bool) {
         editor.close(view);
     }
     let _ = editor.close_document(doc, force);
-    let loaded = editor.review.stream.take().map(|stream| stream.loaded);
+    let loaded = editor
+        .features
+        .review_mut()
+        .stream
+        .take()
+        .map(|stream| stream.loaded);
     sync::close_loaded(editor, loaded.unwrap_or_default(), force);
 }
 
@@ -787,7 +858,7 @@ pub fn edit_file(editor: &mut Editor, doc: DocumentId, view: ViewId, transaction
         file.set_selection(view, Selection::point(from));
     }
     file.apply(transaction, view);
-    if let Some(stream) = editor.review.stream.as_mut() {
+    if let Some(stream) = editor.features.review_mut().stream.as_mut() {
         if !stream.pending.iter().any(|&(pending, _)| pending == doc) {
             stream.pending.push((doc, view));
         }
@@ -807,7 +878,7 @@ fn to_top(editor: &mut Editor, doc: DocumentId) {
 /// Puts the focused view's cursor on the header of `path` in the review it
 /// shows. Returns whether the review has the file.
 pub fn focus_file(editor: &mut Editor, path: &Path) -> bool {
-    let Some(stream) = editor.review.stream_of(view!(editor).doc) else {
+    let Some(stream) = editor.features.review().stream_of(view!(editor).doc) else {
         return false;
     };
     let header = stream.rows.iter().position(|row| match row {
@@ -825,7 +896,7 @@ pub fn focus_file(editor: &mut Editor, path: &Path) -> bool {
 }
 
 pub fn set_context(editor: &mut Editor, lines: usize) {
-    let Some(stream) = editor.review.stream.as_mut() else {
+    let Some(stream) = editor.features.review_mut().stream.as_mut() else {
         return;
     };
     stream.context = lines;
@@ -834,7 +905,7 @@ pub fn set_context(editor: &mut Editor, lines: usize) {
 }
 
 pub fn open_gap(editor: &mut Editor, row: usize) -> bool {
-    let Some(stream) = editor.review.stream_of(view!(editor).doc) else {
+    let Some(stream) = editor.features.review().stream_of(view!(editor).doc) else {
         return false;
     };
     let Some(&Row::Gap { file, start, end }) = stream.rows.get(row) else {
@@ -844,7 +915,7 @@ pub fn open_gap(editor: &mut Editor, row: usize) -> bool {
     update(editor, files, Some((file, start..end)));
     // WHY: a selection on the gap row, as a search leaves, maps over every
     // line it shows, so a following `d` would delete them all.
-    let first = editor.review.stream.as_ref().and_then(|stream| {
+    let first = editor.features.review().stream.as_ref().and_then(|stream| {
         stream.rows.iter().position(|row| {
             matches!(*row, Row::Context { file: f, source, .. } if f == file && source == start)
         })
@@ -859,7 +930,13 @@ pub fn open_gap(editor: &mut Editor, row: usize) -> bool {
 
 // INVARIANT: `open` is a range of `files`' source lines, not the stream's.
 fn update(editor: &mut Editor, mut files: Vec<File>, open: Option<(usize, Range<usize>)>) {
-    let Some(doc_id) = editor.review.stream.as_ref().map(|stream| stream.doc) else {
+    let Some(doc_id) = editor
+        .features
+        .review()
+        .stream
+        .as_ref()
+        .map(|stream| stream.doc)
+    else {
         return;
     };
     // INVARIANT: the transaction below is built on the stream's text, so the
@@ -873,7 +950,8 @@ fn update(editor: &mut Editor, mut files: Vec<File>, open: Option<(usize, Range<
     };
     let loader = editor.syn_loader.load();
     let staged = editor
-        .review
+        .features
+        .review()
         .stream
         .as_ref()
         .is_some_and(|stream| stream.scope == ChangeView::Staged);
@@ -890,7 +968,7 @@ fn update(editor: &mut Editor, mut files: Vec<File>, open: Option<(usize, Range<
     }
     drop(loader);
 
-    let Some(stream) = editor.review.stream.as_ref() else {
+    let Some(stream) = editor.features.review().stream.as_ref() else {
         return;
     };
     let index: HashMap<PathBuf, usize> = files
@@ -972,7 +1050,12 @@ fn update(editor: &mut Editor, mut files: Vec<File>, open: Option<(usize, Range<
     sync::settle(doc, &mut editor.tree, view);
     debug_assert_eq!(*doc.text(), text);
     let version = doc.version();
-    let stream = editor.review.stream.as_mut().expect("checked above");
+    let stream = editor
+        .features
+        .review_mut()
+        .stream
+        .as_mut()
+        .expect("checked above");
     stream.ranges = Ranges::new(&layout.rows, &hunks(&layout.rows), &text);
     stream.files = files;
     stream.rows = layout.rows;

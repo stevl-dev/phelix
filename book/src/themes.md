@@ -280,7 +280,7 @@ See also [#2380]
 - `diff` - version control changes
   - `plus` - additions
     - `gutter` - gutter indicator
-    - `view` - background of an added row in the [review](./keymap.md#review), unless [`row-background`](./editor.md#editorreview-section) is off
+    - `view` - background of an added row in the [review](./keymap.md#review), unless [`row-background`](./configuration.md#review-section) is off
   - `minus` - deletions
     - `gutter` - gutter indicator
     - `view` - background of a removed row in the review, unless `row-background` is off. Its text falls back to `diff.minus`
@@ -289,7 +289,7 @@ See also [#2380]
     - `conflict` - merge conflicts
     - `gutter` - gutter indicator
     - `view`
-      - `text` - changed words in the review, unless [`word-background`](./editor.md#editorreview-section) is off
+      - `text` - changed words in the review, unless [`word-background`](./configuration.md#review-section) is off
 
 - `embedded` - Interpolated expressions embedded in a string template (`${…}`)
 

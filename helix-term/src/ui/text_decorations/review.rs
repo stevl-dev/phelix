@@ -9,7 +9,7 @@
 //! - `ui.review.header` falls back to `markup.heading`, and `ui.review.gap` to
 //!   `comment`. The rule after a header takes its color from `ui.window`.
 //!
-//! `[editor.review]`'s `row-background` and `word-background` turn the row
+//! `[review]`'s `row-background` and `word-background` turn the row
 //! styles and the word marks off. Removed rows then keep their syntax colors.
 //!
 //! Syntax colors come first, from parses of each file's two sides, so these
@@ -18,7 +18,7 @@
 use helix_core::syntax::{Highlight, OverlayHighlights};
 use helix_core::unicode::width::UnicodeWidthStr;
 use helix_view::graphics::{Rect, Style};
-use helix_view::review::{self, Row};
+use helix_view::review::{self, ReviewState, Row};
 use helix_view::{Document, Editor, Theme, View};
 
 use crate::ui::document::{LinePos, TextRenderer};
@@ -32,10 +32,10 @@ pub fn render<'a>(
     decorations: &mut DecorationManager<'a>,
     overlays: &mut Vec<OverlayHighlights>,
 ) {
-    let Some(stream) = editor.review.stream_of(doc.id()) else {
+    let Some(stream) = editor.features.review().stream_of(doc.id()) else {
         return;
     };
-    let config = editor.config().review;
+    let config = editor.features.review().config();
     // WHY: syntax colors on removed rows show only when `diff.minus.view` sets
     // no text color. Most themes fall back to `diff.minus`, a text color.
     let base = !config.row_background

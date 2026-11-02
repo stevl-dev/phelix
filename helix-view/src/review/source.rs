@@ -7,6 +7,7 @@ use helix_core::line_ending::line_end_char_index;
 use helix_core::{Range, RopeSlice, Selection};
 use helix_vcs::ChangeView;
 
+use super::ReviewState;
 use super::{load, Content, Row, Stream};
 use crate::{DocumentId, Editor, ViewId};
 
@@ -27,7 +28,7 @@ fn place(stream: &Stream, text: RopeSlice, pos: usize) -> Option<(usize, usize, 
 /// use.
 pub fn source(editor: &mut Editor, view: ViewId) -> Result<DocumentId, String> {
     let stream_doc = editor.tree.get(view).doc;
-    let Some(stream) = editor.review.stream_of(stream_doc) else {
+    let Some(stream) = editor.features.review().stream_of(stream_doc) else {
         return Err("This buffer isn't a review. Start one with :review".to_string());
     };
     if stream.scope == ChangeView::Staged {

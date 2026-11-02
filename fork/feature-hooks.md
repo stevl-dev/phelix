@@ -3,7 +3,7 @@
 Snapshot: `main` at `4a60f8c`, on upstream `master` at `ba40e547`.
 Goes in `fork/feature-hooks.md`. Feature slug: `feature-hooks`.
 
-Status: phases 0 to 7 done. Section 9's questions are answered under Decisions. Phase 8 is next.
+Status: phases 0 to 8 done. Section 9's questions are answered under Decisions. Phase 9 is next.
 
 ## Bottom line
 
@@ -315,7 +315,7 @@ Each phase is one commit that builds and passes `tools/fork/land.sh --check`. Ea
 | 5 | done | Let a buffer kind reload and write its buffer. | 3.4's `reload` and `write`. `helix-term/src/kind.rs` with `BufferKindUi` and its registry. The `:w` seam goes, and the save chain copy if it can. Tests that must pass unchanged: `w_in_the_review_writes_the_files_it_shows_with_unsaved_changes`, the two reload tests, `a_reload_with_no_changes_closes_the_review_and_names_unsaved_files`. |
 | 6 | done | Give a buffer kind a keymap of its own. | 3.5. `kind_keys` replaces `review_keys`. Tests that must pass unchanged: `a_custom_key_for_goto_next_change_moves_by_review_hunk`, and every test that types in the review. |
 | 7 | done | Draw a buffer kind's gutter and decorations through its hooks. | 3.6. Tests that must pass unchanged: `review_backgrounds_follow_their_keys`, `files_diagnostics_land_on_their_rows_open_or_not`, and the review's tests that read line numbers and signs. |
-| 8 | | Keep the review's state and config out of the editor's fields. | 3.7. `Editor::features`. `Config::review` moves to a top-level `[review]`, with the registered table names. Book: `book/src/editor.md`'s `[editor.review]` section becomes `[review]`. Tests in `config.rs`, parsed from TOML: `[review]`'s default and an override, an unknown key in it, an unregistered top-level table refused, and `[editor.review]` refused. |
+| 8 | done | Keep the review's state and config out of the editor's fields. | 3.7. `Editor::features`. `Config::review` moves to a top-level `[review]`, with the registered table names. Book: `book/src/editor.md`'s `[editor.review]` section becomes `[review]`. Tests in `config.rs`, parsed from TOML: `[review]`'s default and an override, an unknown key in it, an unregistered top-level table refused, and `[editor.review]` refused. |
 | 9 | | Name tabs by the features that open them. | 3.8, phase 9 half. `Tree::tabs` without `Tab::ALL`, and the registered tab names. Tests: `tree.rs`'s, with a test tab name, and one for `Tree::tabs`'s order; `tabs.rs` and the `:tab` tests in `review.rs` pass unchanged, since the messages stay. |
 | 10 | | Send what opens in a feature's tab to the code tab from the core. | 3.8, phase 10 half. `TabOptions`, the core check, `Editor::close_tab`. Tests that must pass unchanged: `a_file_opened_in_the_reviews_view_lands_in_the_code_tab`, `a_split_opened_on_a_file_in_the_review_tab_stays_there_until_the_review_closes`, `ret_opens_the_file_in_the_code_tab_and_review_comes_back`, and the goto in the `rust_analyzer` test at a manual run. |
 | 11 | | Let features register commands. | 3.9, commands. `helix-term/src/feature.rs`, `init`, the registry's users, the review's `Feature`, with phase 8's table name and phase 9's tab. `cargo xtask docgen`. Test: a unit test in `config.rs` parses `[keys.normal]` TOML that binds `review_open` by name, after `init`. It fails if the review's commands aren't in the registry. The `keymap!` macro in the integration tests names commands as Rust paths, not strings, so they don't cover this. |
@@ -394,6 +394,7 @@ By the human, before phase 1:
 
 1. **The name:** `feature-hooks`.
 2. **Feature config:** a top-level `[review]` table, as raw TOML handed to the review. Features register their table names, so an unknown top-level table is still an error. `[editor.review]` stops working.
+   At phase 8: `:set`, `:get` and `:toggle` edit `[editor]` only, so they don't reach `[review]`. By the human's call, they don't: the review's keys change in `config.toml`, then `:config-reload`.
 3. **`:tab` messages:** features register their tab names, and `:tab`'s two messages stay.
 4. **The review's integration tests:** in `helix-review/tests/integration.rs`, on a harness in `helix_term::test_support` behind the `integration` feature.
 5. **Signature help's highlights:** at first, the popup was to use the file's language, with a test. At phase 3 the test couldn't be written: the integration tests run with no language server, and the popup isn't reachable from `Application::editor`. The human dropped the fix, so the popup keeps the focused buffer's language, and shows without colors in the review as before.
@@ -470,4 +471,16 @@ Each phase records here what it found, the count from section 7, and any hook si
 - The review's kind matches the gutter type to its own `line_numbers`, `signs` and `diagnostics`, so `review::gutter` is a private module now. The decoration is still `text_decorations::review::render`, which the review's UI kind calls. `ui::text_decorations` became `pub(crate)` for that and for `DecorationManager` in the hook's signature.
 - `fit_gutters` stays in the review's sync, as 3.6 says.
 - The tests 3.6 names pass unchanged.
+
+### Phase 8
+
+- The count from section 7 is 74, from 79. `Editor::review`, `Config::review` and `ReviewConfig` left `editor.rs`. `config.rs` gained the review's row in `FEATURE_TABLES`, counted until phase 11 moves it to the review's `Feature`.
+- `Features` is in `helix-view/src/features.rs`, with `get` and `get_or_default`. The review reaches its state through `ReviewState`, a trait it implements on `Features`, as `editor.features.review()` and `editor.features.review_mut()`. Both borrow only the field, so the split borrows beside `editor.documents` in the sync and in `accept_completion` still compile. `review()` reads a static empty state before anything has stored one.
+- `ReviewConfig` lives in `helix-view/src/review.rs`, and the review's state holds it. The decoration reads it from there instead of from `editor.config()`.
+- Config, as Decisions 2 has it, with a shape 3.7 left open. Each registered table is a `FeatureTable`: a name, and an `apply` that reads the table, or `None` when it's absent, into the feature's state. `Config::load` runs every `apply` against a scratch `Features`, so a bad `[review]` refuses the whole file, as a bad `[editor.review]` did. `Application::new` and `refresh_config` apply them to the editor.
+- `ConfigRaw` lost `deny_unknown_fields`, with a `WHY`. `feature_tables` parses the file a second time, as a table, and refuses a top-level name that's neither `theme`, `keys` and `editor` nor a registered table's, with serde's message. A second parse keeps the line and column in the errors for `[keys]`, which a `#[serde(flatten)]` catch-all would lose.
+- Both files' tables merge with `merge_toml_values`, at the depth `[editor]` uses.
+- `:set review.row-background` stopped working, as Decisions 2 now says. `review_backgrounds_follow_their_keys` builds one app per `[review]` instead. Each case runs in a tokio runtime of its own, since an `Application` registers its event hooks for its runtime, and a second app in the same one never finished `:review`.
+- The tests of `[review]` itself are in `commands/review.rs`, the review's own file: the default, an override, both files merged, an unknown key, and `[editor.review]` refused. `config.rs` keeps only the core's rule, that an unread top-level table is refused.
+- Book: the review's section left `book/src/editor.md`, whose sections are `[editor]`'s, for `book/src/configuration.md`, and `themes.md`'s two links follow it.
 

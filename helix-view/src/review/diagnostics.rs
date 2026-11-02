@@ -13,6 +13,7 @@ use helix_core::Uri;
 use helix_lsp::{lsp, OffsetEncoding};
 use helix_vcs::ChangeView;
 
+use super::ReviewState;
 use super::{Content, Row};
 use crate::{Document, Editor};
 
@@ -28,7 +29,7 @@ fn report<'a>(editor: &'a Editor, path: &Path) -> &'a [(lsp::Diagnostic, Diagnos
 
 /// Places the diagnostics again when a file's report changed since.
 pub(super) fn follow(editor: &mut Editor) {
-    let Some(stream) = editor.review.stream.as_ref() else {
+    let Some(stream) = editor.features.review().stream.as_ref() else {
         return;
     };
     let moved = stream.files.iter().any(|file| {
@@ -44,7 +45,7 @@ pub(super) fn follow(editor: &mut Editor) {
 /// Puts each file's diagnostics on the rows that show their lines, and drops
 /// the rest.
 pub(super) fn place(editor: &mut Editor) {
-    let Some(stream) = editor.review.stream.as_ref() else {
+    let Some(stream) = editor.features.review().stream.as_ref() else {
         return;
     };
     let Some(doc) = editor.documents.get(&stream.doc) else {
@@ -141,7 +142,12 @@ pub(super) fn place(editor: &mut Editor) {
     }
     drop(loader);
 
-    let stream = editor.review.stream.as_mut().expect("checked above");
+    let stream = editor
+        .features
+        .review_mut()
+        .stream
+        .as_mut()
+        .expect("checked above");
     stream.reports = reports;
     let doc = editor
         .documents

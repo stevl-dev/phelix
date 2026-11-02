@@ -437,7 +437,6 @@ pub struct Config {
     pub buffer_picker: BufferPickerConfig,
     /// Workspace-trust configuration.
     pub workspace_trust: WorkspaceTrustConfig,
-    pub review: ReviewConfig,
     /// Picker bindings. Not read from `[editor]`; the term config fills this
     /// from `[keys.picker]` after merging with the defaults.
     #[serde(skip, default = "default_picker_keys")]
@@ -1180,25 +1179,6 @@ impl Default for WordCompletion {
     }
 }
 
-/// Which of the theme's diff styles the review draws, from `[editor.review]`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(default, rename_all = "kebab-case", deny_unknown_fields)]
-pub struct ReviewConfig {
-    /// Tint added and removed rows. Defaults to `true`.
-    pub row_background: bool,
-    /// Mark changed words. Defaults to `true`.
-    pub word_background: bool,
-}
-
-impl Default for ReviewConfig {
-    fn default() -> Self {
-        Self {
-            row_background: true,
-            word_background: true,
-        }
-    }
-}
-
 impl Default for Config {
     fn default() -> Self {
         Self {
@@ -1267,7 +1247,6 @@ impl Default for Config {
             kitty_keyboard_protocol: Default::default(),
             buffer_picker: BufferPickerConfig::default(),
             workspace_trust: WorkspaceTrustConfig::default(),
-            review: ReviewConfig::default(),
             picker_keys: default_picker_keys(),
         }
     }
@@ -1372,7 +1351,7 @@ pub struct Editor {
     pub mouse_down_range: Option<Range>,
     pub cursor_cache: CursorCache,
     pub workspace_trust: WorkspaceTrust,
-    pub review: crate::review::Review,
+    pub features: crate::features::Features,
 }
 
 pub type Motion = Box<dyn Fn(&mut Editor)>;
@@ -1498,7 +1477,7 @@ impl Editor {
             cursor_cache: CursorCache::default(),
             dir_stack: VecDeque::with_capacity(DIR_STACK_CAP),
             workspace_trust,
-            review: Default::default(),
+            features: Default::default(),
         }
     }
 

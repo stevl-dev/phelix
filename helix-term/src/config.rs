@@ -2,6 +2,7 @@ use crate::keymap;
 use crate::keymap::{merge_keys, KeyTrie};
 use helix_loader::merge_toml_values;
 use helix_view::editor::{default_picker_keys, overlay_picker_keys, PickerCommand};
+use helix_view::features::Features;
 use helix_view::input::KeyEvent;
 use helix_view::{document::Mode, theme};
 use serde::de::Error;
@@ -18,7 +19,25 @@ pub struct Config {
     pub theme: Option<theme::Config>,
     pub keys: HashMap<Mode, KeyTrie>,
     pub editor: helix_view::editor::Config,
+    /// The top-level tables features read, by name, as the file has them.
+    pub features: HashMap<&'static str, toml::Value>,
 }
+
+/// A feature's top-level table: its name, and how it reads the table into the
+/// feature's state, or why it can't. It gets `None` when the table is absent.
+pub struct FeatureTable {
+    pub name: &'static str,
+    pub apply: fn(&mut Features, Option<&toml::Value>) -> Result<(), TomlError>,
+}
+
+/// The features' tables.
+const FEATURE_TABLES: &[FeatureTable] = &[FeatureTable {
+    name: "review",
+    apply: crate::commands::review::apply_config,
+}];
+
+/// The top-level tables of the core's own.
+const CORE_TABLES: &[&str] = &["theme", "keys", "editor"];
 
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct RawKeys {
@@ -74,8 +93,9 @@ fn apply_picker_keys(
     editor.picker_keys = picker_keys;
 }
 
+// WHY: no `deny_unknown_fields`, since the features' tables sit beside these.
+// `feature_tables` refuses a name that's neither the core's nor a feature's.
 #[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(deny_unknown_fields)]
 pub struct ConfigRaw {
     pub theme: Option<theme::Config>,
     pub keys: Option<RawKeys>,
@@ -88,8 +108,40 @@ impl Default for Config {
             theme: None,
             keys: keymap::default(),
             editor: helix_view::editor::Config::default(),
+            features: HashMap::new(),
         }
     }
+}
+
+/// The tables of `file` that features read, by name. Refused with a
+/// top-level name that's neither the core's nor a feature's.
+fn feature_tables(file: &str) -> Result<HashMap<&'static str, toml::Value>, TomlError> {
+    let table: toml::Table = toml::from_str(file)?;
+    let mut tables = HashMap::new();
+    for (name, value) in table {
+        if CORE_TABLES.contains(&name.as_str()) {
+            continue;
+        }
+        let Some(feature) = FEATURE_TABLES.iter().find(|feature| feature.name == name) else {
+            let expected: Vec<_> = CORE_TABLES
+                .iter()
+                .chain(FEATURE_TABLES.iter().map(|feature| &feature.name))
+                .map(|name| format!("`{name}`"))
+                .collect();
+            return Err(TomlError::custom(format!(
+                "unknown field `{name}`, expected one of {}",
+                expected.join(", ")
+            )));
+        };
+        tables.insert(feature.name, value);
+    }
+    Ok(tables)
+}
+
+fn parse(file: &str) -> Result<(ConfigRaw, HashMap<&'static str, toml::Value>), ConfigLoadError> {
+    let raw = toml::from_str(file).map_err(ConfigLoadError::BadConfig)?;
+    let tables = feature_tables(file).map_err(ConfigLoadError::BadConfig)?;
+    Ok((raw, tables))
 }
 
 #[derive(Debug)]
@@ -118,12 +170,17 @@ impl Config {
         global: Result<&String, ConfigLoadError>,
         local: Result<String, ConfigLoadError>,
     ) -> Result<Config, ConfigLoadError> {
-        let global_config: Result<ConfigRaw, ConfigLoadError> =
-            global.and_then(|file| toml::from_str(file).map_err(ConfigLoadError::BadConfig));
-        let local_config: Result<ConfigRaw, ConfigLoadError> =
-            local.and_then(|file| toml::from_str(&file).map_err(ConfigLoadError::BadConfig));
+        let global_config = global.and_then(|file| parse(file));
+        let local_config = local.and_then(|file| parse(&file));
         let res = match (global_config, local_config) {
-            (Ok(global), Ok(local)) => {
+            (Ok((global, mut features)), Ok((local, local_features))) => {
+                for (name, local) in local_features {
+                    let merged = match features.remove(name) {
+                        Some(global) => merge_toml_values(global, local, 3),
+                        None => local,
+                    };
+                    features.insert(name, merged);
+                }
                 let mut keys = keymap::default();
                 let mut picker_overlays = Vec::new();
                 if let Some(global_keys) = global.keys {
@@ -150,6 +207,7 @@ impl Config {
                     theme: local.theme.or(global.theme),
                     keys,
                     editor,
+                    features,
                 }
             }
             // if any configs are invalid return that first
@@ -157,7 +215,7 @@ impl Config {
             | (Err(ConfigLoadError::BadConfig(err)), _) => {
                 return Err(ConfigLoadError::BadConfig(err))
             }
-            (Ok(config), Err(_)) | (Err(_), Ok(config)) => {
+            (Ok((config, features)), Err(_)) | (Err(_), Ok((config, features))) => {
                 let mut keys = keymap::default();
                 let picker_overlay = if let Some(keymap) = config.keys {
                     merge_keys(&mut keys, keymap.modes);
@@ -174,6 +232,7 @@ impl Config {
                     theme: config.theme,
                     keys,
                     editor,
+                    features,
                 }
             }
 
@@ -181,7 +240,20 @@ impl Config {
             (Err(err), Err(_)) => return Err(err),
         };
 
+        // WHY: a feature's table is read into its state only once the editor
+        // exists. Reading it into a scratch state here refuses a bad one with
+        // the rest of the file, as a bad `[editor]` is.
+        res.apply_features(&mut Features::default())
+            .map_err(ConfigLoadError::BadConfig)?;
         Ok(res)
+    }
+
+    /// Reads each feature's table into its state in `features`.
+    pub fn apply_features(&self, features: &mut Features) -> Result<(), TomlError> {
+        for table in FEATURE_TABLES {
+            (table.apply)(features, self.features.get(table.name))?;
+        }
+        Ok(())
     }
 
     pub fn load_default() -> Result<Config, ConfigLoadError> {
@@ -297,5 +369,16 @@ mod tests {
         assert_eq!(keys.get(&ctrl_k), Some(&PickerCommand::Previous));
         assert!(!keys.contains_key(&ctrl_p));
         assert_eq!(keys.get(&ctrl_n), Some(&PickerCommand::Next));
+    }
+
+    #[test]
+    fn config_refuses_a_top_level_table_no_one_reads() {
+        let refused = Config::load(Ok(&"[keyss]\n".to_owned()), Err(ConfigLoadError::default()))
+            .unwrap_err()
+            .to_string();
+        assert!(
+            refused.contains("unknown field `keyss`, expected one of `theme`, `keys`, `editor`"),
+            "{refused}"
+        );
     }
 }

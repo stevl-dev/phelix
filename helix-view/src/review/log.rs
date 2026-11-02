@@ -7,6 +7,7 @@ use helix_core::line_ending::line_end_char_index;
 use helix_core::{Range, Selection};
 use helix_vcs::ChangeView;
 
+use super::ReviewState;
 use super::{sync, Row};
 use crate::{Document, DocumentId, Editor, ViewId};
 
@@ -67,7 +68,7 @@ impl Commit {
 /// Logs what each file committed since the revision beside it, as one step of
 /// the review's undo log.
 pub fn log_step(editor: &mut Editor, since: &[(DocumentId, usize)]) {
-    let Some(stream) = editor.review.stream.as_mut() else {
+    let Some(stream) = editor.features.review_mut().stream.as_mut() else {
         return;
     };
     let step = since
@@ -95,7 +96,11 @@ pub fn redo(editor: &mut Editor, count: usize) {
 /// puts a cursor where each file of the last one changed.
 fn walk(editor: &mut Editor, count: usize, way: Way) {
     let view = editor.tree.focus;
-    let Some(stream) = editor.review.stream_of(editor.tree.get(view).doc) else {
+    let Some(stream) = editor
+        .features
+        .review()
+        .stream_of(editor.tree.get(view).doc)
+    else {
         return;
     };
     let doc_id = stream.doc;
@@ -110,7 +115,13 @@ fn walk(editor: &mut Editor, count: usize, way: Way) {
     let mut moved = Vec::new();
     let mut message = None;
     for _ in 0..count {
-        let log = &mut editor.review.stream.as_mut().expect("checked above").log;
+        let log = &mut editor
+            .features
+            .review_mut()
+            .stream
+            .as_mut()
+            .expect("checked above")
+            .log;
         let Some(step) = log.stacks(way).0.pop() else {
             message = Some(match way {
                 Way::Undo => "Already at oldest change".to_string(),
@@ -119,7 +130,13 @@ fn walk(editor: &mut Editor, count: usize, way: Way) {
             break;
         };
         let walked = walk_step(editor, &step, view, way);
-        let log = &mut editor.review.stream.as_mut().expect("checked above").log;
+        let log = &mut editor
+            .features
+            .review_mut()
+            .stream
+            .as_mut()
+            .expect("checked above")
+            .log;
         let (from, to) = log.stacks(way);
         match walked {
             Ok(()) => {
@@ -199,7 +216,7 @@ fn walk_step(editor: &mut Editor, step: &[Commit], view: ViewId, way: Way) -> Re
 /// Puts a cursor on each file's cursor in the stream's `view`: on that line's
 /// row, or on the file's header when the line isn't shown.
 fn put_cursors(editor: &mut Editor, doc_id: DocumentId, view: ViewId, files: &[DocumentId]) {
-    let Some(stream) = editor.review.stream.as_ref() else {
+    let Some(stream) = editor.features.review().stream.as_ref() else {
         return;
     };
     let text = editor.documents[&doc_id].text().slice(..);
