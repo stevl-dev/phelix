@@ -44,12 +44,19 @@ pub use source::source;
 pub use sync::{load, sync};
 pub use syntax::overlays as syntax_overlays;
 
+/// The name of the review's buffer kind.
+pub const KIND_NAME: &str = "review";
+
 /// The review's buffer kind, on the stream's buffer.
 struct Kind;
 
 static KIND: Kind = Kind;
 
 impl BufferKind for Kind {
+    fn name(&self) -> &'static str {
+        KIND_NAME
+    }
+
     fn source(&self, editor: &mut Editor, view: ViewId) -> Result<DocumentId, String> {
         source(editor, view)
     }

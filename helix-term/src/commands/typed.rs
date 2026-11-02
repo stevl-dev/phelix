@@ -3,6 +3,7 @@ use std::io::BufReader;
 use std::ops::{self, Deref};
 
 use crate::job::Job;
+use crate::kind;
 
 use super::*;
 
@@ -19,8 +20,6 @@ use serde_json::Value;
 use ui::completers::{self, Completer};
 
 mod yank_diagnostics;
-
-mod review_write;
 
 #[derive(Clone)]
 pub struct TypableCommand {
@@ -400,8 +399,9 @@ fn write_impl(
     path: Option<&str>,
     options: WriteOptions,
 ) -> anyhow::Result<()> {
-    if let Some(written) = review_write::write(cx, path, options) {
-        return written;
+    let doc = doc!(cx.editor);
+    if let Some(ui) = kind::ui(doc) {
+        return ui.write(cx, doc.id(), path, options);
     }
     let config = cx.editor.config();
     let (view, doc) = current!(cx.editor);
@@ -484,7 +484,7 @@ fn write_impl(
 }
 
 /// Trim all whitespace preceding line-endings in a document.
-fn trim_trailing_whitespace(doc: &mut Document, view_id: ViewId) {
+pub(super) fn trim_trailing_whitespace(doc: &mut Document, view_id: ViewId) {
     let text = doc.text();
     let mut pos = 0;
     let transaction = Transaction::delete(
@@ -512,7 +512,7 @@ fn trim_trailing_whitespace(doc: &mut Document, view_id: ViewId) {
 }
 
 /// Trim any extra line-endings after the final line-ending.
-fn trim_final_newlines(doc: &mut Document, view_id: ViewId) {
+pub(super) fn trim_final_newlines(doc: &mut Document, view_id: ViewId) {
     let rope = doc.text();
     let mut text = rope.slice(..);
     let mut total_char_len = 0;
@@ -533,7 +533,7 @@ fn trim_final_newlines(doc: &mut Document, view_id: ViewId) {
 }
 
 /// Ensure that the document is terminated with a line ending.
-fn insert_final_newline(doc: &mut Document, view_id: ViewId) {
+pub(super) fn insert_final_newline(doc: &mut Document, view_id: ViewId) {
     let text = doc.text();
     if text.len_chars() > 0 && line_ending::get_line_ending(&text.slice(..)).is_none() {
         let eof = Selection::point(text.len_chars());
@@ -1612,9 +1612,9 @@ fn reload(cx: &mut compositor::Context, _args: Args, event: PromptEvent) -> anyh
         return Ok(());
     }
 
-    // WHY: the review's buffer has no file to reload from. Its changes do.
-    if cx.editor.review.stream_of(doc!(cx.editor).id()).is_some() {
-        super::review::reload(cx);
+    let doc = doc!(cx.editor);
+    if let Some(ui) = kind::ui(doc) {
+        ui.reload(cx, doc.id());
         return Ok(());
     }
     let scrolloff = cx.editor.config().scrolloff;
@@ -1701,7 +1701,14 @@ fn reload_all(cx: &mut compositor::Context, _args: Args, event: PromptEvent) -> 
         }
     }
 
-    super::review::reload(cx);
+    let kinds: Vec<_> = cx
+        .editor
+        .documents()
+        .filter_map(|doc| Some((kind::ui(doc)?, doc.id())))
+        .collect();
+    for (ui, doc) in kinds {
+        ui.reload(cx, doc);
+    }
     Ok(())
 }
 

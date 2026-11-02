@@ -10,33 +10,26 @@ use anyhow::bail;
 use helix_vcs::ChangeView;
 use helix_view::{doc, doc_mut, review, view_mut, DocumentId, Editor};
 
-use super::{
-    code_actions_on_save, insert_final_newline, make_format_callback, trim_final_newlines,
-    trim_trailing_whitespace, WriteOptions,
+use crate::commands::typed::{
+    insert_final_newline, trim_final_newlines, trim_trailing_whitespace, WriteOptions,
 };
+use crate::commands::{code_actions_on_save, make_format_callback};
 use crate::compositor;
 use crate::job::{self, Callback, Job};
 
-/// Writes the review's files when the current buffer is the review, or `None`
-/// when it isn't.
+// WHY: a copy of `write_all_impl`'s chain, which writes every modified buffer
+// and has no seam to log the trims and the format as steps of the review's
+// undo log. Keep it in step with upstream's.
 pub(super) fn write(
     cx: &mut compositor::Context,
     path: Option<&str>,
     options: WriteOptions,
-) -> Option<anyhow::Result<()>> {
-    let doc = doc!(cx.editor).id();
-    cx.editor.review.stream_of(doc)?;
-    Some(write_files(cx, path, options))
-}
-
-// WHY: a copy of `write_all_impl`'s chain, which writes every modified buffer
-// and takes no filter. Keep it in step with upstream's.
-fn write_files(
-    cx: &mut compositor::Context,
-    path: Option<&str>,
-    options: WriteOptions,
 ) -> anyhow::Result<()> {
-    let stream = cx.editor.review.stream().expect("checked by the caller");
+    let stream = cx
+        .editor
+        .review
+        .stream()
+        .expect("the review's buffer is open");
     if stream.scope == ChangeView::Staged {
         bail!("A staged review is read-only. ret opens the file.");
     }

@@ -10,6 +10,9 @@ use crate::editor::CloseError;
 use crate::{Document, DocumentId, Editor, ViewId};
 
 pub trait BufferKind: 'static {
+    /// Names the kind, for the registry of its `helix-term` side.
+    fn name(&self) -> &'static str;
+
     /// The buffer a language feature asks from for `view`'s primary selection,
     /// loaded if need be, with `view`'s selection at the same place in it. Or
     /// why there's none.

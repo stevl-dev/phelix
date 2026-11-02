@@ -103,21 +103,19 @@ Each entry says what the feature adds, and where its code, tests, and book pages
   Rows get syntax colors from parses of each file's whole base and source.
   Removed and added rows get tints, headers a rule, and changed words a mark, from theme scopes: `diff.{plus,minus}.view`, `diff.delta.view.text`, and the fork's `ui.review.header` and `ui.review.gap`.
   `[editor.review]`'s `row-background` and `word-background` turn the tints and the marks off.
-- Code: `helix-view/src/review.rs` and `review/{layout,reconcile,forward,gutter,diagnostics,source,log,sync,syntax,words,complete}.rs`, `helix-term/src/commands/review.rs` and `review/{lsp,stage,restore}.rs`, `helix-term/src/commands/typed/review_write.rs`, `helix-term/src/keymap/review.rs`, `helix-term/src/ui/text_decorations/review.rs`, and `helix-vcs/src/git/index.rs` with the `helix-vcs/src/index.rs` facade.
+- Code: `helix-view/src/review.rs` and `review/{layout,reconcile,forward,gutter,diagnostics,source,log,sync,syntax,words,complete}.rs`, `helix-term/src/commands/review.rs` and `review/{lsp,stage,restore,write}.rs`, `helix-term/src/keymap/review.rs`, `helix-term/src/ui/text_decorations/review.rs`, and `helix-vcs/src/git/index.rs` with the `helix-vcs/src/index.rs` facade.
   It hooks in at:
   - `helix-view/src/editor.rs`: the `Editor::review` field, and `ReviewConfig` in `Config::review`. `replace_document_in_view` is crate-visible, so the sync can put the stream back in its view.
   - `helix-view/src/gutter.rs`: the stream's branch at the top of `line_numbers`, `diff`, and `diagnostic`.
   - `helix-term/src/ui/editor.rs`: the `review_keys` field, the keymap swap at the top of `handle_event`, and the review's decoration and overlays in `render_view`.
-  - `helix-term/src/handlers.rs`: `setup` calls `commands::review::register_hooks`, which runs `review::sync` on `EditorWillUpdate` (`feature-hooks`).
-  - `helix-term/src/commands/typed.rs`: the seam at the top of `write_impl` that sends `:w` in the review to `typed/review_write.rs`.
-    The review's branch at the top of `reload`, since the review's buffer has no file, and the read of an open review at the end of `reload_all`.
+  - `helix-term/src/handlers.rs`: `setup` calls `commands::review::register`, which runs `review::sync` on `EditorWillUpdate` and registers the UI part of the review's buffer kind (`feature-hooks`).
   - `helix-term/src/ui/picker.rs`: the `on_review_jump` hook, its builder, and its key arm.
     `picker_keys.rs` (`picker-keys`) has `ReviewJump` and its `Alt-r` default, and `changed_file.rs` (`changed-files-views`) sets the hook.
 - Book: `book/src/keymap.md` (Review), `book/src/themes.md` (the review's scopes), `book/src/editor.md` (`[editor.review]`), and `book/src/generated/static-cmd.md` and `typable-cmd.md`, generated.
 - Tests: unit tests in `review.rs`, `review/layout.rs`, `review/reconcile.rs`, `review/forward.rs`, `review/syntax.rs`, `review/words.rs`, `review/complete.rs`, `helix-vcs/src/git/index.rs`, and `commands/review/stage.rs`. Integration tests in `helix-term/tests/test/review.rs` over a temporary git repository. `review/rust_analyzer.rs` runs completion and a goto against rust-analyzer. It's ignored, since it changes the working directory, and runs alone at a manual check: `cargo integration-test -- --ignored rust_analyzer --test-threads=1`.
 - Relies on:
   - The review's rename in `commands/review/lsp.rs` follows `rename_symbol`'s request and edit, without `prepareRename`. A cherry-pick that changes them updates it.
-  - `typed/review_write.rs` copies `write_all_impl`'s save chain. A cherry-pick that changes the chain updates the copy.
+  - `commands/review/write.rs` copies `write_all_impl`'s save chain. A cherry-pick that changes the chain updates the copy.
   - `imara-diff` in `helix-view/Cargo.toml` moves together with helix-core's and helix-vcs's.
 - Rulings:
   - The dropped diff review feature's plan and code stay under the local tag `archive/diff-review`. The tag is never pushed.
@@ -161,7 +159,7 @@ Each entry says what the feature adds, and where its code, tests, and book pages
 
 ### feature-hooks
 
-- Plan: `fork/feature-hooks.md`, done through phase 4.
+- Plan: `fork/feature-hooks.md`, done through phase 5.
 - Adds: general hooks the core calls where it used to check for a feature. Nothing the user sees.
 - Hooks:
   - `EditorWillUpdate { editor, completing }`, an event before each key and each frame. Defined in `helix-term/src/events.rs`, and dispatched at the top of `EditorView::handle_event`, before the keymap swap, and of `EditorView::render`, in `helix-term/src/ui/editor.rs`. `completing` is whether a completion menu is open.
@@ -173,6 +171,9 @@ Each entry says what the feature adds, and where its code, tests, and book pages
   - `request_incomplete_completion_list` dispatches `EditorWillUpdate { completing: true }` before it asks again, since it runs inside the key that typed the char, before the frame's.
   - `BufferKind::close`, which `buffer_close_by_ids_impl` in `helix-term/src/commands/typed.rs` calls for a kind's buffer, behind `:bc`, `:bca` and `:bco`. Refused with the buffers that hold it open. The default closes the buffer as the core does.
   - `BufferKind::goto_buffer`, which `goto_buffer` in `helix-term/src/commands.rs` asks first, behind `gn`, `gp`, `:bn` and `:bp`. `false` cycles the buffers as usual.
+  - `BufferKindUi` in `helix-term/src/kind.rs`, a kind's answers that need the UI. A feature registers one for its kind's name, `BufferKind::name`, with `kind::register` at startup, and `kind::ui` finds a buffer's.
+  - `BufferKindUi::reload`, which `reload` in `helix-term/src/commands/typed.rs` calls in place of reading the file, and `reload_all` calls for each open buffer that has one, after the files.
+  - `BufferKindUi::write`, which `write_impl` in `typed.rs` calls in place of writing the buffer, behind `:w` and the commands that write through it.
 - Core rules for a kind's buffer:
   - A refused close or quit doesn't swap it out of its view to show the first unsaved buffer: `buffer_close_by_ids_impl` and `buffers_remaining_impl` in `typed.rs`.
   - `Editor::switch` in `helix-view/src/editor.rs` never discards it as an empty scratch buffer.

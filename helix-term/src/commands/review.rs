@@ -18,20 +18,46 @@ use helix_view::document::Mode;
 use helix_view::editor::Action;
 use helix_view::review::{self, Content, Row, Section, Stream};
 use helix_view::tree::Tab;
-use helix_view::{align_view, current, current_ref, doc, view, Align, Editor};
+use helix_view::{align_view, current, current_ref, doc, view, Align, DocumentId, Editor};
 
 mod lsp;
 mod restore;
 mod stage;
+mod write;
 
 pub(crate) use lsp::replacement;
 pub(super) use restore::review_restore;
 pub(super) use stage::{stage_hunk, unstage_hunk};
 
 use super::{push_jump, Context};
+use crate::commands::WriteOptions;
 use crate::events::EditorWillUpdate;
+use crate::kind::{self, BufferKindUi};
 
-pub(crate) fn register_hooks() {
+/// The `helix-term` side of the review's buffer kind.
+struct Ui;
+
+static UI: Ui = Ui;
+
+impl BufferKindUi for Ui {
+    fn reload(&self, cx: &mut compositor::Context, _doc: DocumentId) {
+        reload(cx);
+    }
+
+    fn write(
+        &self,
+        cx: &mut compositor::Context,
+        _doc: DocumentId,
+        path: Option<&str>,
+        options: WriteOptions,
+    ) -> anyhow::Result<()> {
+        write::write(cx, path, options)
+    }
+}
+
+/// Registers the review's hook and the UI part of its buffer kind.
+pub(crate) fn register() {
+    kind::register(review::KIND_NAME, &UI);
     register_hook!(move |event: &mut EditorWillUpdate<'_>| {
         review::sync(event.editor, event.completing);
         Ok(())
@@ -82,7 +108,7 @@ pub(super) fn complete_scope(_editor: &Editor, input: &str) -> Vec<Completion> {
 
 /// `:reload` in the review, and `:reload-all`: lists and reads the open
 /// review's changes again.
-pub(super) fn reload(cx: &mut compositor::Context) {
+fn reload(cx: &mut compositor::Context) {
     if let Some(scope) = open_stream(cx.editor).map(|stream| stream.scope) {
         read_changes(cx, scope, None, None);
     }

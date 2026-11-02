@@ -3,7 +3,7 @@
 Snapshot: `main` at `4a60f8c`, on upstream `master` at `ba40e547`.
 Goes in `fork/feature-hooks.md`. Feature slug: `feature-hooks`.
 
-Status: phases 0 to 4 done. Section 9's questions are answered under Decisions. Phase 5 is next.
+Status: phases 0 to 5 done. Section 9's questions are answered under Decisions. Phase 6 is next.
 
 ## Bottom line
 
@@ -312,7 +312,7 @@ Each phase is one commit that builds and passes `tools/fork/land.sh --check`. Ea
 | 2 | done | Add buffer kinds, and ask the LSP commands' file from them. | 3.2 and the commands half of 3.3. `helix-view/src/kind.rs`, `Document::kind`, `Editor::source`, `source_open`. The review's kind, with `source` from `review/lend.rs`. The `commands/lsp.rs` rows of 3.3's table. `lent()` keeps only the rename. Tests that must pass unchanged: `lsp_keys_in_the_review_ask_from_the_rows_file`, `lsp_keys_in_the_review_need_a_line_the_file_has`, `a_staged_review_refuses_undo_and_lsp_keys`, and the ignored `rust_analyzer` test at a manual run. |
 | 3 | done | Ask completion and signature help from the buffer's source. | The rest of 3.3. Delete `request/review.rs` and `signature_help/review.rs`. `previews_completion` and `accept_completion` on the kind. Tests that must pass unchanged: the four completion tests in `review.rs` and `signature_help_in_the_review_asks_from_the_rows_file`. No new test: Decisions 5 keeps the popup as it is. |
 | 4 | done | Let a buffer kind close its buffer and step through it. | 3.4's `close` and `goto_buffer`, the two core rules, and `Editor::switch`'s scratch rule. Tests that must pass unchanged: the close and refusal tests, `buffer_motions_in_the_review_step_through_its_files`, `buffer_commands_pass_over_the_review`. |
-| 5 | | Let a buffer kind reload and write its buffer. | 3.4's `reload` and `write`. `helix-term/src/kind.rs` with `BufferKindUi` and its registry. The `:w` seam goes, and the save chain copy if it can. Tests that must pass unchanged: `w_in_the_review_writes_the_files_it_shows_with_unsaved_changes`, the two reload tests, `a_reload_with_no_changes_closes_the_review_and_names_unsaved_files`. |
+| 5 | done | Let a buffer kind reload and write its buffer. | 3.4's `reload` and `write`. `helix-term/src/kind.rs` with `BufferKindUi` and its registry. The `:w` seam goes, and the save chain copy if it can. Tests that must pass unchanged: `w_in_the_review_writes_the_files_it_shows_with_unsaved_changes`, the two reload tests, `a_reload_with_no_changes_closes_the_review_and_names_unsaved_files`. |
 | 6 | | Give a buffer kind a keymap of its own. | 3.5. `kind_keys` replaces `review_keys`. Tests that must pass unchanged: `a_custom_key_for_goto_next_change_moves_by_review_hunk`, and every test that types in the review. |
 | 7 | | Draw a buffer kind's gutter and decorations through its hooks. | 3.6. Tests that must pass unchanged: `review_backgrounds_follow_their_keys`, `files_diagnostics_land_on_their_rows_open_or_not`, and the review's tests that read line numbers and signs. |
 | 8 | | Keep the review's state and config out of the editor's fields. | 3.7. `Editor::features`. `Config::review` moves to a top-level `[review]`, with the registered table names. Book: `book/src/editor.md`'s `[editor.review]` section becomes `[review]`. Tests in `config.rs`, parsed from TOML: `[review]`'s default and an override, an unknown key in it, an unregistered top-level table refused, and `[editor.review]` refused. |
@@ -444,5 +444,14 @@ Each phase records here what it found, the count from section 7, and any hook si
 - The signatures are as 3.4 has them. `close`'s default closes the buffer as `buffer_close_by_ids_impl` does for an ordinary one, and `goto_buffer`'s returns `false`.
 - `step_file` moved from `helix-term/src/commands/review.rs` to `helix-view/src/review.rs`, since the hook is on the `helix-view` side. It called `helix-term`'s `push_jump`, which `helix-view` can't see. It now records its jump with `View::push_jump`, as `Editor::switch` does, after `append_changes_to_history`. It reads the stream from `editor.review` directly: the kind only answers for the review's buffer, so `stream_rows`'s "This buffer isn't a review" refusal can't happen there.
 - The review's `close` ignores the `doc` it gets, since the review has one buffer, and keeps its `WHY` that the buffer is never modified, only its files.
+- The tests 3.4 names pass unchanged.
+
+### Phase 5
+
+- The count from section 7 is 86, from 92: the `:w` seam and `mod review_write` in `typed.rs`, the review's branch in `reload`, and its read at the end of `reload_all`.
+- `BufferKindUi` is in `helix-term/src/kind.rs`, with `reload` and `write` as 3.4 has them. The registry is a static list of `(name, &'static dyn BufferKindUi)`, so the trait is `Sync`. `register` does nothing for a name it has, since every `Application` in the integration tests runs `handlers::setup` in one process. `kind::ui(doc)` finds a buffer's by `BufferKind::name`, which came with this phase.
+- The review's name is `review::KIND_NAME`, shared by its kind and its registration. The registration is in `commands::review::register`, which took over from `register_hooks` and registers the event hook too.
+- The save chain copy stays. `write_all_impl` could take the documents to write, but the review records all the files' trims as one step of its undo log before any save, and wraps the format callback so the format lands as a step of its own. The chain has no seam for either, and one would be a parameter only the review passes. The copy moved from `typed/review_write.rs` to `commands/review/write.rs`, with the review's other code. `typed.rs`'s three trim functions are `pub(super)` so it can reach them.
+- `reload_all` still reads every buffer first, the review's included, then calls each UI kind's `reload`, in the order the review's read ran before.
 - The tests 3.4 names pass unchanged.
 
