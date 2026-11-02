@@ -242,7 +242,7 @@ type DynQueryCallback<T, D> =
     fn(&str, &mut Editor, Arc<D>, &Injector<T, D>) -> BoxFuture<'static, anyhow::Result<()>>;
 
 type CycleChangesCallback<T, D> = Box<dyn Fn(&mut Picker<T, D>)>;
-type ReviewJumpCallback<T> = Box<dyn Fn(&mut Context, &T)>;
+type ActionCallback<T> = Box<dyn Fn(&mut Context, &'static str, &T)>;
 
 pub struct Picker<T: 'static + Send + Sync, D: 'static> {
     columns: Arc<[Column<T, D>]>,
@@ -270,7 +270,9 @@ pub struct Picker<T: 'static + Send + Sync, D: 'static> {
     /// Handles [`PickerCommand::CycleChanges`]. Absent on pickers that do not
     /// have a change list, which then pass the key to the prompt.
     on_cycle_changes: Option<CycleChangesCallback<T, D>>,
-    on_review_jump: Option<ReviewJumpCallback<T>>,
+    /// Runs [`PickerCommand::Action`] by its name. Absent on pickers with no
+    /// actions, which then pass the key to the prompt.
+    on_action: Option<ActionCallback<T>>,
 
     pub truncate_start: bool,
     /// Caches paths to documents
@@ -401,7 +403,7 @@ impl<T: 'static + Send + Sync, D: 'static + Send + Sync> Picker<T, D> {
             default_action: Action::Replace,
             status_label: None,
             on_cycle_changes: None,
-            on_review_jump: None,
+            on_action: None,
             completion_height: 0,
             widths,
             preview_cache: HashMap::new(),
@@ -553,8 +555,11 @@ impl<T: 'static + Send + Sync, D: 'static + Send + Sync> Picker<T, D> {
         self
     }
 
-    pub fn with_on_review_jump(mut self, jump: impl Fn(&mut Context, &T) + 'static) -> Self {
-        self.on_review_jump = Some(Box::new(jump));
+    pub fn with_on_action(
+        mut self,
+        action: impl Fn(&mut Context, &'static str, &T) + 'static,
+    ) -> Self {
+        self.on_action = Some(Box::new(action));
         self
     }
 
@@ -1220,9 +1225,9 @@ impl<I: 'static + Send + Sync, D: 'static + Send + Sync> Component for Picker<I,
                     self.prompt_handle_event(event, ctx);
                 }
             }
-            Some(PickerCommand::ReviewJump) => match (&self.on_review_jump, self.selection()) {
-                (Some(jump), Some(item)) => {
-                    jump(ctx, item);
+            Some(PickerCommand::Action(name)) => match (&self.on_action, self.selection()) {
+                (Some(action), Some(item)) => {
+                    action(ctx, name, item);
                     return close_fn(self);
                 }
                 (Some(_), None) => {}

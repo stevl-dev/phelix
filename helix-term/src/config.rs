@@ -1,4 +1,4 @@
-use crate::feature::config_tables;
+use crate::feature::{config_tables, picker_actions};
 use crate::keymap;
 use crate::keymap::{merge_keys, KeyTrie};
 use helix_loader::merge_toml_values;
@@ -71,6 +71,11 @@ fn parse_picker_keys(value: toml::Value) -> Result<HashMap<KeyEvent, PickerComma
             .as_str()
             .ok_or_else(|| format!("picker binding for '{key}' must be a command name"))?;
         let command = PickerCommand::from_name(command)
+            .or_else(|| {
+                picker_actions()
+                    .find(|action| action.name == command)
+                    .map(|action| PickerCommand::Action(action.name))
+            })
             .ok_or_else(|| format!("unknown picker command '{command}'"))?;
         keys.insert(key, command);
     }
@@ -82,6 +87,9 @@ fn apply_picker_keys(
     overlays: impl IntoIterator<Item = HashMap<KeyEvent, PickerCommand>>,
 ) {
     let mut picker_keys = default_picker_keys();
+    for action in picker_actions() {
+        picker_keys.insert(action.key, PickerCommand::Action(action.name));
+    }
     for overlay in overlays {
         overlay_picker_keys(&mut picker_keys, overlay);
     }
@@ -99,10 +107,14 @@ pub struct ConfigRaw {
 
 impl Default for Config {
     fn default() -> Config {
+        // WHY: `helix-view`'s picker keys are the core's. The features' keys
+        // come in here, as they do for a loaded config.
+        let mut editor = helix_view::editor::Config::default();
+        apply_picker_keys(&mut editor, []);
         Config {
             theme: None,
             keys: keymap::default(),
-            editor: helix_view::editor::Config::default(),
+            editor,
             features: HashMap::new(),
         }
     }

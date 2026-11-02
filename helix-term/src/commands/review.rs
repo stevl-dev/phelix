@@ -19,6 +19,8 @@ use helix_view::document::from_reader;
 use helix_view::document::Mode;
 use helix_view::editor::Action;
 use helix_view::features::Features;
+use helix_view::input::KeyEvent;
+use helix_view::keyboard::{KeyCode, KeyModifiers};
 use helix_view::review::{
     self, Content, ReviewConfig, ReviewState, Row, Section, Stream, REVIEW_TAB,
 };
@@ -42,7 +44,7 @@ use crate::commands::MappableCommand;
 use crate::commands::WriteOptions;
 use crate::config::FeatureTable;
 use crate::events::EditorWillUpdate;
-use crate::feature::Feature;
+use crate::feature::{Feature, PickerAction};
 use crate::keymap::KeyTrie;
 use crate::kind::{self, BufferKindUi};
 use crate::ui::text_decorations::DecorationManager;
@@ -59,6 +61,14 @@ pub(crate) const FEATURE: Feature = Feature {
         apply: apply_config,
     }),
     register,
+    picker_actions: &[PickerAction {
+        name: "review_jump",
+        key: KeyEvent {
+            code: KeyCode::Char('r'),
+            modifiers: KeyModifiers::ALT,
+        },
+        run: |cx, scope, change| jump(cx, scope, change.path()),
+    }],
     typable: &[
         TypableCommand {
             name: "review",
@@ -302,7 +312,7 @@ fn open_stream(editor: &Editor) -> Option<&Stream> {
 /// The changed-file picker's `review_jump`: the open review at `path`'s header
 /// when it shows `scope`'s changes and has the file, or else a new read of
 /// `scope`'s changes, then the header.
-pub(super) fn jump(cx: &mut compositor::Context, scope: ChangeView, path: &Path) {
+fn jump(cx: &mut compositor::Context, scope: ChangeView, path: &Path) {
     if let Some(doc) = open_stream(cx.editor)
         .filter(|stream| stream.scope == scope)
         .map(|stream| stream.doc)
@@ -733,5 +743,30 @@ mod tests {
         };
         assert_eq!(name("C-r"), "review_open");
         assert_eq!(name("C-t"), "review");
+    }
+
+    #[test]
+    fn picker_keys_bind_review_jump_by_default_by_name_and_unbind_it() {
+        use std::str::FromStr;
+
+        use helix_view::editor::PickerCommand;
+        use helix_view::input::KeyEvent;
+
+        let key = |name: &str| KeyEvent::from_str(name).unwrap();
+        let jump = Some(&PickerCommand::Action("review_jump"));
+        let loaded = load("", None).unwrap();
+        assert_eq!(loaded.editor.picker_keys.get(&key("A-r")), jump);
+        assert_eq!(
+            Config::default().editor.picker_keys.get(&key("A-r")),
+            jump,
+            "with no config file too"
+        );
+        let config = load(
+            "[keys.picker]\nC-j = \"review_jump\"\nA-r = \"no_op\"",
+            None,
+        )
+        .unwrap();
+        assert_eq!(config.editor.picker_keys.get(&key("C-j")), jump);
+        assert_eq!(config.editor.picker_keys.get(&key("A-r")), None);
     }
 }

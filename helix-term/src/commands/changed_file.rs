@@ -184,7 +184,7 @@ pub(super) fn changed_file_picker(cx: &mut Context) {
         injector: Some(picker.injector()),
     }));
     let lists_for_cycle = Arc::clone(&lists);
-    let lists_for_review = Arc::clone(&lists);
+    let lists_for_actions = Arc::clone(&lists);
     let lists_for_scan = Arc::clone(&lists);
     let finish_scan = FinishScan(lists);
     let picker = picker.with_on_cycle_changes(move |picker| {
@@ -201,9 +201,11 @@ pub(super) fn changed_file_picker(cx: &mut Context) {
         }
         picker.set_status_label(lists.mode.label());
     });
-    let picker = picker.with_on_review_jump(move |cx, change: &FileChange| {
-        let scope = lists_for_review.lock().unwrap().mode;
-        super::review::jump(cx, scope, change.path());
+    let picker = picker.with_on_action(move |cx, name, change: &FileChange| {
+        let scope = lists_for_actions.lock().unwrap().mode;
+        if let Some(action) = crate::feature::picker_actions().find(|action| action.name == name) {
+            (action.run)(cx, scope, change);
+        }
     });
 
     let trust_full = cx

@@ -40,6 +40,7 @@ Each entry says what the feature adds, and where its code, tests, and book pages
 
 - Adds: `[keys.picker]` in `config.toml`.
   The built-in picker bindings stay, entries override them, and `no_op` returns a key to the query prompt.
+  A feature's picker action binds by its name, as `PickerCommand::Action` (`feature-hooks`).
 - Code: the table in `helix-view/src/editor/picker_keys.rs`, re-exported from `editor.rs` beside the `Config::picker_keys` field.
   `helix-term/src/config.rs` parses `[keys.picker]` and merges it over the defaults, and the key handler in `helix-term/src/ui/picker.rs` looks commands up in the table.
 - Book: `book/src/keymap.md`.
@@ -53,6 +54,7 @@ Each entry says what the feature adds, and where its code, tests, and book pages
 - Code: the picker in `helix-term/src/commands/changed_file.rs`.
   The status walk in `helix-vcs/src/git.rs` also reports staged changes (`status`, `staged_file_change`, `absolute_path`), and `for_each_changed_file` in `helix-vcs/src/lib.rs` passes each change's `ChangeKind`.
   `helix-vcs/src/status.rs` has `ChangeKind`, `ChangeView`, and `visible_changes`. `helix-term/src/ui/picker.rs` has the status label, the `on_cycle_changes` hook, and `replace_items`.
+  The picker runs a feature's `PickerAction` by its name, through the `on_action` hook (`feature-hooks`).
 - Book: `book/src/keymap.md`.
 - Tests: `changed_files_include_staged_and_unstaged` in `helix-vcs/src/git/test.rs`, `all_keeps_one_entry_and_prefers_unstaged` in `status.rs`.
 - Relies on: upstream's status walk in `git.rs` and `lib.rs`. Upstream's #9951 and #16252, both open, rewrite it, so taking either means redoing the staged walk on top.
@@ -106,9 +108,7 @@ Each entry says what the feature adds, and where its code, tests, and book pages
   `[review]`'s `row-background` and `word-background`, a top-level table of `config.toml`, turn the tints and the marks off. `:config-reload` reads it again, and `:set` and `:toggle` don't reach it.
 - Code: `helix-view/src/review.rs` and `review/{layout,reconcile,forward,gutter,diagnostics,source,log,sync,syntax,words,complete}.rs`, `helix-term/src/commands/review.rs` and `review/{lsp,stage,restore,write}.rs`, `helix-term/src/keymap/review.rs`, `helix-term/src/ui/text_decorations/review.rs`, and `helix-vcs/src/git/index.rs` with the `helix-vcs/src/index.rs` facade.
   It hooks in at:
-  - `helix-term/src/feature.rs`: `FEATURES` lists `commands::review::FEATURE`, the review's commands, its tab, its `[review]` table, and its `register`, which runs `review::sync` on `EditorWillUpdate` and registers the UI part of its buffer kind (`feature-hooks`).
-  - `helix-term/src/ui/picker.rs`: the `on_review_jump` hook, its builder, and its key arm.
-    `picker_keys.rs` (`picker-keys`) has `ReviewJump` and its `Alt-r` default, and `changed_file.rs` (`changed-files-views`) sets the hook.
+  - `helix-term/src/feature.rs`: `FEATURES` lists `commands::review::FEATURE`, the review's commands, its tab, its `[review]` table, its `review_jump` picker action on `Alt-r`, and its `register`, which runs `review::sync` on `EditorWillUpdate` and registers the UI part of its buffer kind (`feature-hooks`).
 - Book: `book/src/keymap.md` (Review), `book/src/themes.md` (the review's scopes), `book/src/configuration.md` (`[review]`), and `book/src/generated/static-cmd.md` and `typable-cmd.md`, generated.
 - Tests: unit tests in `review.rs`, `review/layout.rs`, `review/reconcile.rs`, `review/forward.rs`, `review/syntax.rs`, `review/words.rs`, `review/complete.rs`, `helix-vcs/src/git/index.rs`, `commands/review.rs` (`[review]`), and `commands/review/stage.rs`. Integration tests in `helix-term/tests/test/review.rs` over a temporary git repository. `review/rust_analyzer.rs` runs completion and a goto against rust-analyzer. It's ignored, since it changes the working directory, and runs alone at a manual check: `cargo integration-test -- --ignored rust_analyzer --test-threads=1`.
 - Relies on:
@@ -157,7 +157,7 @@ Each entry says what the feature adds, and where its code, tests, and book pages
 
 ### feature-hooks
 
-- Plan: `fork/feature-hooks.md`, done through phase 11b.
+- Plan: `fork/feature-hooks.md`, done through phase 12.
 - Adds: general hooks the core calls where it used to check for a feature. A feature's config is a top-level table of `config.toml` of its own, and an unknown top-level table is still refused.
 - Hooks:
   - `EditorWillUpdate { editor, completing }`, an event before each key and each frame. Defined in `helix-term/src/events.rs`, and dispatched at the top of `EditorView::handle_event`, before the keymap swap, and of `EditorView::render`, in `helix-term/src/ui/editor.rs`. `completing` is whether a completion menu is open.
@@ -177,12 +177,13 @@ Each entry says what the feature adds, and where its code, tests, and book pages
   - `Editor::features` in `helix-view/src/features.rs`, a feature's state by its type, with `get` and `get_or_default`. A field, not a method, so a borrow of a feature's state and one of `editor.documents` can sit side by side.
   - `FeatureTable` in `helix-term/src/config.rs`, a feature's `Feature::config`: its top-level table, and its `apply`, which reads it into the feature's state. `helix-term`'s `Config::features` keeps the registered tables as TOML, merged from both files as `[editor]` is. `Config::load` refuses a top-level name that's neither the core's nor a registered table's, and runs each `apply` against a scratch state, so a bad table refuses the file. `Config::apply_features` reads them into `Editor::features` in `Application::new` and in `refresh_config`, behind `:config-reload`.
   - `Feature` in `helix-term/src/feature.rs`: a feature's static and typable commands. `feature::static_commands` and `typable_commands` list the core's, then each feature's, and every lookup by name goes through them: `MappableCommand::from_str` for the keymap, `TYPABLE_COMMAND_MAP` and the command line's completion in `typed.rs`, the command palette, and `xtask/src/docgen.rs`. `FEATURES` there lists the features Helix is built with. `handlers::setup` calls each one's `register` once per `Application`, after the core's own hooks. `CommandCompleter`'s constructors are public so a feature can build its typable rows.
+  - `PickerAction` in `helix-term/src/feature.rs`, a feature's `Feature::picker_actions`: a name, its default key, and what it runs on the changed-file picker's selected file and list. `PickerCommand::Action(name)` in `helix-view/src/editor/picker_keys.rs` is one in the picker key table. `[keys.picker]` in `config.rs` parses a registered action's name, `apply_picker_keys` puts each action's key under the user's, and `Config::default` does too, so a run with no config file has them. `Picker::with_on_action` in `helix-term/src/ui/picker.rs` runs the action a key names, and `changed_file.rs` looks it up in the registry.
   - Tab names: `Tab` in `helix-view/src/tree.rs` is a name a feature declares, as the review's `REVIEW_TAB`. `Feature::tabs` lists the ones a feature opens, and `feature::tabs` the code tab and every feature's, for `:tab`'s messages.
   - `TabOptions::keeps` in `helix-view/src/editor.rs`, a property `Editor::open_tab` gives a tab: the name of a buffer kind whose buffers the tab keeps. `Editor::send_out_of_kept_tabs` runs on `EditorWillUpdate`, from a hook `handlers::setup` registers before any feature's.
   - `Editor::close_tab`, which closes every view of a tab, and with them the tab.
   - `BufferKindUi::decorate`, which `render_view` in `helix-term/src/ui/editor.rs` calls after the syntax highlights' overlay and before the rainbow brackets'. `ui::text_decorations` is crate-visible so a kind can name `DecorationManager`.
 - Book: `book/src/configuration.md` (`[review]`), the first feature table.
-- Tests: `config_refuses_a_top_level_table_no_one_reads` in `helix-term/src/config.rs`, and the review's `keys_bind_the_reviews_commands_by_name` in `commands/review.rs`, which reads its commands' names through the registry.
+- Tests: `config_refuses_a_top_level_table_no_one_reads` in `helix-term/src/config.rs`, and the review's `keys_bind_the_reviews_commands_by_name` and `picker_keys_bind_review_jump_by_default_by_name_and_unbind_it` in `commands/review.rs`, which read its commands' and its picker action's names through the registry.
 - Core rules for a kind's buffer:
   - A refused close or quit doesn't swap it out of its view to show the first unsaved buffer: `buffer_close_by_ids_impl` and `buffers_remaining_impl` in `typed.rs`.
   - `Editor::switch` in `helix-view/src/editor.rs` never discards it as an empty scratch buffer.

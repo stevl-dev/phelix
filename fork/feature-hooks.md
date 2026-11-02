@@ -3,7 +3,7 @@
 Snapshot: `main` at `4a60f8c`, on upstream `master` at `ba40e547`.
 Goes in `fork/feature-hooks.md`. Feature slug: `feature-hooks`.
 
-Status: phases 0 to 11b done. Section 9's questions are answered under Decisions. Phase 12 is next.
+Status: phases 0 to 12 done. Section 9's questions are answered under Decisions. Phase 13 is next.
 
 ## Bottom line
 
@@ -320,7 +320,7 @@ Each phase is one commit that builds and passes `tools/fork/land.sh --check`. Ea
 | 10 | done | Send what opens in a feature's tab to the code tab from the core. | 3.8, phase 10 half. `TabOptions`, the core check, `Editor::close_tab`. Tests that must pass unchanged: `a_file_opened_in_the_reviews_view_lands_in_the_code_tab`, `a_split_opened_on_a_file_in_the_review_tab_stays_there_until_the_review_closes`, `ret_opens_the_file_in_the_code_tab_and_review_comes_back`, and the goto in the `rust_analyzer` test at a manual run. |
 | 11a | done | Let features register commands. | 3.9, commands. `helix-term/src/feature.rs`, the registry's users, the review's `Feature` with its commands. `cargo xtask docgen`. Test: a unit test parses `[keys.normal]` TOML that binds `review_open` by name. It fails if the review's commands aren't in the registry. The `keymap!` macro in the integration tests names commands as Rust paths, not strings, so they don't cover this. |
 | 11b | done | Gather the review's tab, config table and hooks into its Feature. | 3.9, the rest. `TABS` and `FEATURE_TABLES` become `Feature::tabs` and `Feature::config`, and `handlers::setup` calls each feature's `register`. No new test: the tests of `:tab`, `[review]` and the review's hooks pin it. |
-| 12 | | Let features add actions to the changed-file picker. | 3.9, picker actions. Tests: `picker_keys_overlay_defaults_and_no_op_unbinds` in `config.rs` with `review_jump` as a registered action, its default, an override, and `no_op`. |
+| 12 | done | Let features add actions to the changed-file picker. | 3.9, picker actions. Tests: `picker_keys_overlay_defaults_and_no_op_unbinds` in `config.rs` with `review_jump` as a registered action, its default, an override, and `no_op`. |
 | 13 | | Move the binary into an hx crate. | 3.10, `hx`. Build files and the docs that name `--path helix-term`. No new test. `land.sh --check`, and `cargo install --path hx --locked` at the manual check. |
 | 14 | | Move the review into a helix-review crate. | 3.10, `helix-review`. The `pub` items, the harness, the tests, `AGENTS.md`, `agents/*.md`, `FORK.md`. Section 7's count reaches 0. |
 
@@ -523,4 +523,14 @@ Each phase records here what it found, the count from section 7, and any hook si
 - `handlers::setup` calls each feature's `register` after the kept tabs' hook, so that hook still comes first.
 - `apply_config` and `register` are private to the review again, since only its `Feature` names them.
 - What the count still finds: the `mod review` lines in `commands.rs`, `keymap.rs`, `text_decorations.rs` and `helix-view/src/lib.rs`, which phase 14 moves; the picker action in `changed_file.rs`, `picker.rs` and `picker_keys.rs`, which phase 12 moves; `FEATURES`, which phase 13 moves; and the docs of `:reload`, `:reload-all` and `:tab`, and two doc comments in `document.rs`, which name the review for the user or as an example.
+
+### Phase 12
+
+- Before it, a fix of its own: `Keep the picker keys across :set.` `:set` and `:toggle` rebuild the editor config through serde, which skips `picker_keys`, so they came back as `helix-view`'s defaults and dropped `[keys.picker]`. With the review's `Alt-r` no longer among those defaults, a `:set` would have dropped it too. `Application` now keeps the keys across `ConfigEvent::Update`, and `set_keeps_the_picker_keys_from_the_config` pins it.
+- The count from section 7 is 10, from 22: `ReviewJump`, its name and its `Alt-r` default in `picker_keys.rs`, `on_review_jump` in `picker.rs`, and the call to `review::jump` in `changed_file.rs`.
+- `PickerCommand::Action(&'static str)` replaces `ReviewJump`. `PickerAction` in `feature.rs` is the registered action: a name, a default `KeyEvent`, and `run: fn(&mut compositor::Context, ChangeView, &FileChange)`. The picker's hook is `with_on_action`, which takes the action's name with the item. Only the changed-file picker sets it, and it looks the name up in `feature::picker_actions`.
+- `helix-view`'s `default_picker_keys` is the core's. `apply_picker_keys` puts each action's default key in before the user's overlays, so `no_op` still unbinds one. `Config::default` calls it too: `main` falls back to `Config::default` when there's no config file, and it would have lost `Alt-r` there.
+- The test of `review_jump`'s default, an override and `no_op` is in `commands/review.rs`, since it names the review's action. 3.9 had it in `config.rs`'s `picker_keys_overlay_defaults_and_no_op_unbinds`, which stays the core's own.
+- `review::jump` is private again.
+- What the count still finds: the four `mod review` lines, which phase 14 moves; `FEATURES`, which phase 13 moves; and the docs of `:reload`, `:reload-all` and `:tab`, and two doc comments in `document.rs`, which name the review for the user or as an example.
 
