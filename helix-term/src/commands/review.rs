@@ -412,7 +412,7 @@ pub(super) fn open(cx: &mut Context) {
     let line = target.line;
     let column = target.same_line.then(|| cursor - text.line_to_char(row));
 
-    cx.editor.switch_tab(Tab::Code);
+    cx.editor.switch_tab(Tab::CODE);
     let (view, doc) = current!(cx.editor);
     push_jump(view, doc);
     if let Err(err) = cx.editor.open(&path, Action::Replace) {

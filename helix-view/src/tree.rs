@@ -1,22 +1,17 @@
 use crate::{graphics::Rect, View, ViewId};
 use slotmap::SlotMap;
 
-/// A layout of its own, with its own splits and focus. Features open tabs, one
-/// of each kind, and Helix starts in `Code`.
+/// A layout of its own, with its own splits and focus, by its name. Features
+/// open tabs, one of each name, and Helix starts in `Tab::CODE`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Tab {
-    Code,
-    Review,
-}
+pub struct Tab(pub &'static str);
 
 impl Tab {
-    pub const ALL: [Tab; 2] = [Tab::Code, Tab::Review];
+    /// The home tab, which never closes.
+    pub const CODE: Tab = Tab("code");
 
     pub fn name(self) -> &'static str {
-        match self {
-            Tab::Code => "code",
-            Tab::Review => "review",
-        }
+        self.0
     }
 }
 
@@ -40,6 +35,8 @@ pub struct Tree {
     pub focus: ViewId,
     tab: Tab,
     hidden: Vec<Hidden>,
+    /// The open tabs, in the order they opened.
+    opened: Vec<Tab>,
     area: Rect,
 
     nodes: SlotMap<ViewId, Node>,
@@ -127,8 +124,9 @@ impl Tree {
         Self {
             root,
             focus: root,
-            tab: Tab::Code,
+            tab: Tab::CODE,
             hidden: Vec::new(),
+            opened: vec![Tab::CODE],
             area,
             nodes,
             stack: Vec::new(),
@@ -312,12 +310,13 @@ impl Tree {
             return;
         }
         if root == self.root {
-            if self.tab != Tab::Code {
+            if self.tab != Tab::CODE {
                 self.nodes.remove(root);
+                self.opened.retain(|&tab| tab != self.tab);
                 let code = self
                     .hidden
                     .iter()
-                    .position(|hidden| hidden.tab == Tab::Code)
+                    .position(|hidden| hidden.tab == Tab::CODE)
                     .expect("the code tab stays open");
                 let code = self.hidden.remove(code);
                 self.tab = code.tab;
@@ -325,10 +324,11 @@ impl Tree {
                 self.focus = code.focus;
             }
         } else if let Some(index) = self.hidden.iter().position(|hidden| hidden.root == root) {
-            if self.hidden[index].tab == Tab::Code {
+            if self.hidden[index].tab == Tab::CODE {
                 self.hidden[index].focus = root;
             } else {
-                self.hidden.remove(index);
+                let hidden = self.hidden.remove(index);
+                self.opened.retain(|&tab| tab != hidden.tab);
                 self.nodes.remove(root);
             }
         }
@@ -355,11 +355,9 @@ impl Tree {
         self.tab
     }
 
-    /// The open tabs, in `Tab::ALL`'s order.
+    /// The open tabs, in the order they opened, so the code tab first.
     pub fn tabs(&self) -> impl Iterator<Item = Tab> + '_ {
-        Tab::ALL
-            .into_iter()
-            .filter(|&tab| self.root_of_tab(tab).is_some())
+        self.opened.iter().copied()
     }
 
     /// The view `tab` last focused, or `None` when it isn't open.
@@ -387,7 +385,7 @@ impl Tree {
 
     /// Opens `tab`, which isn't open yet, with `view` in it, and switches to it.
     pub fn open_tab(&mut self, tab: Tab, view: View) -> ViewId {
-        assert!(self.root_of_tab(tab).is_none(), "one tab of each kind");
+        assert!(self.root_of_tab(tab).is_none(), "one tab of each name");
         let root = self.nodes.insert(Node::container(Layout::Vertical));
         self.nodes[root].parent = root;
         self.hidden.push(Hidden {
@@ -395,6 +393,7 @@ impl Tree {
             root: self.root,
             focus: self.focus,
         });
+        self.opened.push(tab);
         self.tab = tab;
         self.root = root;
         self.focus = root;
@@ -912,6 +911,8 @@ mod test {
     use crate::editor::GutterConfig;
     use crate::DocumentId;
 
+    const OTHER: Tab = Tab("other");
+
     #[test]
     fn find_split_in_direction() {
         let mut tree = Tree::new(Rect {
@@ -1170,35 +1171,35 @@ mod test {
     #[test]
     fn a_hidden_tabs_views_stay_in_views_but_leave_the_screen() {
         let (mut tree, a0, a1) = code_tab();
-        let b0 = tree.open_tab(Tab::Review, view());
+        let b0 = tree.open_tab(OTHER, view());
 
         assert!(![a0, a1].contains(&b0));
         assert_eq!(3, tree.views().count());
-        assert_eq!((Tab::Review, b0), (tree.tab(), tree.focus));
+        assert_eq!((OTHER, b0), (tree.tab(), tree.focus));
         assert_eq!(vec![b0], on_screen(&tree));
 
         tree.focus_view(a1);
-        assert_eq!((Tab::Code, a1), (tree.tab(), tree.focus));
+        assert_eq!((Tab::CODE, a1), (tree.tab(), tree.focus));
         assert_eq!(vec![a0, a1], on_screen(&tree));
-        assert_eq!(Some(b0), tree.tab_focus(Tab::Review));
+        assert_eq!(Some(b0), tree.tab_focus(OTHER));
     }
 
     #[test]
     fn removing_a_tabs_last_view_closes_it_and_returns_to_the_code_tabs_focus() {
         let (mut tree, a0, a1) = code_tab();
-        let b0 = tree.open_tab(Tab::Review, view());
+        let b0 = tree.open_tab(OTHER, view());
 
         tree.remove(b0);
 
-        assert_eq!((Tab::Code, a0), (tree.tab(), tree.focus));
-        assert_eq!(None, tree.tab_focus(Tab::Review));
+        assert_eq!((Tab::CODE, a0), (tree.tab(), tree.focus));
+        assert_eq!(None, tree.tab_focus(OTHER));
         assert_eq!(vec![a0, a1], on_screen(&tree));
     }
 
     #[test]
     fn focus_motions_stay_in_the_active_tab() {
         let (mut tree, _, _) = code_tab();
-        let b0 = tree.open_tab(Tab::Review, view());
+        let b0 = tree.open_tab(OTHER, view());
         let b1 = tree.split(view(), Layout::Vertical);
 
         assert_eq!(b0, tree.next());
@@ -1211,25 +1212,42 @@ mod test {
     fn removing_a_hidden_tabs_focused_view_moves_its_focus() {
         let (mut tree, a0, a1) = code_tab();
         tree.focus = a1;
-        tree.open_tab(Tab::Review, view());
+        tree.open_tab(OTHER, view());
 
         tree.remove(a1);
 
-        assert_eq!(Tab::Review, tree.tab());
-        assert_eq!(Some(a0), tree.tab_focus(Tab::Code));
+        assert_eq!(OTHER, tree.tab());
+        assert_eq!(Some(a0), tree.tab_focus(Tab::CODE));
     }
 
     #[test]
     fn an_emptied_hidden_code_tab_stays_open_and_takes_a_view_while_hidden() {
         let (mut tree, a0, a1) = code_tab();
-        let b0 = tree.open_tab(Tab::Review, view());
+        let b0 = tree.open_tab(OTHER, view());
 
         tree.remove(a0);
         tree.remove(a1);
-        assert!(tree.is_tab_empty(Tab::Code));
+        assert!(tree.is_tab_empty(Tab::CODE));
 
-        let c0 = tree.insert_into(Tab::Code, view());
-        assert_eq!((Tab::Review, b0), (tree.tab(), tree.focus));
-        assert_eq!(Some(c0), tree.tab_focus(Tab::Code));
+        let c0 = tree.insert_into(Tab::CODE, view());
+        assert_eq!((OTHER, b0), (tree.tab(), tree.focus));
+        assert_eq!(Some(c0), tree.tab_focus(Tab::CODE));
+    }
+
+    #[test]
+    fn tabs_list_in_the_order_they_opened_through_switches_and_closes() {
+        let (mut tree, a0, _) = code_tab();
+        const THIRD: Tab = Tab("third");
+        let b0 = tree.open_tab(OTHER, view());
+        tree.open_tab(THIRD, view());
+        tree.focus_view(b0);
+        tree.focus_view(a0);
+        assert_eq!(
+            vec![Tab::CODE, OTHER, THIRD],
+            tree.tabs().collect::<Vec<_>>()
+        );
+
+        tree.remove(b0);
+        assert_eq!(vec![Tab::CODE, THIRD], tree.tabs().collect::<Vec<_>>());
     }
 }

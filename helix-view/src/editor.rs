@@ -2284,7 +2284,7 @@ impl Editor {
         // If the document we removed was visible in all of the code tab's views, it has no more
         // views. We don't want to close the editor just for a simple buffer close, so we need to
         // create a new view containing either an existing document, or a brand new document.
-        if self.tree.is_tab_empty(Tab::Code) {
+        if self.tree.is_tab_empty(Tab::CODE) {
             let doc_id = self
                 .documents
                 .iter()
@@ -2297,7 +2297,7 @@ impl Editor {
                     ))
                 });
             let view = View::new(doc_id, self.config().gutters.clone());
-            let view_id = self.tree.insert_into(Tab::Code, view);
+            let view_id = self.tree.insert_into(Tab::CODE, view);
             let doc = doc_mut!(self, &doc_id);
             doc.ensure_view_init(view_id);
             doc.mark_as_focused();

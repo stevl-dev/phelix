@@ -47,6 +47,9 @@ pub use source::source;
 pub use sync::{load, sync};
 pub use syntax::overlays as syntax_overlays;
 
+/// The tab the review opens in.
+pub const REVIEW_TAB: Tab = Tab("review");
+
 /// The name of the review's buffer kind.
 pub const KIND_NAME: &str = "review";
 
@@ -757,8 +760,8 @@ pub fn show(editor: &mut Editor, root: PathBuf, scope: ChangeView, sections: Vec
 /// Switches to the review tab, opening it on the stream `doc` if it isn't open,
 /// and shows the stream in the tab's focused view.
 pub fn switch_to(editor: &mut Editor, doc: DocumentId) {
-    if !editor.switch_tab(Tab::Review) {
-        editor.open_tab(Tab::Review, doc);
+    if !editor.switch_tab(REVIEW_TAB) {
+        editor.open_tab(REVIEW_TAB, doc);
     } else if editor.tree.get(editor.tree.focus).doc != doc {
         editor.switch(doc, Action::Replace);
     }
@@ -828,7 +831,7 @@ fn shut(editor: &mut Editor, force: bool) {
     let views: Vec<_> = editor
         .tree
         .views()
-        .filter(|(view, _)| editor.tree.tab_of(view.id) == Tab::Review)
+        .filter(|(view, _)| editor.tree.tab_of(view.id) == REVIEW_TAB)
         .map(|(view, _)| view.id)
         .collect();
     for view in views {

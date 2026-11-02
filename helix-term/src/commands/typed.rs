@@ -2157,6 +2157,10 @@ fn hsplit_new(cx: &mut compositor::Context, _args: Args, event: PromptEvent) -> 
     Ok(())
 }
 
+/// The tabs features open, for `:tab` to tell a name no feature has from a tab
+/// that isn't open.
+const TABS: &[Tab] = &[Tab::CODE, helix_view::review::REVIEW_TAB];
+
 fn tab(cx: &mut compositor::Context, args: Args, event: PromptEvent) -> anyhow::Result<()> {
     if event != PromptEvent::Validate {
         return Ok(());
@@ -2167,10 +2171,19 @@ fn tab(cx: &mut compositor::Context, args: Args, event: PromptEvent) -> anyhow::
         cx.editor.set_status(format!("In the {} tab", tab.name()));
         return Ok(());
     };
-    let tab = Tab::ALL
-        .into_iter()
+    let tab = TABS
+        .iter()
+        .copied()
         .find(|tab| tab.name() == name)
-        .ok_or_else(|| anyhow!("'{name}' is not a tab. The tabs are code and review"))?;
+        .ok_or_else(|| {
+            let names: Vec<_> = TABS.iter().map(|tab| tab.name()).collect();
+            let names = match names.split_last() {
+                Some((last, [])) => last.to_string(),
+                Some((last, rest)) => format!("{} and {last}", rest.join(", ")),
+                None => String::new(),
+            };
+            anyhow!("'{name}' is not a tab. The tabs are {names}")
+        })?;
     if !cx.editor.switch_tab(tab) {
         bail!("The {name} tab isn't open");
     }

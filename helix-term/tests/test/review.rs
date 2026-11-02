@@ -10,6 +10,7 @@ use helix_term::application::Application;
 use helix_view::document::Mode;
 use helix_view::graphics::Color;
 use helix_view::input::parse_macro;
+use helix_view::review::REVIEW_TAB;
 use helix_view::review::{ReviewState, Stream};
 use helix_view::tree::Tab;
 use helix_view::{current_ref, doc, view};
@@ -279,7 +280,7 @@ async fn a_reload_with_no_changes_closes_the_review_and_names_unsaved_files() ->
             shown(a.clone())
         )
     );
-    assert_eq!(app.editor.tree.tabs().collect::<Vec<_>>(), [Tab::Code]);
+    assert_eq!(app.editor.tree.tabs().collect::<Vec<_>>(), [Tab::CODE]);
     let file = app.editor.document_by_path(&a).expect("kept open");
     assert!(file.is_modified());
     assert_eq!(file.text(), "1\n2\n3\n4\n5\n6\nxseven\n8\n9\n10\n");
@@ -639,7 +640,7 @@ async fn closing_the_review_waits_for_its_files_and_closes_those_it_opened() -> 
                             shown(path("c.txt"))
                         )
                     );
-                    assert_eq!(app.editor.tree.tab(), Tab::Review);
+                    assert_eq!(app.editor.tree.tab(), REVIEW_TAB);
                     assert!(in_stream(app));
                 }),
             ),
@@ -647,8 +648,8 @@ async fn closing_the_review_waits_for_its_files_and_closes_those_it_opened() -> 
                 Some(":w<ret>:buffer-close<ret>"),
                 Some(&|app| {
                     assert!(app.editor.features.review().stream().is_none());
-                    assert_eq!(app.editor.tree.tab(), Tab::Code, "its tab closes with it");
-                    assert_eq!(app.editor.tree.tab_focus(Tab::Review), None);
+                    assert_eq!(app.editor.tree.tab(), Tab::CODE, "its tab closes with it");
+                    assert_eq!(app.editor.tree.tab_focus(REVIEW_TAB), None);
                     assert!(
                         app.editor.document_by_path(path("c.txt")).is_none(),
                         "it opened it, so it closes"
@@ -677,7 +678,7 @@ async fn force_closing_the_review_drops_the_changes_of_the_files_it_opened() -> 
         Some("/^A<ret>ix<esc>/^C<ret>ix<esc>:buffer-close!<ret>"),
         Some(&|app| {
             assert!(app.editor.features.review().stream().is_none());
-            assert_eq!(app.editor.tree.tab(), Tab::Code);
+            assert_eq!(app.editor.tree.tab(), Tab::CODE);
             assert!(app.editor.document_by_path(path("c.txt")).is_none());
             assert_eq!(read(&path("c.txt")), "C\n");
             assert_eq!(
@@ -1549,7 +1550,7 @@ async fn ret_opens_the_file_in_the_code_tab_and_review_comes_back() -> anyhow::R
     start_review(&mut app).await?;
     let in_file = |app: &Application| doc!(app.editor).path() == Some(&file);
     let code_tab_doc = |app: &Application| {
-        let view = app.editor.tree.tab_focus(Tab::Code).unwrap();
+        let view = app.editor.tree.tab_focus(Tab::CODE).unwrap();
         app.editor.tree.get(view).doc
     };
 
@@ -1559,7 +1560,7 @@ async fn ret_opens_the_file_in_the_code_tab_and_review_comes_back() -> anyhow::R
             (
                 None,
                 Some(&|app| {
-                    assert_eq!(app.editor.tree.tab(), Tab::Review);
+                    assert_eq!(app.editor.tree.tab(), REVIEW_TAB);
                     assert!(in_stream(app));
                     assert_eq!(
                         app.editor.document(code_tab_doc(app)).unwrap().path(),
@@ -1571,7 +1572,7 @@ async fn ret_opens_the_file_in_the_code_tab_and_review_comes_back() -> anyhow::R
             (
                 Some("/new<ret><ret>"),
                 Some(&|app| {
-                    assert_eq!(app.editor.tree.tab(), Tab::Code);
+                    assert_eq!(app.editor.tree.tab(), Tab::CODE);
                     assert!(in_file(app));
                     assert_eq!(
                         cursor(app),
@@ -1584,7 +1585,7 @@ async fn ret_opens_the_file_in_the_code_tab_and_review_comes_back() -> anyhow::R
             (
                 Some(":review<ret>"),
                 Some(&|app| {
-                    assert_eq!(app.editor.tree.tab(), Tab::Review);
+                    assert_eq!(app.editor.tree.tab(), REVIEW_TAB);
                     assert!(in_stream(app));
                     assert_eq!(
                         Some(cursor(app).0),
@@ -1726,7 +1727,7 @@ async fn ret_on_a_gap_shows_its_lines_and_they_stay_shown() -> anyhow::Result<()
 
 /// The doc the review tab's focused view shows.
 fn review_tab_doc(app: &Application) -> helix_view::DocumentId {
-    let view = app.editor.tree.tab_focus(Tab::Review).unwrap();
+    let view = app.editor.tree.tab_focus(REVIEW_TAB).unwrap();
     app.editor.tree.get(view).doc
 }
 
@@ -1744,7 +1745,7 @@ async fn a_file_opened_in_the_reviews_view_lands_in_the_code_tab() -> anyhow::Re
             (
                 Some(&format!(":edit {}<ret>", other.display())),
                 Some(&|app| {
-                    assert_eq!(app.editor.tree.tab(), Tab::Code);
+                    assert_eq!(app.editor.tree.tab(), Tab::CODE);
                     assert!(doc!(app.editor).path() == Some(&other));
                     assert_eq!(review_tab_doc(app), stream(app).doc);
                 }),
@@ -1779,7 +1780,7 @@ async fn a_split_opened_on_a_file_in_the_review_tab_stays_there_until_the_review
             (
                 Some(&format!(":vsplit {}<ret>", other.display())),
                 Some(&|app| {
-                    assert_eq!(app.editor.tree.tab(), Tab::Review);
+                    assert_eq!(app.editor.tree.tab(), REVIEW_TAB);
                     assert!(doc!(app.editor).path() == Some(&other));
                     assert_eq!(app.editor.tree.traverse().count(), 2);
                 }),
@@ -1788,7 +1789,7 @@ async fn a_split_opened_on_a_file_in_the_review_tab_stays_there_until_the_review
                 Some("<C-w>w:buffer-close<ret>"),
                 Some(&|app| {
                     assert!(app.editor.features.review().stream().is_none());
-                    assert_eq!(app.editor.tree.tabs().collect::<Vec<_>>(), [Tab::Code]);
+                    assert_eq!(app.editor.tree.tabs().collect::<Vec<_>>(), [Tab::CODE]);
                     assert!(doc!(app.editor).path() == Some(&file));
                     assert!(
                         app.editor.document_by_path(&other).is_some(),
@@ -1869,7 +1870,7 @@ async fn reload_all_reads_the_review_again_from_the_code_tab() -> anyhow::Result
     let mut app = app_on(a.clone())?;
     start_review(&mut app).await?;
     run_until(&mut app, ":tab code<ret>", |app| {
-        app.editor.tree.tab() == Tab::Code
+        app.editor.tree.tab() == Tab::CODE
     })
     .await?;
     std::fs::write(&a, "1\n2\n3\n4\n5\n6\nSEVEN\n8\n9\n10\n")?;
@@ -1879,7 +1880,7 @@ async fn reload_all_reads_the_review_again_from_the_code_tab() -> anyhow::Result
     })
     .await?;
 
-    assert_eq!(app.editor.tree.tab(), Tab::Code);
+    assert_eq!(app.editor.tree.tab(), Tab::CODE);
     assert_eq!(doc!(app.editor).path(), Some(a.as_path()));
     assert!(
         stream_text(&app).contains("\nSEVEN\n"),
@@ -1913,7 +1914,7 @@ async fn a_refusal_over_unsaved_files_leaves_you_in_the_review() -> anyhow::Resu
         )
     };
     let in_review = |app: &Application| {
-        assert_eq!(app.editor.tree.tab(), Tab::Review);
+        assert_eq!(app.editor.tree.tab(), REVIEW_TAB);
         assert!(in_stream(app));
     };
 
@@ -2046,7 +2047,7 @@ async fn buffer_commands_pass_over_the_review() -> anyhow::Result<()> {
                     assert!(app.editor.document_by_path(&a).is_none());
                     assert!(app.editor.document_by_path(&b).is_none());
                     assert!(app.editor.document(stream(app).doc).is_some());
-                    assert!(app.editor.tree.tab_focus(Tab::Review).is_some());
+                    assert!(app.editor.tree.tab_focus(REVIEW_TAB).is_some());
                 }),
             ),
         ],

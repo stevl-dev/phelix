@@ -200,10 +200,10 @@ async fn rust_analyzer_completes_and_goes_to_definitions_in_the_review() -> anyh
     .await?;
     assert_eq!(
         app.editor.tree.tab(),
-        Tab::Code,
+        Tab::CODE,
         "the answer lands in the code tab"
     );
-    let review = app.editor.tree.tab_focus(Tab::Review).unwrap();
+    let review = app.editor.tree.tab_focus(REVIEW_TAB).unwrap();
     assert_eq!(
         app.editor.tree.get(review).doc,
         stream(&app).doc,

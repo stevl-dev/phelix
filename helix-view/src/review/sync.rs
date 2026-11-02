@@ -10,7 +10,10 @@ use helix_core::{diff::compare_ropes, history::History, Rope, Transaction};
 use helix_vcs::ChangeView;
 
 use super::ReviewState;
-use super::{complete, diagnostics, edit_file, forward, layout, log, update, Content, Row, Stream};
+use super::{
+    complete, diagnostics, edit_file, forward, layout, log, update, Content, Row, Stream,
+    REVIEW_TAB,
+};
 use crate::document::{from_reader, DocumentOpenError, Mode};
 use crate::editor::Action;
 use crate::tree::{Tab, Tree};
@@ -92,14 +95,14 @@ fn move_out(editor: &mut Editor, doc_id: DocumentId) {
                 .tree
                 .try_get(view)
                 .is_some_and(|shown| shown.doc != doc_id)
-                && editor.tree.tab_of(view) == Tab::Review
+                && editor.tree.tab_of(view) == REVIEW_TAB
         })
         .collect();
     for view in views {
         let file = editor.tree.get(view).doc;
         let selection = editor.documents[&file].selection(view).clone();
         editor.replace_document_in_view(view, doc_id);
-        editor.switch_tab(Tab::Code);
+        editor.switch_tab(Tab::CODE);
         editor.switch(file, Action::Replace);
         let (view, doc) = current!(editor);
         doc.set_selection(view.id, selection);
@@ -114,7 +117,7 @@ fn note_views(editor: &mut Editor, doc_id: DocumentId) {
     stream.views = editor
         .tree
         .views()
-        .filter(|(view, _)| view.doc == doc_id && editor.tree.tab_of(view.id) == Tab::Review)
+        .filter(|(view, _)| view.doc == doc_id && editor.tree.tab_of(view.id) == REVIEW_TAB)
         .map(|(view, _)| view.id)
         .collect();
 }

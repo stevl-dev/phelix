@@ -3,7 +3,7 @@
 Snapshot: `main` at `4a60f8c`, on upstream `master` at `ba40e547`.
 Goes in `fork/feature-hooks.md`. Feature slug: `feature-hooks`.
 
-Status: phases 0 to 8 done. Section 9's questions are answered under Decisions. Phase 9 is next.
+Status: phases 0 to 9 done. Section 9's questions are answered under Decisions. Phase 10 is next.
 
 ## Bottom line
 
@@ -316,7 +316,7 @@ Each phase is one commit that builds and passes `tools/fork/land.sh --check`. Ea
 | 6 | done | Give a buffer kind a keymap of its own. | 3.5. `kind_keys` replaces `review_keys`. Tests that must pass unchanged: `a_custom_key_for_goto_next_change_moves_by_review_hunk`, and every test that types in the review. |
 | 7 | done | Draw a buffer kind's gutter and decorations through its hooks. | 3.6. Tests that must pass unchanged: `review_backgrounds_follow_their_keys`, `files_diagnostics_land_on_their_rows_open_or_not`, and the review's tests that read line numbers and signs. |
 | 8 | done | Keep the review's state and config out of the editor's fields. | 3.7. `Editor::features`. `Config::review` moves to a top-level `[review]`, with the registered table names. Book: `book/src/editor.md`'s `[editor.review]` section becomes `[review]`. Tests in `config.rs`, parsed from TOML: `[review]`'s default and an override, an unknown key in it, an unregistered top-level table refused, and `[editor.review]` refused. |
-| 9 | | Name tabs by the features that open them. | 3.8, phase 9 half. `Tree::tabs` without `Tab::ALL`, and the registered tab names. Tests: `tree.rs`'s, with a test tab name, and one for `Tree::tabs`'s order; `tabs.rs` and the `:tab` tests in `review.rs` pass unchanged, since the messages stay. |
+| 9 | done | Name tabs by the features that open them. | 3.8, phase 9 half. `Tree::tabs` without `Tab::ALL`, and the registered tab names. Tests: `tree.rs`'s, with a test tab name, and one for `Tree::tabs`'s order; `tabs.rs` and the `:tab` tests in `review.rs` pass unchanged, since the messages stay. |
 | 10 | | Send what opens in a feature's tab to the code tab from the core. | 3.8, phase 10 half. `TabOptions`, the core check, `Editor::close_tab`. Tests that must pass unchanged: `a_file_opened_in_the_reviews_view_lands_in_the_code_tab`, `a_split_opened_on_a_file_in_the_review_tab_stays_there_until_the_review_closes`, `ret_opens_the_file_in_the_code_tab_and_review_comes_back`, and the goto in the `rust_analyzer` test at a manual run. |
 | 11 | | Let features register commands. | 3.9, commands. `helix-term/src/feature.rs`, `init`, the registry's users, the review's `Feature`, with phase 8's table name and phase 9's tab. `cargo xtask docgen`. Test: a unit test in `config.rs` parses `[keys.normal]` TOML that binds `review_open` by name, after `init`. It fails if the review's commands aren't in the registry. The `keymap!` macro in the integration tests names commands as Rust paths, not strings, so they don't cover this. |
 | 12 | | Let features add actions to the changed-file picker. | 3.9, picker actions. Tests: `picker_keys_overlay_defaults_and_no_op_unbinds` in `config.rs` with `review_jump` as a registered action, its default, an override, and `no_op`. |
@@ -483,4 +483,13 @@ Each phase records here what it found, the count from section 7, and any hook si
 - `:set review.row-background` stopped working, as Decisions 2 now says. `review_backgrounds_follow_their_keys` builds one app per `[review]` instead. Each case runs in a tokio runtime of its own, since an `Application` registers its event hooks for its runtime, and a second app in the same one never finished `:review`.
 - The tests of `[review]` itself are in `commands/review.rs`, the review's own file: the default, an override, both files merged, an unknown key, and `[editor.review]` refused. `config.rs` keeps only the core's rule, that an unread top-level table is refused.
 - Book: the review's section left `book/src/editor.md`, whose sections are `[editor]`'s, for `book/src/configuration.md`, and `themes.md`'s two links follow it.
+
+### Phase 9
+
+- The count from section 7 is 61, from 74: the `Review` variant, `Tab::ALL` and the name match in `tree.rs`, its unit tests' uses of the review's tab, and `:tab`'s fixed list of names.
+- `Tab` is `Tab(pub &'static str)`, with `Tab::CODE` and `name()`. The review declares `REVIEW_TAB` in `helix-view/src/review.rs`.
+- `Tree::tabs` read `Tab::ALL`. `Tree::activate` swaps the active tab with a hidden one in place, so `hidden` doesn't keep the order the tabs opened in. The tree now keeps an `opened` list: `Tab::CODE` from the start, a tab pushed by `open_tab` and dropped where `close_if_empty` closes it. `tabs_list_in_the_order_they_opened_through_switches_and_closes` in `tree.rs` pins it.
+- `TABS` in `typed.rs` is the registered tabs, `[Tab::CODE, REVIEW_TAB]`, counted until phase 11 moves the review's to its `Feature`. `:tab`'s unknown-name message lists them, joined with commas and a last "and", so it reads as before.
+- `tree.rs`'s unit tests open a tab of their own, `Tab("other")`. The integration tests in `tabs.rs` keep the review's tab, since they switch to it with `:tab review`, which needs a registered name.
+- `tabs.rs` and the `:tab` tests in `review.rs` pass unchanged.
 
