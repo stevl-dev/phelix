@@ -949,3 +949,32 @@ async fn align_selections_with_varying_columns() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn set_keeps_the_picker_keys_from_the_config() -> anyhow::Result<()> {
+    use std::str::FromStr;
+
+    use helix_view::editor::PickerCommand;
+
+    let ctrl_k = helix_view::input::KeyEvent::from_str("C-k")?;
+    let mut config = test_config();
+    config
+        .editor
+        .picker_keys
+        .insert(ctrl_k, PickerCommand::Previous);
+    let mut app = AppBuilder::new().with_config(config).build()?;
+
+    test_key_sequence(
+        &mut app,
+        Some(":set mouse false<ret>"),
+        Some(&|app| {
+            assert!(!app.editor.config().mouse, "the option is set");
+            assert_eq!(
+                app.editor.config().picker_keys.get(&ctrl_k),
+                Some(&PickerCommand::Previous)
+            );
+        }),
+        false,
+    )
+    .await
+}

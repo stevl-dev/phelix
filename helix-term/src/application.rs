@@ -391,7 +391,12 @@ impl Application {
             // the Application can apply it.
             ConfigEvent::Update(editor_config) => {
                 let mut app_config = (*self.config.load().clone()).clone();
+                // WHY: `:set` and `:toggle` rebuild the editor config through
+                // serde, which skips the picker keys, so they come back as the
+                // defaults without `[keys.picker]`.
+                let picker_keys = std::mem::take(&mut app_config.editor.picker_keys);
                 app_config.editor = *editor_config;
+                app_config.editor.picker_keys = picker_keys;
                 if let Err(err) = self.terminal.reconfigure((&app_config.editor).into()) {
                     self.editor.set_error(err.to_string());
                 };

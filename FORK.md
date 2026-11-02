@@ -43,7 +43,8 @@ Each entry says what the feature adds, and where its code, tests, and book pages
 - Code: the table in `helix-view/src/editor/picker_keys.rs`, re-exported from `editor.rs` beside the `Config::picker_keys` field.
   `helix-term/src/config.rs` parses `[keys.picker]` and merges it over the defaults, and the key handler in `helix-term/src/ui/picker.rs` looks commands up in the table.
 - Book: `book/src/keymap.md`.
-- Tests: `picker_keys_overlay_defaults_and_no_op_unbinds` in `config.rs`. No integration test.
+- Tests: `picker_keys_overlay_defaults_and_no_op_unbinds` in `config.rs`, and `set_keeps_the_picker_keys_from_the_config` in `helix-term/tests/test/commands.rs`.
+- Relies on: `Application` keeps the picker keys across `ConfigEvent::Update`, since `:set` and `:toggle` rebuild the editor config through serde, which skips them.
 
 ### changed-files-views
 
