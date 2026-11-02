@@ -10,6 +10,7 @@ use helix_core::fuzzy::fuzzy_match;
 use helix_core::line_ending::line_end_char_index;
 use helix_core::movement::Direction;
 use helix_core::{encoding, Range, Rope, RopeSlice, Selection};
+use helix_event::register_hook;
 use helix_loader::workspace_trust::TrustQuery;
 use helix_vcs::{index, visible_changes, ChangeKind, ChangeView, DiffProviderRegistry, FileChange};
 use helix_view::document::from_reader;
@@ -28,6 +29,14 @@ pub(super) use restore::review_restore;
 pub(super) use stage::{stage_hunk, unstage_hunk};
 
 use super::{push_jump, Context};
+use crate::events::EditorWillUpdate;
+
+pub(crate) fn register_hooks() {
+    register_hook!(move |event: &mut EditorWillUpdate<'_>| {
+        review::sync(event.editor, event.completing);
+        Ok(())
+    });
+}
 use crate::compositor;
 use crate::job::Callback;
 use crate::ui::prompt::Completion;

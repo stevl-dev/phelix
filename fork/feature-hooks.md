@@ -3,7 +3,7 @@
 Snapshot: `main` at `4a60f8c`, on upstream `master` at `ba40e547`.
 Goes in `fork/feature-hooks.md`. Feature slug: `feature-hooks`.
 
-Status: phase 0 done. Section 9's questions are answered under Decisions. Phase 1 is next, when the human asks for the work.
+Status: phases 0 and 1 done. Section 9's questions are answered under Decisions. Phase 2 is next.
 
 ## Bottom line
 
@@ -308,7 +308,7 @@ Each phase is one commit that builds and passes `tools/fork/land.sh --check`. Ea
 | # | Status | Commit | Scope |
 | --- | --- | --- | --- |
 | 0 | done | Add the feature hooks plan. | This file, and the `feature-hooks` entry in `FORK.md`. |
-| 1 | | Run the review before each key and frame through an event. | 3.1. `EditorWillUpdate`, its two dispatches, the review's hook. No test: the review's tests pin the sync, and wiring needs none. |
+| 1 | done | Run the review before each key and frame through an event. | 3.1. `EditorWillUpdate`, its two dispatches, the review's hook. No test: the review's tests pin the sync, and wiring needs none. |
 | 2 | | Add buffer kinds, and ask the LSP commands' file from them. | 3.2 and the commands half of 3.3. `helix-view/src/kind.rs`, `Document::kind`, `Editor::source`, `source_open`. The review's kind, with `source` from `review/lend.rs`. The `commands/lsp.rs` rows of 3.3's table. `lent()` keeps only the rename. Tests that must pass unchanged: `lsp_keys_in_the_review_ask_from_the_rows_file`, `lsp_keys_in_the_review_need_a_line_the_file_has`, `a_staged_review_refuses_undo_and_lsp_keys`, and the ignored `rust_analyzer` test at a manual run. |
 | 3 | | Ask completion and signature help from the buffer's source. | The rest of 3.3. Delete `request/review.rs` and `signature_help/review.rs`. `previews_completion` and `accept_completion` on the kind. Tests that must pass unchanged: the four completion tests in `review.rs` and `signature_help_in_the_review_asks_from_the_rows_file`. A new test that the signature help popup has the file's language (Decisions 5). |
 | 4 | | Let a buffer kind close its buffer and step through it. | 3.4's `close` and `goto_buffer`, the two core rules, and `Editor::switch`'s scratch rule. Tests that must pass unchanged: the close and refusal tests, `buffer_motions_in_the_review_step_through_its_files`, `buffer_commands_pass_over_the_review`. |
@@ -409,3 +409,11 @@ Each phase records here what it found, the count from section 7, and any hook si
 - The first draft said `Tree::tabs` already lists the open tabs in opening order. It filters `Tab::ALL`, so phase 9 rewrites it (3.8).
 - `helix-term`'s `ConfigRaw` has `deny_unknown_fields` too, so a top-level `[review]` needs the features' table names to keep unknown tables an error (3.7).
 - Phases 8 and 9 come before phase 11's registry, so each keeps its registered names in a `const` in `helix-term` until phase 11.
+
+### Phase 1
+
+- The count from section 7 is 112, from 113. The two `review::sync` calls in `ui/editor.rs` went, and `handlers::setup`'s call to `commands::review::register_hooks` came. That call stays until phase 11 moves it into the review's `Feature`.
+- The review's hook is `register_hooks` in `helix-term/src/commands/review.rs`, so the review owns its registration and `handlers.rs` names only the entry point.
+- The event is as 3.1 has it: `EditorWillUpdate<'a> { editor: &'a mut Editor, completing: bool }`.
+- Under the `integration` feature the hook registry is per tokio runtime (`helix-event/src/runtime.rs`), so each test's app registers its own hook, and tests in parallel don't run the sync twice.
+- A dispatch holds the registry's read lock while hooks run, and the sync dispatches events of its own, like `DocumentDidOpen` when it loads a file. Nested reads are safe because hooks register only at startup. The review's tests pass with it.

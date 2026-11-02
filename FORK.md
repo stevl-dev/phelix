@@ -107,7 +107,8 @@ Each entry says what the feature adds, and where its code, tests, and book pages
   It hooks in at:
   - `helix-view/src/editor.rs`: the `Editor::review` field, `ReviewConfig` in `Config::review`, and a condition in `Editor::switch` that keeps the stream when you switch away from it. Without it, switching away deletes the stream, an unmodified buffer with no path. `replace_document_in_view` is crate-visible, so the sync can put the stream back in its view.
   - `helix-view/src/gutter.rs`: the stream's branch at the top of `line_numbers`, `diff`, and `diagnostic`.
-  - `helix-term/src/ui/editor.rs`: the `review_keys` field, `review::sync` and the keymap swap at the top of `handle_event`, `review::sync` at the top of `render`, and the review's decoration and overlays in `render_view`.
+  - `helix-term/src/ui/editor.rs`: the `review_keys` field, the keymap swap at the top of `handle_event`, and the review's decoration and overlays in `render_view`.
+  - `helix-term/src/handlers.rs`: `setup` calls `commands::review::register_hooks`, which runs `review::sync` on `EditorWillUpdate` (`feature-hooks`).
   - `helix-term/src/handlers/completion/request.rs`: the review's requests in `request_completions`, and its own re-request at the top of `request_incomplete_completion_list`.
   - `helix-term/src/handlers/completion.rs`: the file's trigger characters in `trigger_auto_completion`.
   - `helix-term/src/ui/completion.rs`: previews off for the review in `Completion::new`, and `review::accept_item` in the menu's accept arm.
@@ -169,5 +170,7 @@ Each entry says what the feature adds, and where its code, tests, and book pages
 
 ### feature-hooks
 
-- Plan: `fork/feature-hooks.md`, done through phase 0.
-- Adds: nothing yet. Each phase adds the hook it makes, where it's defined, and where the core calls it.
+- Plan: `fork/feature-hooks.md`, done through phase 1.
+- Adds: general hooks the core calls where it used to check for a feature. Nothing the user sees.
+- Hooks:
+  - `EditorWillUpdate { editor, completing }`, an event before each key and each frame. Defined in `helix-term/src/events.rs`, and dispatched at the top of `EditorView::handle_event`, before the keymap swap, and of `EditorView::render`, in `helix-term/src/ui/editor.rs`. `completing` is whether a completion menu is open.

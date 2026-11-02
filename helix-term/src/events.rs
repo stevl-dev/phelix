@@ -4,6 +4,7 @@ use helix_view::events::{
     ConfigDidChange, DiagnosticsDidChange, DocumentDidChange, DocumentDidClose, DocumentDidOpen,
     DocumentFocusLost, LanguageServerExited, LanguageServerInitialized, SelectionDidChange,
 };
+use helix_view::Editor;
 
 use crate::commands;
 use crate::keymap::MappableCommand;
@@ -12,12 +13,14 @@ events! {
     OnModeSwitch<'a, 'cx> { old_mode: Mode, new_mode: Mode, cx: &'a mut commands::Context<'cx> }
     PostInsertChar<'a, 'cx> { c: char, cx: &'a mut commands::Context<'cx> }
     PostCommand<'a, 'cx> { command: & 'a MappableCommand, cx: &'a mut commands::Context<'cx> }
+    EditorWillUpdate<'a> { editor: &'a mut Editor, completing: bool }
 }
 
 pub fn register() {
     register_event::<OnModeSwitch>();
     register_event::<PostInsertChar>();
     register_event::<PostCommand>();
+    register_event::<EditorWillUpdate>();
     register_event::<DocumentDidOpen>();
     register_event::<DocumentDidChange>();
     register_event::<DocumentDidClose>();

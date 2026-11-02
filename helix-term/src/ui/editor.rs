@@ -1,7 +1,7 @@
 use crate::{
     commands::{self, OnKeyCallback, OnKeyCallbackKind},
     compositor::{Component, Context, Event, EventResult},
-    events::{OnModeSwitch, PostCommand},
+    events::{EditorWillUpdate, OnModeSwitch, PostCommand},
     handlers::completion::CompletionItem,
     key,
     keymap::{KeymapResult, Keymaps},
@@ -1455,7 +1455,12 @@ impl Component for EditorView {
         event: &Event,
         context: &mut crate::compositor::Context,
     ) -> EventResult {
-        helix_view::review::sync(context.editor, self.completion.is_some());
+        // INVARIANT: before the keymap swap, which reads what the focused view
+        // shows. A hook can change that.
+        helix_event::dispatch(EditorWillUpdate {
+            editor: context.editor,
+            completing: self.completion.is_some(),
+        });
         self.review_keys.swap(&mut self.keymaps, context.editor);
         let mut cx = commands::Context {
             editor: context.editor,
@@ -1621,7 +1626,10 @@ impl Component for EditorView {
     }
 
     fn render(&mut self, area: Rect, surface: &mut Surface, cx: &mut Context) {
-        helix_view::review::sync(cx.editor, self.completion.is_some());
+        helix_event::dispatch(EditorWillUpdate {
+            editor: cx.editor,
+            completing: self.completion.is_some(),
+        });
         // clear with background color
         surface.set_style(area, cx.editor.theme.get("ui.background"));
         let config = cx.editor.config();
