@@ -2,6 +2,7 @@
 //! live in `helix_view::review`. This module lists the changed files, reads
 //! both sides of each, and opens a row's file.
 
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use anyhow::{anyhow, Context as _};
@@ -32,6 +33,7 @@ pub(super) use stage::{stage_hunk, unstage_hunk};
 use super::{push_jump, Context};
 use crate::commands::WriteOptions;
 use crate::events::EditorWillUpdate;
+use crate::keymap::KeyTrie;
 use crate::kind::{self, BufferKindUi};
 
 /// The `helix-term` side of the review's buffer kind.
@@ -52,6 +54,10 @@ impl BufferKindUi for Ui {
         options: WriteOptions,
     ) -> anyhow::Result<()> {
         write::write(cx, path, options)
+    }
+
+    fn keymap(&self, user: &HashMap<Mode, KeyTrie>) -> Option<HashMap<Mode, KeyTrie>> {
+        Some(crate::keymap::review::keymap(user))
     }
 }
 

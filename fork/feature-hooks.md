@@ -3,7 +3,7 @@
 Snapshot: `main` at `4a60f8c`, on upstream `master` at `ba40e547`.
 Goes in `fork/feature-hooks.md`. Feature slug: `feature-hooks`.
 
-Status: phases 0 to 5 done. Section 9's questions are answered under Decisions. Phase 6 is next.
+Status: phases 0 to 6 done. Section 9's questions are answered under Decisions. Phase 7 is next.
 
 ## Bottom line
 
@@ -313,7 +313,7 @@ Each phase is one commit that builds and passes `tools/fork/land.sh --check`. Ea
 | 3 | done | Ask completion and signature help from the buffer's source. | The rest of 3.3. Delete `request/review.rs` and `signature_help/review.rs`. `previews_completion` and `accept_completion` on the kind. Tests that must pass unchanged: the four completion tests in `review.rs` and `signature_help_in_the_review_asks_from_the_rows_file`. No new test: Decisions 5 keeps the popup as it is. |
 | 4 | done | Let a buffer kind close its buffer and step through it. | 3.4's `close` and `goto_buffer`, the two core rules, and `Editor::switch`'s scratch rule. Tests that must pass unchanged: the close and refusal tests, `buffer_motions_in_the_review_step_through_its_files`, `buffer_commands_pass_over_the_review`. |
 | 5 | done | Let a buffer kind reload and write its buffer. | 3.4's `reload` and `write`. `helix-term/src/kind.rs` with `BufferKindUi` and its registry. The `:w` seam goes, and the save chain copy if it can. Tests that must pass unchanged: `w_in_the_review_writes_the_files_it_shows_with_unsaved_changes`, the two reload tests, `a_reload_with_no_changes_closes_the_review_and_names_unsaved_files`. |
-| 6 | | Give a buffer kind a keymap of its own. | 3.5. `kind_keys` replaces `review_keys`. Tests that must pass unchanged: `a_custom_key_for_goto_next_change_moves_by_review_hunk`, and every test that types in the review. |
+| 6 | done | Give a buffer kind a keymap of its own. | 3.5. `kind_keys` replaces `review_keys`. Tests that must pass unchanged: `a_custom_key_for_goto_next_change_moves_by_review_hunk`, and every test that types in the review. |
 | 7 | | Draw a buffer kind's gutter and decorations through its hooks. | 3.6. Tests that must pass unchanged: `review_backgrounds_follow_their_keys`, `files_diagnostics_land_on_their_rows_open_or_not`, and the review's tests that read line numbers and signs. |
 | 8 | | Keep the review's state and config out of the editor's fields. | 3.7. `Editor::features`. `Config::review` moves to a top-level `[review]`, with the registered table names. Book: `book/src/editor.md`'s `[editor.review]` section becomes `[review]`. Tests in `config.rs`, parsed from TOML: `[review]`'s default and an override, an unknown key in it, an unregistered top-level table refused, and `[editor.review]` refused. |
 | 9 | | Name tabs by the features that open them. | 3.8, phase 9 half. `Tree::tabs` without `Tab::ALL`, and the registered tab names. Tests: `tree.rs`'s, with a test tab name, and one for `Tree::tabs`'s order; `tabs.rs` and the `:tab` tests in `review.rs` pass unchanged, since the messages stay. |
@@ -454,4 +454,12 @@ Each phase records here what it found, the count from section 7, and any hook si
 - The save chain copy stays. `write_all_impl` could take the documents to write, but the review records all the files' trims as one step of its undo log before any save, and wraps the format callback so the format lands as a step of its own. The chain has no seam for either, and one would be a parameter only the review passes. The copy moved from `typed/review_write.rs` to `commands/review/write.rs`, with the review's other code. `typed.rs`'s three trim functions are `pub(super)` so it can reach them.
 - `reload_all` still reads every buffer first, the review's included, then calls each UI kind's `reload`, in the order the review's read ran before.
 - The tests 3.4 names pass unchanged.
+
+### Phase 6
+
+- The count from section 7 is 83, from 86: the `review_keys` field, its default, and its swap in `ui/editor.rs`.
+- `keymap` returns an `Option`, with `None` as the default, so a kind with no keymap of its own keeps the user's and nothing swaps. 3.5 had it return the map.
+- `KindKeys` is in `helix-term/src/kind.rs`, beside the registry. It keeps the user's `Keymaps` and the name of the kind whose keymap is in. On a switch from one kind's buffer to another's it puts the user's back before it builds the next kind's.
+- The review's `keymap` in `keymap/review.rs` is `ReviewKeys::swap`'s building of the map, with `replace_commands` and `bindings` as they were. As before, the map is built when the review takes focus, from the user's keymap at that moment.
+- The tests 3.5 names pass unchanged.
 

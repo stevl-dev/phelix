@@ -44,7 +44,7 @@ pub struct EditorView {
     spinners: ProgressSpinners,
     /// Tracks if the terminal window is focused by reaction to terminal focus events
     terminal_focused: bool,
-    review_keys: crate::keymap::review::ReviewKeys,
+    kind_keys: crate::kind::KindKeys,
 }
 
 #[derive(Debug, Clone)]
@@ -68,7 +68,7 @@ impl EditorView {
             completion: None,
             spinners: ProgressSpinners::default(),
             terminal_focused: true,
-            review_keys: Default::default(),
+            kind_keys: Default::default(),
         }
     }
 
@@ -1461,7 +1461,7 @@ impl Component for EditorView {
             editor: context.editor,
             completing: self.completion.is_some(),
         });
-        self.review_keys.swap(&mut self.keymaps, context.editor);
+        self.kind_keys.swap(&mut self.keymaps, context.editor);
         let mut cx = commands::Context {
             editor: context.editor,
             count: None,

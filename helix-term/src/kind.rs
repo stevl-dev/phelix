@@ -2,12 +2,16 @@
 //! `helix-view` can't see. A feature registers one for its kind's name at
 //! startup.
 
+use std::collections::HashMap;
 use std::sync::RwLock;
 
-use helix_view::{Document, DocumentId};
+use arc_swap::access::Constant;
+use helix_view::document::Mode;
+use helix_view::{view, Document, DocumentId, Editor};
 
 use crate::commands::WriteOptions;
 use crate::compositor;
+use crate::keymap::{KeyTrie, Keymaps};
 
 pub trait BufferKindUi: Sync + 'static {
     /// `:reload` on the buffer, and `:reload-all` with it open.
@@ -21,6 +25,12 @@ pub trait BufferKindUi: Sync + 'static {
         path: Option<&str>,
         options: WriteOptions,
     ) -> anyhow::Result<()>;
+
+    /// The keymap while the buffer has focus, built from the user's, or
+    /// `None` to keep the user's.
+    fn keymap(&self, _user: &HashMap<Mode, KeyTrie>) -> Option<HashMap<Mode, KeyTrie>> {
+        None
+    }
 }
 
 static REGISTRY: RwLock<Vec<(&'static str, &'static dyn BufferKindUi)>> = RwLock::new(Vec::new());
@@ -42,4 +52,36 @@ pub fn ui(doc: &Document) -> Option<&'static dyn BufferKindUi> {
         .iter()
         .find(|&&(known, _)| known == name)
         .map(|&(_, ui)| ui)
+}
+
+/// Swaps a kind's keymap in while its buffer has focus. A whole `Keymaps`
+/// swaps, so pending keys and sticky modes stay with the keymap they started
+/// in.
+#[derive(Default)]
+pub struct KindKeys {
+    /// The kind whose keymap is in `EditorView::keymaps`, and the user's.
+    layer: Option<(&'static str, Keymaps)>,
+}
+
+impl KindKeys {
+    pub fn swap(&mut self, keymaps: &mut Keymaps, editor: &Editor) {
+        let doc = &editor.documents[&view!(editor).doc];
+        let kind = doc.kind.map(|kind| kind.name());
+        if kind.is_some() && self.layer.as_ref().map(|(name, _)| *name) == kind {
+            return;
+        }
+        // WHY: from one kind's buffer straight to another's, the next kind's
+        // keymap is built from the user's, not the first kind's.
+        if let Some((_, user)) = self.layer.take() {
+            *keymaps = user;
+        }
+        let (Some(kind), Some(ui)) = (kind, ui(doc)) else {
+            return;
+        };
+        let Some(map) = ui.keymap(&keymaps.map()) else {
+            return;
+        };
+        let layer = Keymaps::new(Box::new(Constant(map)));
+        self.layer = Some((kind, std::mem::replace(keymaps, layer)));
+    }
 }

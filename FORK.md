@@ -107,7 +107,7 @@ Each entry says what the feature adds, and where its code, tests, and book pages
   It hooks in at:
   - `helix-view/src/editor.rs`: the `Editor::review` field, and `ReviewConfig` in `Config::review`. `replace_document_in_view` is crate-visible, so the sync can put the stream back in its view.
   - `helix-view/src/gutter.rs`: the stream's branch at the top of `line_numbers`, `diff`, and `diagnostic`.
-  - `helix-term/src/ui/editor.rs`: the `review_keys` field, the keymap swap at the top of `handle_event`, and the review's decoration and overlays in `render_view`.
+  - `helix-term/src/ui/editor.rs`: the review's decoration and overlays in `render_view`.
   - `helix-term/src/handlers.rs`: `setup` calls `commands::review::register`, which runs `review::sync` on `EditorWillUpdate` and registers the UI part of the review's buffer kind (`feature-hooks`).
   - `helix-term/src/ui/picker.rs`: the `on_review_jump` hook, its builder, and its key arm.
     `picker_keys.rs` (`picker-keys`) has `ReviewJump` and its `Alt-r` default, and `changed_file.rs` (`changed-files-views`) sets the hook.
@@ -159,7 +159,7 @@ Each entry says what the feature adds, and where its code, tests, and book pages
 
 ### feature-hooks
 
-- Plan: `fork/feature-hooks.md`, done through phase 5.
+- Plan: `fork/feature-hooks.md`, done through phase 6.
 - Adds: general hooks the core calls where it used to check for a feature. Nothing the user sees.
 - Hooks:
   - `EditorWillUpdate { editor, completing }`, an event before each key and each frame. Defined in `helix-term/src/events.rs`, and dispatched at the top of `EditorView::handle_event`, before the keymap swap, and of `EditorView::render`, in `helix-term/src/ui/editor.rs`. `completing` is whether a completion menu is open.
@@ -174,6 +174,7 @@ Each entry says what the feature adds, and where its code, tests, and book pages
   - `BufferKindUi` in `helix-term/src/kind.rs`, a kind's answers that need the UI. A feature registers one for its kind's name, `BufferKind::name`, with `kind::register` at startup, and `kind::ui` finds a buffer's.
   - `BufferKindUi::reload`, which `reload` in `helix-term/src/commands/typed.rs` calls in place of reading the file, and `reload_all` calls for each open buffer that has one, after the files.
   - `BufferKindUi::write`, which `write_impl` in `typed.rs` calls in place of writing the buffer, behind `:w` and the commands that write through it.
+  - `BufferKindUi::keymap`, the keymap while a kind's buffer has focus, built from the user's. `KindKeys` in `helix-term/src/kind.rs` swaps it into `EditorView::keymaps` at the top of `handle_event`, after `EditorWillUpdate`, and the user's back when focus leaves. A whole `Keymaps` swaps, so pending keys and sticky modes stay with the keymap they started in.
 - Core rules for a kind's buffer:
   - A refused close or quit doesn't swap it out of its view to show the first unsaved buffer: `buffer_close_by_ids_impl` and `buffers_remaining_impl` in `typed.rs`.
   - `Editor::switch` in `helix-view/src/editor.rs` never discards it as an empty scratch buffer.
