@@ -20,7 +20,7 @@ In a new clone:
 ```sh
 git remote add upstream https://github.com/helix-editor/helix.git
 git remote set-url --push upstream no_push
-gh repo set-default stepan-ogorodnikov/helix
+gh repo set-default stevl-dev/phelix
 git config core.hooksPath tools/fork/hooks
 ```
 

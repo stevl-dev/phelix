@@ -11,7 +11,7 @@
 
 Requirements:
 
-Clone the Helix GitHub repository into a directory of your choice. The
+Clone the Phelix repository into a directory of your choice. The
 examples in this documentation assume installation into either `~/src/` on
 Linux and macOS, or `%userprofile%\src\` on Windows.
 
@@ -28,8 +28,8 @@ RUSTFLAGS="-C target-feature=-crt-static"
 1. Clone the repository:
 
    ```sh
-   git clone https://github.com/helix-editor/helix
-   cd helix
+   git clone https://github.com/stevl-dev/phelix
+   cd phelix
    ```
 
 2. Compile from source:
@@ -69,7 +69,7 @@ The **runtime** directory is one below the Helix source, so either export a
 your `~/.bashrc` or equivalent:
 
 ```sh
-export PHELIX_RUNTIME=~/src/helix/runtime
+export PHELIX_RUNTIME=~/src/phelix/runtime
 ```
 
 Or, create a symbolic link:
@@ -85,7 +85,7 @@ Either set the `PHELIX_RUNTIME` environment variable to point to the runtime fil
 Cmd:
 
 ```sh
-setx PHELIX_RUNTIME "%userprofile%\src\helix\runtime"
+setx PHELIX_RUNTIME "%userprofile%\src\phelix\runtime"
 ```
 
 > 💡 `%userprofile%` resolves to your user directory like
@@ -96,7 +96,7 @@ Or, create a symlink in `%appdata%\phelix\` that links to the source code direct
 | Method     | Command                                                                                |
 | ---------- | -------------------------------------------------------------------------------------- |
 | PowerShell | `New-Item -ItemType Junction -Target "runtime" -Path "$Env:AppData\phelix\runtime"`    |
-| Cmd        | `cd %appdata%\phelix` <br/> `mklink /D runtime "%userprofile%\src\helix\runtime"`      |
+| Cmd        | `cd %appdata%\phelix` <br/> `mklink /D runtime "%userprofile%\src\phelix\runtime"`     |
 
 > 💡 On Windows, creating a symbolic link may require running PowerShell or
 > Cmd as an administrator.

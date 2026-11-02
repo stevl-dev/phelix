@@ -73,7 +73,7 @@ fn prompt(workspace: PathBuf, compositor: &mut Compositor) {
 
 const TRUST_MESSAGE: &str = "Trust this workspace?
 
-Trusted workspaces may load local Helix config files (`.helix/*`) and auto-start language servers. \
+Trusted workspaces may load local Phelix config files (`.helix/*`) and auto-start language servers. \
 Both can execute arbitrary code. Only trust workspaces whose contents you have inspected.";
 
 #[derive(Default, Clone, Copy, Debug)]

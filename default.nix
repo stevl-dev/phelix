@@ -14,7 +14,6 @@
   src = fs.difference (fs.gitTracked ./.) (fs.unions [
     ./.envrc
     ./rustfmt.toml
-    ./screenshot.png
     ./book
     ./docs
     ./runtime

@@ -18,7 +18,7 @@ Push `main` only through `tools/fork/land.sh`, and only when the human asks. It 
 
 Take a change from upstream only when the human asks, by cherry-pick, as `agents/UPSTREAM.md` says.
 
-In a fork clone, `gh` picks the parent repository until `gh repo set-default stepan-ogorodnikov/helix` has run. Check `gh repo set-default --view` before using `gh`.
+In a fork clone, `gh` picks the parent repository until `gh repo set-default stevl-dev/phelix` has run. Check `gh repo set-default --view` before using `gh`.
 
 ## Commits
 

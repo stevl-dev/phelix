@@ -1,9 +1,8 @@
 # Summary
 
-[Helix](./title-page.md)
+[Phelix](./title-page.md)
 
 - [Installation](./install.md)
-  - [Package Managers](./package-managers.md)
   - [Building from source](./building-from-source.md)
 - [Usage](./usage.md)
   - [Registers](./registers.md)

@@ -35,7 +35,7 @@ async fn main_impl() -> Result<i32> {
     if args.display_help {
         print!(
             "\
-{} {}
+phelix {}
 {}
 {}
 
@@ -66,9 +66,8 @@ FLAGS:
     +[N]                           Open the first given file at line number N, or the last line, if
                                    N is not specified.
 ",
-            env!("CARGO_PKG_NAME"),
             VERSION_AND_GIT_HASH,
-            env!("CARGO_PKG_AUTHORS"),
+            env!("CARGO_PKG_AUTHORS").replace(':', ", "),
             env!("CARGO_PKG_DESCRIPTION"),
             helix_loader::default_log_file().display(),
         );
@@ -76,7 +75,7 @@ FLAGS:
     }
 
     if args.display_version {
-        println!("helix {}", VERSION_AND_GIT_HASH);
+        println!("phelix {}", VERSION_AND_GIT_HASH);
         std::process::exit(0);
     }
 

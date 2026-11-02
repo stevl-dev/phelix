@@ -1,64 +1,72 @@
-<div align="center">
+# Phelix
 
-<h1>
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="logo_dark.svg">
-  <source media="(prefers-color-scheme: light)" srcset="logo_light.svg">
-  <img alt="Helix" height="128" src="logo_light.svg">
-</picture>
-</h1>
+Phelix is a personal hard fork of [Helix](https://github.com/helix-editor/helix),
+the Kakoune and Neovim inspired modal editor written in Rust.
 
-[![Build status](https://github.com/helix-editor/helix/actions/workflows/build.yml/badge.svg)](https://github.com/helix-editor/helix/actions)
-[![GitHub Release](https://img.shields.io/github/v/release/helix-editor/helix)](https://github.com/helix-editor/helix/releases/latest)
-[![Documentation](https://shields.io/badge/-documentation-452859)](https://docs.helix-editor.com/)
-[![GitHub contributors](https://img.shields.io/github/contributors/helix-editor/helix)](https://github.com/helix-editor/helix/graphs/contributors)
-[![Matrix Space](https://img.shields.io/matrix/helix-community:matrix.org)](https://matrix.to/#/#helix-community:matrix.org)
+It isn't affiliated with the Helix project, and the Helix maintainers don't
+support it. Report Helix's own bugs to Helix only when they also happen in
+upstream Helix.
 
-</div>
+Phelix doesn't rebase onto Helix. Helix's changes come over by cherry-pick,
+when they're worth it, so the two drift apart over time.
 
-![Screenshot](./screenshot.png)
+# What it adds
 
-A [Kakoune](https://github.com/mawww/kakoune) / [Neovim](https://github.com/neovim/neovim) inspired editor, written in Rust.
+- `:review` shows every changed file's hunks in one buffer, against `HEAD`, or
+  with `unstaged` or `staged` against the index. Edits to the hunks go to the
+  files as you type.
+- Tabs, each a layout with its own splits and focus: `code`, where the editor
+  starts, and `review`.
+- The changed-files picker (`Space g`) lists unstaged, staged, or all changes,
+  and `Ctrl-g` cycles between them.
+- `[keys.picker]` in `config.toml` rebinds the picker's keys.
+- `:yank-diagnostics` copies every diagnostic in the buffer as a compiler
+  report.
+- The message below the statusline lines up with the statusline's text.
 
-The editing model is very heavily based on Kakoune; during development I found
-myself agreeing with most of Kakoune's design decisions.
+[`FORK.md`](./FORK.md) lists every change, with where its code and docs are.
+The [book](./book/src/SUMMARY.md) documents the editor, the changes included.
 
-For more information, see the [website](https://helix-editor.com) or
-[documentation](https://docs.helix-editor.com/).
+# Building
 
-All shortcuts/keymaps can be found [in the documentation on the website](https://docs.helix-editor.com/keymap.html).
+You need the [Rust toolchain](https://www.rust-lang.org/tools/install), Git,
+and a C++14 compiler for the tree-sitter grammars.
 
-[Troubleshooting](https://github.com/helix-editor/helix/wiki/Troubleshooting)
+```sh
+git clone https://github.com/stevl-dev/phelix
+cd phelix
+cargo install --path phx --locked
+```
 
-# Features
+That installs the `phx` binary. It needs the `runtime` directory from the
+checkout. Point it there with `PHELIX_RUNTIME`, or link it into the config
+directory, and check the result with `phx --health`:
 
-- Vim-like modal editing
-- Multiple selections
-- Built-in language server support
-- Smart, incremental syntax highlighting and code editing via tree-sitter
+```sh
+export PHELIX_RUNTIME=~/src/phelix/runtime
+```
 
-Although it's primarily a terminal-based editor, I am interested in exploring
-a custom renderer (similar to Emacs) using wgpu.
+[Building from source](./book/src/building-from-source.md) has the other
+options.
 
-Note: Only certain languages have indentation definitions at the moment. Check
-`runtime/queries/<lang>/` for `indents.scm`.
+# Configuration
 
-# Installation
+Phelix reads `~/.config/phelix/config.toml`, or `%AppData%\phelix\config.toml`
+on Windows. While that directory doesn't exist and Helix's `~/.config/helix`
+does, it reads Helix's instead. The data directory falls back the same way.
 
-[Installation documentation](https://docs.helix-editor.com/install.html).
+To give Phelix a config of its own, move or copy Helix's directory:
 
-[![Packaging status](https://repology.org/badge/vertical-allrepos/helix-editor.svg?exclude_unsupported=1)](https://repology.org/project/helix-editor/versions)
+```sh
+mv ~/.config/helix ~/.config/phelix
+```
 
-# Contributing
+Don't create an empty one first: an empty `phelix` directory wins over a full
+`helix` one. Workspace-local `.helix/` directories still work.
 
-Contributing guidelines can be found [here](./docs/CONTRIBUTING.md).
+The [configuration](./book/src/configuration.md) page has the rest.
 
-# Getting help
+# License
 
-Your question might already be answered on the [FAQ](https://github.com/helix-editor/helix/wiki/FAQ).
-
-Discuss the project on the community [Matrix Space](https://matrix.to/#/#helix-community:matrix.org) (make sure to join `#helix-editor:matrix.org` if you're on a client that doesn't support Matrix Spaces yet).
-
-# Credits
-
-Thanks to [@jakenvac](https://github.com/jakenvac) for designing the logo!
+Phelix is distributed under the [Mozilla Public License 2.0](./LICENSE), like
+Helix. Nearly all of it is the work of the Helix contributors.
