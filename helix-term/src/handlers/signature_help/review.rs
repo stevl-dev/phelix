@@ -25,7 +25,7 @@ pub(super) fn lend(
     if editor.review.stream_of(editor.tree.get(view).doc).is_none() {
         return false;
     }
-    match review::lend(editor) {
+    match review::lend(editor, editor.tree.focus) {
         Ok(file) => {
             // INVARIANT: the view shows the review again before anything
             // draws it. The request reads the buffer only before it goes out.

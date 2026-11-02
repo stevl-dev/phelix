@@ -47,6 +47,7 @@ use crate::{
     editor::Config,
     events::{DocumentDidChange, SelectionDidChange},
     expansion,
+    kind::BufferKind,
     view::ViewPosition,
     DocumentId, Editor, Theme, View, ViewId,
 };
@@ -219,6 +220,9 @@ pub struct Document {
     /// What the buffer is called while it has no path: `[scratch]`, or a
     /// feature's own name, like the review's `[review]`.
     pub name_without_path: &'static str,
+    /// The feature's kind that answers for the buffer, or `None` for an
+    /// ordinary one.
+    pub kind: Option<&'static dyn BufferKind>,
 
     pub previous_diagnostic_ids: HashMap<LanguageServerId, String>,
 
@@ -772,6 +776,7 @@ impl Document {
             readonly: false,
             listed: true,
             name_without_path: SCRATCH_BUFFER_NAME,
+            kind: None,
             jump_labels: HashMap::new(),
             document_highlights: HashMap::new(),
             code_action_hints: HashSet::new(),

@@ -37,6 +37,17 @@ mod words;
 
 pub use complete::{accept_item, file_at_cursor, previews_completion};
 pub use lend::lend;
+
+/// The review's buffer kind, on the stream's buffer.
+struct Kind;
+
+static KIND: Kind = Kind;
+
+impl crate::kind::BufferKind for Kind {
+    fn source(&self, editor: &mut Editor, view: ViewId) -> Result<DocumentId, String> {
+        lend(editor, view)
+    }
+}
 pub use log::{log_step, redo, undo};
 pub use sync::{load, sync};
 pub use syntax::overlays as syntax_overlays;
@@ -557,6 +568,7 @@ pub fn show(editor: &mut Editor, root: PathBuf, scope: ChangeView, sections: Vec
     doc.readonly = scope == ChangeView::Staged;
     doc.listed = false;
     doc.name_without_path = "[review]";
+    doc.kind = Some(&KIND);
     editor.review.stream = Some(Stream {
         doc: doc_id,
         root,

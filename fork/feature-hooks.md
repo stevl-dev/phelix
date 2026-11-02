@@ -3,7 +3,7 @@
 Snapshot: `main` at `4a60f8c`, on upstream `master` at `ba40e547`.
 Goes in `fork/feature-hooks.md`. Feature slug: `feature-hooks`.
 
-Status: phases 0 and 1 done. Section 9's questions are answered under Decisions. Phase 2 is next.
+Status: phases 0 to 2 done. Section 9's questions are answered under Decisions. Phase 3 is next.
 
 ## Bottom line
 
@@ -309,7 +309,7 @@ Each phase is one commit that builds and passes `tools/fork/land.sh --check`. Ea
 | --- | --- | --- | --- |
 | 0 | done | Add the feature hooks plan. | This file, and the `feature-hooks` entry in `FORK.md`. |
 | 1 | done | Run the review before each key and frame through an event. | 3.1. `EditorWillUpdate`, its two dispatches, the review's hook. No test: the review's tests pin the sync, and wiring needs none. |
-| 2 | | Add buffer kinds, and ask the LSP commands' file from them. | 3.2 and the commands half of 3.3. `helix-view/src/kind.rs`, `Document::kind`, `Editor::source`, `source_open`. The review's kind, with `source` from `review/lend.rs`. The `commands/lsp.rs` rows of 3.3's table. `lent()` keeps only the rename. Tests that must pass unchanged: `lsp_keys_in_the_review_ask_from_the_rows_file`, `lsp_keys_in_the_review_need_a_line_the_file_has`, `a_staged_review_refuses_undo_and_lsp_keys`, and the ignored `rust_analyzer` test at a manual run. |
+| 2 | done | Add buffer kinds, and ask the LSP commands' file from them. | 3.2 and the commands half of 3.3. `helix-view/src/kind.rs`, `Document::kind`, `Editor::source`, `source_open`. The review's kind, with `source` from `review/lend.rs`. The `commands/lsp.rs` rows of 3.3's table. `lent()` keeps only the rename. Tests that must pass unchanged: `lsp_keys_in_the_review_ask_from_the_rows_file`, `lsp_keys_in_the_review_need_a_line_the_file_has`, `a_staged_review_refuses_undo_and_lsp_keys`, and the ignored `rust_analyzer` test at a manual run. |
 | 3 | | Ask completion and signature help from the buffer's source. | The rest of 3.3. Delete `request/review.rs` and `signature_help/review.rs`. `previews_completion` and `accept_completion` on the kind. Tests that must pass unchanged: the four completion tests in `review.rs` and `signature_help_in_the_review_asks_from_the_rows_file`. A new test that the signature help popup has the file's language (Decisions 5). |
 | 4 | | Let a buffer kind close its buffer and step through it. | 3.4's `close` and `goto_buffer`, the two core rules, and `Editor::switch`'s scratch rule. Tests that must pass unchanged: the close and refusal tests, `buffer_motions_in_the_review_step_through_its_files`, `buffer_commands_pass_over_the_review`. |
 | 5 | | Let a buffer kind reload and write its buffer. | 3.4's `reload` and `write`. `helix-term/src/kind.rs` with `BufferKindUi` and its registry. The `:w` seam goes, and the save chain copy if it can. Tests that must pass unchanged: `w_in_the_review_writes_the_files_it_shows_with_unsaved_changes`, the two reload tests, `a_reload_with_no_changes_closes_the_review_and_names_unsaved_files`. |
@@ -417,3 +417,14 @@ Each phase records here what it found, the count from section 7, and any hook si
 - The event is as 3.1 has it: `EditorWillUpdate<'a> { editor: &'a mut Editor, completing: bool }`.
 - Under the `integration` feature the hook registry is per tokio runtime (`helix-event/src/runtime.rs`), so each test's app registers its own hook, and tests in parallel don't run the sync twice.
 - A dispatch holds the registry's read lock while hooks run, and the sync dispatches events of its own, like `DocumentDidOpen` when it loads a file. Nested reads are safe because hooks register only at startup. The review's tests pass with it.
+
+### Phase 2
+
+- The count from section 7 stays at 112. The lending lived in the review's own files, which the count leaves out, and upstream's `commands/lsp.rs` never named the review. What went is the review's lent goto, references, hover and code action, and the `INVARIANT` that the view showed the review again before anything drew it.
+- `BufferKind` has only `source` for now. `name` comes with phase 5, which has the registry it's for, and `source_open` with phase 3, which has its callers.
+- The review's kind is `Kind` in `helix-view/src/review.rs`, set on the stream's buffer where `listed` and `name_without_path` are. Its `source` is `review::lend`, which now takes the asking view rather than reading the focus.
+- 3.3's table held against the code. Each of `goto_single_impl`, `goto_reference`, `hover` and `code_action` reads the buffer once, before its request goes out, and the answers read the focused view: `jump_to_location`'s `push_jump`, the hover popup, the code action menu. `source` in `commands/lsp.rs` is the one place they ask.
+- `rename_symbol` keeps the review's own version, and `lent()` handles only it. Upstream's reads the focused buffer again when you confirm the prompt, and the review records the rename's edit as a step of its undo log. No hook yet runs code around a workspace edit, and adding one for rename alone would be a hook without a second user.
+- Completion and signature help still lend: `request/review.rs` and `signature_help/review.rs` call `review::lend` with the focused view. So `lend`'s name, its `WHY`s about jobs and signature help, and `keep_shown`'s note on lent views in `review/sync.rs` stay until phase 3.
+- The tests 3.3 names pass unchanged, and so does the ignored `rust_analyzer` test, run by hand.
+

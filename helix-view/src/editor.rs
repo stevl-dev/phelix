@@ -1951,6 +1951,17 @@ impl Editor {
         }
     }
 
+    /// The buffer a language feature asks from for `view`'s primary
+    /// selection: the view's own, or the one its buffer's kind names.
+    pub fn source(&mut self, view: ViewId) -> Result<DocumentId, String> {
+        let doc = self.tree.get(view).doc;
+        // INVARIANT: copied out of the document, so the kind can take the editor.
+        match self.documents[&doc].kind {
+            None => Ok(doc),
+            Some(kind) => kind.source(self, view),
+        }
+    }
+
     pub(crate) fn replace_document_in_view(&mut self, current_view: ViewId, doc_id: DocumentId) {
         let scrolloff = self.config().scrolloff;
         let view = self.tree.get_mut(current_view);

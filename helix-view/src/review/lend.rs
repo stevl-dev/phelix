@@ -1,14 +1,14 @@
-//! Readies the file of the row under the cursor for an LSP command. The stream
-//! has no path and no language servers, so `helix-term` runs upstream's
-//! command with the view lent to the file's buffer, which this module loads
-//! and puts the view's selection in, at the same place as in the stream.
+//! The file of the row under the cursor, for a language feature: the review's
+//! buffer kind's source. The stream has no path and no language servers, so a
+//! feature asks from the file's buffer, which this module loads and puts the
+//! view's selection in, at the same place as in the stream.
 
 use helix_core::line_ending::line_end_char_index;
 use helix_core::{Range, RopeSlice, Selection};
 use helix_vcs::ChangeView;
 
 use super::{load, Content, Row, Stream};
-use crate::{DocumentId, Editor};
+use crate::{DocumentId, Editor, ViewId};
 
 /// The file, source line, and column of a stream position on an added or
 /// unchanged line.
@@ -22,11 +22,10 @@ fn place(stream: &Stream, text: RopeSlice, pos: usize) -> Option<(usize, usize, 
     Some((file, source, pos - text.line_to_char(row)))
 }
 
-/// The buffer of the file under the focused view's primary cursor, loaded if
-/// need be, with the view's selection at the same place in it. Or why there's
-/// none to use.
-pub fn lend(editor: &mut Editor) -> Result<DocumentId, String> {
-    let view = editor.tree.focus;
+/// The buffer of the file under `view`'s primary cursor, loaded if need be,
+/// with the view's selection at the same place in it. Or why there's none to
+/// use.
+pub fn lend(editor: &mut Editor, view: ViewId) -> Result<DocumentId, String> {
     let stream_doc = editor.tree.get(view).doc;
     let Some(stream) = editor.review.stream_of(stream_doc) else {
         return Err("This buffer isn't a review. Start one with :review".to_string());

@@ -121,7 +121,6 @@ Each entry says what the feature adds, and where its code, tests, and book pages
 - Book: `book/src/keymap.md` (Review), `book/src/themes.md` (the review's scopes), `book/src/editor.md` (`[editor.review]`), and `book/src/generated/static-cmd.md` and `typable-cmd.md`, generated.
 - Tests: unit tests in `review.rs`, `review/layout.rs`, `review/reconcile.rs`, `review/forward.rs`, `review/syntax.rs`, `review/words.rs`, `review/complete.rs`, `helix-vcs/src/git/index.rs`, and `commands/review/stage.rs`. Integration tests in `helix-term/tests/test/review.rs` over a temporary git repository. `review/rust_analyzer.rs` runs completion and a goto against rust-analyzer. It's ignored, since it changes the working directory, and runs alone at a manual check: `cargo integration-test -- --ignored rust_analyzer --test-threads=1`.
 - Relies on:
-  - `goto_*`, `hover`, and `code_action` in `helix-term/src/commands/lsp.rs` run with the view lent to the row's file. A cherry-pick that makes their answers read the focused buffer breaks that.
   - The review's rename in `commands/review/lsp.rs` follows `rename_symbol`'s request and edit, without `prepareRename`. A cherry-pick that changes them updates it.
   - `request/review.rs` calls the private `request_completions_from_language_server`, and copies the completion context `request_completions` builds inline. A cherry-pick that changes either updates it.
   - `review::accept_item` sits in `ui/completion.rs`'s accept arm. A cherry-pick that changes how the arm turns an item into a transaction rereads it.
@@ -170,7 +169,11 @@ Each entry says what the feature adds, and where its code, tests, and book pages
 
 ### feature-hooks
 
-- Plan: `fork/feature-hooks.md`, done through phase 1.
+- Plan: `fork/feature-hooks.md`, done through phase 2.
 - Adds: general hooks the core calls where it used to check for a feature. Nothing the user sees.
 - Hooks:
   - `EditorWillUpdate { editor, completing }`, an event before each key and each frame. Defined in `helix-term/src/events.rs`, and dispatched at the top of `EditorView::handle_event`, before the keymap swap, and of `EditorView::render`, in `helix-term/src/ui/editor.rs`. `completing` is whether a completion menu is open.
+  - `BufferKind` in `helix-view/src/kind.rs`, the answers a feature's buffer gives where the core would act on an ordinary one, and `Document::kind`, which points at one. A feature declares its kind as a `static`.
+  - `BufferKind::source`, the buffer a language feature asks from. `Editor::source` returns the view's own buffer, or asks its kind. `source` in `helix-term/src/commands/lsp.rs` calls it for `goto_definition`, `goto_declaration`, `goto_type_definition`, `goto_implementation` (all through `goto_single_impl`), `goto_reference`, `hover`, and `code_action`. Their requests read the source, and their answers the focused view: the jump records where you were, and the popups open at its cursor.
+- Relies on:
+  - A language feature that asks a server reads its buffer through `Editor::source`. A cherry-pick that adds one, or that adds a read of the focused buffer to a request in one, asks from the source instead.

@@ -37,7 +37,7 @@ pub(in crate::handlers::completion) fn request(
     if !in_review(editor) {
         return;
     }
-    let Ok(file) = review::lend(editor) else {
+    let Ok(file) = review::lend(editor, editor.tree.focus) else {
         return;
     };
     let view = editor.tree.focus;
@@ -86,7 +86,7 @@ pub(in crate::handlers::completion) fn request_incomplete(
     // WHY: this runs inside the key that typed the char, before the frame's
     // sync forwards it. The menu is open, so the rows stay as they are.
     review::sync(editor, true);
-    let Ok(file) = review::lend(editor) else {
+    let Ok(file) = review::lend(editor, editor.tree.focus) else {
         return true;
     };
     let (view, stream) = current!(editor);

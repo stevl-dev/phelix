@@ -24,7 +24,7 @@ use helix_view::{
     editor::Action,
     handlers::lsp::SignatureHelpInvoked,
     theme::Style,
-    Document, DocumentId, View,
+    Document, DocumentId, View, ViewId,
 };
 
 use crate::{
@@ -113,6 +113,19 @@ fn location_to_file_location(location: &Location) -> Option<FileLocation<'_>> {
         location.range.end.line as usize,
     ));
     Some((path.into(), line))
+}
+
+/// The focused view and the buffer its language features ask from, or `None`
+/// once the status says why there's none.
+fn source(editor: &mut Editor) -> Option<(ViewId, DocumentId)> {
+    let view = editor.tree.focus;
+    match editor.source(view) {
+        Ok(doc) => Some((view, doc)),
+        Err(refusal) => {
+            editor.set_error(refusal);
+            None
+        }
+    }
 }
 
 fn jump_to_location(editor: &mut Editor, location: &Location, action: Action) {
@@ -596,9 +609,12 @@ impl ui::menu::Item for CodeActionItem {
 }
 
 pub fn code_action(cx: &mut Context) {
-    let (view, doc) = current!(cx.editor);
+    let Some((view, doc)) = source(cx.editor) else {
+        return;
+    };
+    let doc = doc!(cx.editor, &doc);
 
-    let selection_range = doc.selection(view.id).primary();
+    let selection_range = doc.selection(view).primary();
 
     let mut futures: FuturesUnordered<_> =
         code_actions_for_range(doc, selection_range, None, CodeActionTriggerKind::INVOKED)
@@ -948,12 +964,15 @@ where
     P: Fn(&Client, lsp::Position, lsp::TextDocumentIdentifier) -> Option<F>,
     F: Future<Output = helix_lsp::Result<Option<lsp::GotoDefinitionResponse>>> + 'static + Send,
 {
-    let (view, doc) = current_ref!(cx.editor);
+    let Some((view, doc)) = source(cx.editor) else {
+        return;
+    };
+    let doc = doc!(cx.editor, &doc);
     let mut futures: FuturesUnordered<_> = doc
         .language_servers_with_feature(feature)
         .map(|language_server| {
             let offset_encoding = language_server.offset_encoding();
-            let pos = doc.position(view.id, offset_encoding);
+            let pos = doc.position(view, offset_encoding);
             let future = request_provider(language_server, pos, doc.identifier()).unwrap();
             async move { anyhow::Ok((future.await?, offset_encoding)) }
         })
@@ -1043,13 +1062,16 @@ pub fn goto_implementation(cx: &mut Context) {
 
 pub fn goto_reference(cx: &mut Context) {
     let config = cx.editor.config();
-    let (view, doc) = current_ref!(cx.editor);
+    let Some((view, doc)) = source(cx.editor) else {
+        return;
+    };
+    let doc = doc!(cx.editor, &doc);
 
     let mut futures: FuturesUnordered<_> = doc
         .language_servers_with_feature(LanguageServerFeature::GotoReference)
         .map(|language_server| {
             let offset_encoding = language_server.offset_encoding();
-            let pos = doc.position(view.id, offset_encoding);
+            let pos = doc.position(view, offset_encoding);
             let future = language_server
                 .goto_reference(
                     doc.identifier(),
@@ -1095,7 +1117,10 @@ pub fn signature_help(cx: &mut Context) {
 pub fn hover(cx: &mut Context) {
     use ui::lsp::hover::Hover;
 
-    let (view, doc) = current!(cx.editor);
+    let Some((view, doc)) = source(cx.editor) else {
+        return;
+    };
+    let doc = doc!(cx.editor, &doc);
     if doc
         .language_servers_with_feature(LanguageServerFeature::Hover)
         .count()
@@ -1113,7 +1138,7 @@ pub fn hover(cx: &mut Context) {
         .map(|language_server| {
             let server_name = language_server.name().to_string();
             // TODO: factor out a doc.position_identifier() that returns lsp::TextDocumentPositionIdentifier
-            let pos = doc.position(view.id, language_server.offset_encoding());
+            let pos = doc.position(view, language_server.offset_encoding());
             let request = language_server
                 .text_document_hover(doc.identifier(), pos, None)
                 .unwrap();

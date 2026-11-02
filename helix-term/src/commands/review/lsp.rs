@@ -1,75 +1,44 @@
-//! The review's goto, references, hover, code actions, and rename. The first
-//! ones run upstream's own command with the focused view lent to the file of
-//! the row under the cursor. Their answers never read the buffer they asked
-//! from: goto jumps from the current view, hover pops up at its cursor, and a
-//! code action edits by path. The plan's 6.19 has the read of upstream behind
-//! that. Rename has its own prompt.
+//! The review's rename. Goto, references, hover, and code actions are
+//! upstream's own, which ask the review's buffer kind for the file of the row
+//! under the cursor.
 
 use helix_core::syntax::config::LanguageServerFeature;
 use helix_core::textobject::{textobject_word, TextObject};
 use helix_lsp::block_on;
 use helix_view::{doc, review};
 
-use crate::commands::{
-    code_action, goto_declaration, goto_definition, goto_implementation, goto_reference,
-    goto_type_definition, hover, Context, MappableCommand,
-};
+use crate::commands::{Context, MappableCommand};
 use crate::ui::{self, PromptEvent};
 
-/// The review's version of `command`, when the review lends its view for it.
-/// Built here rather than in the command table: it exists only as a swap in
-/// the review's keymap.
+/// The review's version of `command`, swapped into the review's keymap.
+/// Built here rather than in the command table: it exists only as that swap.
 pub(crate) fn lent(command: &MappableCommand) -> Option<MappableCommand> {
-    let MappableCommand::Static { name, doc, .. } = command else {
-        return None;
-    };
-    let (name, fun): (_, fn(&mut Context)) = match *name {
-        "goto_definition" => ("review_goto_definition", |cx| lend(cx, goto_definition)),
-        "goto_declaration" => ("review_goto_declaration", |cx| lend(cx, goto_declaration)),
-        "goto_type_definition" => ("review_goto_type_definition", |cx| {
-            lend(cx, goto_type_definition)
+    match command {
+        MappableCommand::Static {
+            name: "rename_symbol",
+            doc,
+            ..
+        } => Some(MappableCommand::Static {
+            name: "review_rename_symbol",
+            fun: rename,
+            doc,
         }),
-        "goto_implementation" => ("review_goto_implementation", |cx| {
-            lend(cx, goto_implementation)
-        }),
-        "goto_reference" => ("review_goto_reference", |cx| lend(cx, goto_reference)),
-        "hover" => ("review_hover", |cx| lend(cx, hover)),
-        "code_action" => ("review_code_action", |cx| lend(cx, code_action)),
-        "rename_symbol" => ("review_rename_symbol", rename),
-        _ => return None,
-    };
-    Some(MappableCommand::Static { name, fun, doc })
-}
-
-fn lend(cx: &mut Context, command: fn(&mut Context)) {
-    let file = match review::lend(cx.editor) {
-        Ok(file) => file,
-        Err(refusal) => {
-            cx.editor.set_error(refusal);
-            return;
-        }
-    };
-    let view = cx.editor.tree.focus;
-    // INVARIANT: the view shows the review again before anything draws it or
-    // a key reaches it. Upstream's command reads the buffer only before its
-    // request goes out.
-    let stream = std::mem::replace(&mut cx.editor.tree.get_mut(view).doc, file);
-    command(cx);
-    cx.editor.tree.get_mut(view).doc = stream;
+        _ => None,
+    }
 }
 
 // WHY: upstream's rename reads the focused buffer again when you confirm its
-// prompt, and by then the view shows the review again. This one keeps the file
-// and the place, and leaves out `prepareRename`.
+// prompt, and that's the review, which isn't the source. This one keeps the
+// file and the place, and leaves out `prepareRename`.
 fn rename(cx: &mut Context) {
-    let file = match review::lend(cx.editor) {
+    let view = cx.editor.tree.focus;
+    let file = match review::lend(cx.editor, view) {
         Ok(file) => file,
         Err(refusal) => {
             cx.editor.set_error(refusal);
             return;
         }
     };
-    let view = cx.editor.tree.focus;
     let doc = doc!(cx.editor, &file);
     let Some(server) = doc
         .language_servers_with_feature(LanguageServerFeature::RenameSymbol)
