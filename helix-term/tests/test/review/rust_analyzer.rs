@@ -121,7 +121,7 @@ async fn rust_analyzer_completes_and_goes_to_definitions_in_the_review() -> anyh
 
     let mut config = test_config();
     config.editor.lsp.enable = true;
-    let mut app = AppBuilder::new()
+    let mut app = builder()
         .with_config(config)
         .with_file(lib.clone(), None)
         .build()?;

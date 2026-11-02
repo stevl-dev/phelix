@@ -14,6 +14,12 @@ use helix_view::{
 
 use super::*;
 
+/// An app builder, with the review's tab among the features' tabs.
+fn builder() -> AppBuilder {
+    helix_term::feature::init(&[helix_term::REVIEW_FEATURE]);
+    AppBuilder::new()
+}
+
 /// Opens the review tab on a new scratch buffer.
 fn open_review_tab(app: &mut Application) {
     let doc = app.editor.new_file(Action::Load);
@@ -24,7 +30,7 @@ fn open_review_tab(app: &mut Application) {
 async fn quit_on_either_tabs_last_view_checks_for_unsaved_buffers_then_quits() -> anyhow::Result<()>
 {
     for tab in [Tab::CODE, REVIEW_TAB] {
-        let mut app = AppBuilder::new().build()?;
+        let mut app = builder().build()?;
         open_review_tab(&mut app);
         app.editor.switch_tab(tab);
         test_key_sequences(
@@ -52,7 +58,7 @@ async fn quit_on_either_tabs_last_view_checks_for_unsaved_buffers_then_quits() -
 
 #[tokio::test(flavor = "multi_thread")]
 async fn quit_on_a_split_closes_only_the_split() -> anyhow::Result<()> {
-    let mut app = AppBuilder::new().build()?;
+    let mut app = builder().build()?;
     open_review_tab(&mut app);
     test_key_sequence(
         &mut app,
@@ -69,7 +75,7 @@ async fn quit_on_a_split_closes_only_the_split() -> anyhow::Result<()> {
 #[tokio::test(flavor = "multi_thread")]
 async fn closing_a_tabs_only_buffer_closes_the_tab_and_keeps_helix_running() -> anyhow::Result<()> {
     let file = tempfile::NamedTempFile::new()?;
-    let mut app = AppBuilder::new().with_file(file.path(), None).build()?;
+    let mut app = builder().with_file(file.path(), None).build()?;
     open_review_tab(&mut app);
     test_key_sequence(
         &mut app,
@@ -90,7 +96,7 @@ async fn closing_a_tabs_only_buffer_closes_the_tab_and_keeps_helix_running() -> 
 #[tokio::test(flavor = "multi_thread")]
 async fn closing_the_hidden_code_tabs_last_buffer_leaves_it_a_view() -> anyhow::Result<()> {
     let file = tempfile::NamedTempFile::new()?;
-    let mut app = AppBuilder::new().with_file(file.path(), None).build()?;
+    let mut app = builder().with_file(file.path(), None).build()?;
     open_review_tab(&mut app);
     test_key_sequence(
         &mut app,
@@ -110,7 +116,7 @@ async fn closing_the_hidden_code_tabs_last_buffer_leaves_it_a_view() -> anyhow::
 
 #[tokio::test(flavor = "multi_thread")]
 async fn tab_switches_to_an_open_tab_and_names_the_active_one() -> anyhow::Result<()> {
-    let mut app = AppBuilder::new().build()?;
+    let mut app = builder().build()?;
     open_review_tab(&mut app);
     test_key_sequences(
         &mut app,
@@ -146,7 +152,7 @@ async fn tab_refuses_a_tab_that_isnt_open_or_doesnt_exist() -> anyhow::Result<()
         ),
     ] {
         test_key_sequence(
-            &mut AppBuilder::new().build()?,
+            &mut builder().build()?,
             Some(keys),
             Some(&|app| {
                 let (message, severity) = app.editor.get_status().unwrap();

@@ -69,8 +69,14 @@ fn repo(committed: &[(&str, &str)], changes: &[(&str, Option<&str>)]) -> TempDir
     repo
 }
 
+/// An app builder, with the review among the features.
+fn builder() -> AppBuilder {
+    helix_term::feature::init(&[helix_term::REVIEW_FEATURE]);
+    AppBuilder::new()
+}
+
 fn app_on(file: PathBuf) -> anyhow::Result<Application> {
-    AppBuilder::new().with_file(file, None).build()
+    builder().with_file(file, None).build()
 }
 
 async fn run_until(
@@ -1291,7 +1297,7 @@ async fn signature_help_in_the_review_asks_from_the_rows_file() -> anyhow::Resul
             "F2" => signature_help,
         }),
     };
-    let mut app = AppBuilder::new()
+    let mut app = builder()
         .with_config(config)
         .with_file(repo.path().join("a.txt"), None)
         .build()?;
@@ -1508,7 +1514,7 @@ async fn u_after_w_in_the_review_undoes_the_format_first() -> anyhow::Result<()>
         "#
         .to_string(),
     ));
-    let mut app = AppBuilder::new()
+    let mut app = builder()
         .with_file(file.clone(), None)
         .with_lang_loader(loader)
         .build()?;
@@ -1980,7 +1986,7 @@ async fn backgrounds_with(review: &str) -> anyhow::Result<Vec<Color>> {
     config
         .features
         .insert("review", toml::Value::Table(toml::from_str(review)?));
-    let mut app = AppBuilder::new()
+    let mut app = builder()
         .with_config(config)
         .with_file(repo.path().join("a.txt"), None)
         .build()?;
@@ -2128,7 +2134,7 @@ async fn a_custom_key_for_goto_next_change_moves_by_review_hunk() -> anyhow::Res
             "C-n" => goto_next_change,
         }),
     };
-    let mut app = AppBuilder::new()
+    let mut app = builder()
         .with_config(config)
         .with_file(repo.path().join("a.txt"), None)
         .build()?;

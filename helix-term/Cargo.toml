@@ -14,7 +14,7 @@ homepage.workspace = true
 [features]
 default = ["git"]
 unicode-lines = ["helix-core/unicode-lines", "helix-view/unicode-lines"]
-integration = ["helix-event/integration_test"]
+integration = ["helix-event/integration_test", "dep:tempfile"]
 git = ["helix-vcs/git"]
 
 [dependencies]
@@ -64,6 +64,9 @@ serde = { version = "1.0", features = ["derive"] }
 dashmap = "6.2"
 
 parking_lot.workspace = true
+
+# the integration test harness
+tempfile = { workspace = true, optional = true }
 
 [target.'cfg(windows)'.dependencies]
 crossterm = { version = "0.28", features = ["event-stream"] }

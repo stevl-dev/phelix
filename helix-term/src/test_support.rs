@@ -1,3 +1,8 @@
+//! The integration test harness: keys run against an `Application`, and
+//! helpers to set one up. Behind the `integration` feature, so a feature's
+//! crate can test against it. A test binary that needs features calls
+//! `feature::init` before it builds an app.
+
 use std::{
     io::{Read, Write},
     mem::replace,
@@ -5,10 +10,10 @@ use std::{
     time::Duration,
 };
 
+use crate::{application::Application, args::Args, config::Config, keymap::merge_keys};
 use anyhow::bail;
 use helix_core::{diagnostic::Severity, test, Selection, Transaction};
 use helix_loader::workspace_trust::WorkspaceTrust;
-use helix_term::{application::Application, args::Args, config::Config, keymap::merge_keys};
 use helix_view::{
     current_ref, doc,
     editor::{ImplicitTrustLevelConfig, LspConfig, WordCompletion, WorkspaceTrustConfig},
@@ -291,14 +296,10 @@ pub fn temp_file_with_contents<S: AsRef<str>>(
 }
 
 /// Generates a config with defaults more suitable for integration tests
-/// The features the tests run with.
-pub const FEATURES: &[helix_term::feature::Feature] = &[helix_term::REVIEW_FEATURE];
-
 pub fn test_config() -> Config {
-    helix_term::feature::init(FEATURES);
     Config {
         editor: test_editor_config(),
-        keys: helix_term::keymap::default(),
+        keys: crate::keymap::default(),
         ..Default::default()
     }
 }
@@ -391,7 +392,7 @@ impl AppBuilder {
     // Remove this attribute once `with_config` is used in a test:
     #[allow(dead_code)]
     pub fn with_config(mut self, mut config: Config) -> Self {
-        let keys = replace(&mut config.keys, helix_term::keymap::default());
+        let keys = replace(&mut config.keys, crate::keymap::default());
         merge_keys(&mut config.keys, keys);
         self.config = config;
         self
@@ -408,7 +409,6 @@ impl AppBuilder {
     }
 
     pub fn build(self) -> anyhow::Result<Application> {
-        helix_term::feature::init(FEATURES);
         if let Some(path) = &self.args.working_directory {
             bail!("Changing the working directory to {path:?} is not yet supported for integration tests");
         }
@@ -467,7 +467,7 @@ pub fn reload_file(file: &mut NamedTempFile) -> anyhow::Result<()> {
     let f = std::fs::OpenOptions::new()
         .write(true)
         .read(true)
-        .open(&path)?;
+        .open(path)?;
     *file.as_file_mut() = f;
     Ok(())
 }

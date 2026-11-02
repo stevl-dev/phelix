@@ -3,7 +3,7 @@
 Snapshot: `main` at `4a60f8c`, on upstream `master` at `ba40e547`.
 Goes in `fork/feature-hooks.md`. Feature slug: `feature-hooks`.
 
-Status: phases 0 to 13 done. Section 9's questions are answered under Decisions. Phase 14 is next.
+Status: phases 0 to 14a done. Section 9's questions are answered under Decisions. Phase 14b is next.
 
 ## Bottom line
 
@@ -322,7 +322,8 @@ Each phase is one commit that builds and passes `tools/fork/land.sh --check`. Ea
 | 11b | done | Gather the review's tab, config table and hooks into its Feature. | 3.9, the rest. `TABS` and `FEATURE_TABLES` become `Feature::tabs` and `Feature::config`, and `handlers::setup` calls each feature's `register`. No new test: the tests of `:tab`, `[review]` and the review's hooks pin it. |
 | 12 | done | Let features add actions to the changed-file picker. | 3.9, picker actions. Tests: `picker_keys_overlay_defaults_and_no_op_unbinds` in `config.rs` with `review_jump` as a registered action, its default, an override, and `no_op`. |
 | 13 | done | Move the binary into an hx crate. | 3.10, `hx`. Build files and the docs that name `--path helix-term`. No new test. `land.sh --check`, and `cargo install --path hx --locked` at the manual check. |
-| 14 | | Move the review into a helix-review crate. | 3.10, `helix-review`. The `pub` items, the harness, the tests, `AGENTS.md`, `agents/*.md`, `FORK.md`. Section 7's count reaches 0. |
+| 14a | done | Move the integration harness into helix_term::test_support. | 3.10's harness, by Decisions 4. `helix-term/tests/test/helpers.rs` becomes `helix-term/src/test_support.rs` behind the `integration` feature, and the tests import it from there. The harness sets no features: the review's and the tabs' tests call `feature::init` in a `builder` of their own. `agents/TESTING.md` says so. No new test. |
+| 14b | | Move the review into a helix-review crate. | 3.10, `helix-review`. The `pub` items, the review's tests on `test_support`, `tabs.rs` on a test tab of its own, `AGENTS.md`, `agents/*.md`, `FORK.md`. Section 7's count reaches 0. |
 
 ### Order
 
@@ -331,7 +332,7 @@ Each phase is one commit that builds and passes `tools/fork/land.sh --check`. Ea
 - Phases 4–8 are each one hook, and depend only on phase 2's `BufferKind`. Phase 5 adds `BufferKindUi`, which phases 6 and 7 use.
 - Phases 9 and 10 depend on phase 1's event and nothing in 2–8.
 - Phase 11 needs every hook the review registers to exist, so it comes after 1–10. Phase 12 needs phase 11's registry.
-- Phase 13 needs phase 11's `Feature`. Phase 14 needs everything.
+- Phase 13 needs phase 11's `Feature`. Phase 14 needs everything. It split into 14a, the harness, and 14b, the crate, by the human's call.
 - If a phase's subject can't say what it does in one line once its work is known, split it. Phases 2, 5 and 11 are the likeliest to split. Phase 11 split into 11a and 11b, by the human's call.
 
 ## 6. Risks
@@ -544,4 +545,12 @@ Each phase records here what it found, the count from section 7, and any hook si
 - The harness calls `init` in `test_config` and `AppBuilder::build`, and the review's unit tests in their `load`, with the review's `Feature`. `xtask`'s `main` calls it with `hx::FEATURES`, so docgen still lists the review's commands, and `cargo xtask docgen` leaves `book/src/generated` as it was.
 - `cargo install --path hx --locked` replaces `--path helix-term` in `book/src/building-from-source.md`, `FORK.md` and `agents/VERIFY.md`. The book's `cargo deb` names `-p hx`, since a virtual workspace's default member is a weak thing to rely on. `cargo-deb` isn't installed here, so that command wasn't run. `default.nix` reads `hx/Cargo.toml`. `docs/architecture.md` has an `hx` row.
 - `cargo build` builds `target/debug/hx`, and `hx --version` runs.
+
+### Phase 14a
+
+- Phase 14 split in two, by the human's call: 14a moves the harness, 14b the review.
+- The count from section 7 stays at 11. `test_support.rs` names no feature.
+- `helix-term/tests/test/helpers.rs` is `helix-term/src/test_support.rs`, `pub mod test_support` behind `#[cfg(feature = "integration")]`. Its `helix_term::` paths are `crate::`. `tempfile` is an optional dependency that `integration` turns on, beside the dev-dependency. `tests/integration.rs` imports it as `helpers`, so the tests' `helpers::` paths stay.
+- The harness no longer calls `init`: a library can't know which features a test binary wants. `review.rs` and `tabs.rs` call it in a `builder` of their own, and `rust_analyzer.rs` uses the review's. All three pass the review, since they share one binary and so one registry. `tabs.rs` moves to a tab of its own in 14b, when the review's tests leave the binary.
+- As library code, the harness compiles under clippy with `--features integration`, which flagged one needless borrow in `reload_file`. Fixed. The dead `line_feed_handling` warning is gone, since the field is public now.
 

@@ -1,13 +1,13 @@
 #[cfg(feature = "integration")]
 mod test {
-    mod helpers;
+    use helix_term::test_support as helpers;
 
     use helix_core::{syntax::config::AutoPairConfig, Selection};
     use helix_term::config::Config;
 
     use indoc::indoc;
 
-    use self::helpers::*;
+    use helix_term::test_support::*;
 
     #[tokio::test(flavor = "multi_thread")]
     async fn hello_world() -> anyhow::Result<()> {

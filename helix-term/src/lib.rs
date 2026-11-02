@@ -13,6 +13,8 @@ pub mod job;
 pub mod keymap;
 pub mod kind;
 pub mod logging;
+#[cfg(feature = "integration")]
+pub mod test_support;
 pub mod ui;
 
 #[cfg(not(windows))]

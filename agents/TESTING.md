@@ -58,7 +58,8 @@ Upstream's tests are the fork's own. A change that makes one wrong updates or de
 
 ## Integration harness
 
-`helix-term/tests/test/helpers.rs` has the harness.
+`helix_term::test_support` (`helix-term/src/test_support.rs`) has the harness, behind the `integration` feature, so a feature's crate can test against it too.
+The harness sets no features. A test that needs a feature's commands, tabs, or config calls `helix_term::feature::init` with them before it builds an app, as the review's tests do in their `builder`. Every test in one binary has to pass the same features.
 
 - `test_key_sequence`, `test_key_sequences`, and `test_with_config` run keys against an `Application`.
   A sequence can take a closure that asserts on the app afterwards.
