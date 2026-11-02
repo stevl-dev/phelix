@@ -3,7 +3,7 @@
 Snapshot: `main` at `4a60f8c`, on upstream `master` at `ba40e547`.
 Goes in `fork/feature-hooks.md`. Feature slug: `feature-hooks`.
 
-Status: phases 0 to 10 done. Section 9's questions are answered under Decisions. Phase 11 is next.
+Status: phases 0 to 11a done. Section 9's questions are answered under Decisions. Phase 11b is next.
 
 ## Bottom line
 
@@ -318,7 +318,8 @@ Each phase is one commit that builds and passes `tools/fork/land.sh --check`. Ea
 | 8 | done | Keep the review's state and config out of the editor's fields. | 3.7. `Editor::features`. `Config::review` moves to a top-level `[review]`, with the registered table names. Book: `book/src/editor.md`'s `[editor.review]` section becomes `[review]`. Tests in `config.rs`, parsed from TOML: `[review]`'s default and an override, an unknown key in it, an unregistered top-level table refused, and `[editor.review]` refused. |
 | 9 | done | Name tabs by the features that open them. | 3.8, phase 9 half. `Tree::tabs` without `Tab::ALL`, and the registered tab names. Tests: `tree.rs`'s, with a test tab name, and one for `Tree::tabs`'s order; `tabs.rs` and the `:tab` tests in `review.rs` pass unchanged, since the messages stay. |
 | 10 | done | Send what opens in a feature's tab to the code tab from the core. | 3.8, phase 10 half. `TabOptions`, the core check, `Editor::close_tab`. Tests that must pass unchanged: `a_file_opened_in_the_reviews_view_lands_in_the_code_tab`, `a_split_opened_on_a_file_in_the_review_tab_stays_there_until_the_review_closes`, `ret_opens_the_file_in_the_code_tab_and_review_comes_back`, and the goto in the `rust_analyzer` test at a manual run. |
-| 11 | | Let features register commands. | 3.9, commands. `helix-term/src/feature.rs`, `init`, the registry's users, the review's `Feature`, with phase 8's table name and phase 9's tab. `cargo xtask docgen`. Test: a unit test in `config.rs` parses `[keys.normal]` TOML that binds `review_open` by name, after `init`. It fails if the review's commands aren't in the registry. The `keymap!` macro in the integration tests names commands as Rust paths, not strings, so they don't cover this. |
+| 11a | done | Let features register commands. | 3.9, commands. `helix-term/src/feature.rs`, the registry's users, the review's `Feature` with its commands. `cargo xtask docgen`. Test: a unit test parses `[keys.normal]` TOML that binds `review_open` by name. It fails if the review's commands aren't in the registry. The `keymap!` macro in the integration tests names commands as Rust paths, not strings, so they don't cover this. |
+| 11b | | Gather the review's tab, config table and hooks into its Feature. | 3.9, the rest. `TABS` and `FEATURE_TABLES` become `Feature::tabs` and `Feature::config`, and `handlers::setup` calls each feature's `register`. No new test: the tests of `:tab`, `[review]` and the review's hooks pin it. |
 | 12 | | Let features add actions to the changed-file picker. | 3.9, picker actions. Tests: `picker_keys_overlay_defaults_and_no_op_unbinds` in `config.rs` with `review_jump` as a registered action, its default, an override, and `no_op`. |
 | 13 | | Move the binary into an hx crate. | 3.10, `hx`. Build files and the docs that name `--path helix-term`. No new test. `land.sh --check`, and `cargo install --path hx --locked` at the manual check. |
 | 14 | | Move the review into a helix-review crate. | 3.10, `helix-review`. The `pub` items, the harness, the tests, `AGENTS.md`, `agents/*.md`, `FORK.md`. Section 7's count reaches 0. |
@@ -331,7 +332,7 @@ Each phase is one commit that builds and passes `tools/fork/land.sh --check`. Ea
 - Phases 9 and 10 depend on phase 1's event and nothing in 2–8.
 - Phase 11 needs every hook the review registers to exist, so it comes after 1–10. Phase 12 needs phase 11's registry.
 - Phase 13 needs phase 11's `Feature`. Phase 14 needs everything.
-- If a phase's subject can't say what it does in one line once its work is known, split it. Phases 2, 5 and 11 are the likeliest to split.
+- If a phase's subject can't say what it does in one line once its work is known, split it. Phases 2, 5 and 11 are the likeliest to split. Phase 11 split into 11a and 11b, by the human's call.
 
 ## 6. Risks
 
@@ -501,4 +502,16 @@ Each phase records here what it found, the count from section 7, and any hook si
 - `replace_document_in_view` is private again, as upstream has it. Only the review's `move_out` needed it crate-visible.
 - The check's hook is registered in `handlers::setup` before the review's, with an `INVARIANT`. The risk table in section 6 said `a_file_opened_in_the_reviews_view_lands_in_the_code_tab` would fail if the order flipped. It doesn't: with the order flipped, every review and tabs test passes. The review's sync reads nothing that differs whether the check runs before or after it in the same update. `keep_shown` sees a moved file shown in the code tab either way. So the order is kept as the rule for any feature, but no test pins it.
 - The tests 3.8 names pass unchanged, and so does the goto in the ignored `rust_analyzer` test, run by hand.
+
+### Phase 11a
+
+- Phase 11 split in two, by the human's call: 11a the command registry and the review's commands, 11b the tab, the config table and the hooks.
+- The count from section 7 is 27, from 61: the review's 7 rows in `static_commands!` and their 7 wrappers in `commands.rs`, and its 5 rows in `TYPABLE_COMMAND_LIST`. `feature.rs` gained `FEATURES`, which names the review until phase 13.
+- `Feature` has `name`, `commands` and `typable` for now. 11b adds `tabs`, `config` and `register`.
+- No `init` and no `OnceLock` yet. 3.9 has them because the list will live in the `hx` crate, which `helix-term` can't name. Until phase 13 the list is a `const` in `helix-term`, so nothing can read the registry before it's filled. Phase 13 adds `init` with the `hx` crate.
+- The review's static commands are `pub(crate)` consts in `commands/review.rs`, `OPEN` to `REDO`, built as `static_commands!` builds its rows. Their bodies are the review's own functions, so the wrappers in `commands.rs` went.
+- `keymap!` names a command as `MappableCommand::$name`, an associated const of the core's table. The review's one binding, `ret` to `OPEN`, is now a `KeyTrieNode` built by hand in `keymap/review.rs`, rather than an inherent `impl MappableCommand` block that phase 14's crate move would break. `replace_commands` names the consts.
+- `CommandCompleter::none`, `positional` and `all` are `pub`, so a feature can build its typable rows.
+- `cargo xtask docgen` keeps every row of `static-cmd.md` and `typable-cmd.md`. The review's moved to the end of each table, after the core's.
+- The test is `keys_bind_the_reviews_commands_by_name` in `commands/review.rs`, not `config.rs`, since it names the review's commands. It binds `review_open` and `:review staged` and reads them back.
 

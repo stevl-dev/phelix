@@ -43,21 +43,21 @@ pub struct CommandCompleter {
 }
 
 impl CommandCompleter {
-    const fn none() -> Self {
+    pub const fn none() -> Self {
         Self {
             positional_args: &[],
             var_args: completers::none,
         }
     }
 
-    const fn positional(completers: &'static [Completer]) -> Self {
+    pub const fn positional(completers: &'static [Completer]) -> Self {
         Self {
             positional_args: completers,
             var_args: completers::none,
         }
     }
 
-    const fn all(completer: Completer) -> Self {
+    pub const fn all(completer: Completer) -> Self {
         Self {
             positional_args: &[],
             var_args: completer,
@@ -4148,61 +4148,6 @@ pub const TYPABLE_COMMAND_LIST: &[TypableCommand] = &[
         },
     },
     TypableCommand {
-        name: "review",
-        aliases: &[],
-        doc: "Show the changes of every changed file in one buffer, in a tab of its own, or switch to it. Scopes: all (HEAD against the files, the default), unstaged (the index against the files), staged (HEAD against the index)",
-        fun: super::review::review,
-        completer: CommandCompleter::positional(&[super::review::complete_scope]),
-        signature: Signature {
-            positionals: (0, Some(1)),
-            ..Signature::DEFAULT
-        },
-    },
-    TypableCommand {
-        name: "stage-hunk",
-        aliases: &[],
-        doc: "Stage the hunks the selections touch in the review",
-        fun: super::review::stage_hunk,
-        completer: CommandCompleter::none(),
-        signature: Signature {
-            positionals: (0, Some(0)),
-            ..Signature::DEFAULT
-        },
-    },
-    TypableCommand {
-        name: "unstage-hunk",
-        aliases: &[],
-        doc: "Unstage the hunks the selections touch in the review",
-        fun: super::review::unstage_hunk,
-        completer: CommandCompleter::none(),
-        signature: Signature {
-            positionals: (0, Some(0)),
-            ..Signature::DEFAULT
-        },
-    },
-    TypableCommand {
-        name: "review-restore",
-        aliases: &[],
-        doc: "Put the base's text back over the hunks the selections touch in the review, in each file's buffer",
-        fun: super::review::review_restore,
-        completer: CommandCompleter::none(),
-        signature: Signature {
-            positionals: (0, Some(0)),
-            ..Signature::DEFAULT
-        },
-    },
-    TypableCommand {
-        name: "review-context",
-        aliases: &[],
-        doc: "Show the given number of unchanged lines around each hunk of the review, or say how many it shows",
-        fun: super::review::review_context,
-        completer: CommandCompleter::none(),
-        signature: Signature {
-            positionals: (0, Some(1)),
-            ..Signature::DEFAULT
-        },
-    },
-    TypableCommand {
         name: "read",
         aliases: &["r"],
         doc: "Load a file into buffer",
@@ -4263,8 +4208,7 @@ pub const TYPABLE_COMMAND_LIST: &[TypableCommand] = &[
 
 pub static TYPABLE_COMMAND_MAP: LazyLock<HashMap<&'static str, &'static TypableCommand>> =
     LazyLock::new(|| {
-        TYPABLE_COMMAND_LIST
-            .iter()
+        crate::feature::typable_commands()
             .flat_map(|cmd| {
                 std::iter::once((cmd.name, cmd))
                     .chain(cmd.aliases.iter().map(move |&alias| (alias, cmd)))
@@ -4411,7 +4355,7 @@ fn complete_command_line(editor: &Editor, input: &str) -> Vec<ui::prompt::Comple
     if complete_command {
         fuzzy_match(
             input,
-            TYPABLE_COMMAND_LIST.iter().map(|command| command.name),
+            crate::feature::typable_commands().map(|command| command.name),
             false,
         )
         .into_iter()

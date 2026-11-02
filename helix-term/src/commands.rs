@@ -414,13 +414,6 @@ impl MappableCommand {
         syntax_symbol_picker, "Open symbol picker from syntax information",
         lsp_or_syntax_symbol_picker, "Open symbol picker from LSP or syntax information",
         changed_file_picker, "Open changed file picker",
-        review_open, "Open the file of the review row under the cursor, or show the lines of a gap",
-        review_next_hunk, "Select the next hunk of the review",
-        review_prev_hunk, "Select the previous hunk of the review",
-        review_first_hunk, "Select the first hunk of the review",
-        review_last_hunk, "Select the last hunk of the review",
-        review_undo, "Undo the review's last edit in the files it changed",
-        review_redo, "Redo the review's last undone edit in the files it changed",
         select_references_to_symbol_under_cursor, "Select symbol references",
         workspace_symbol_picker, "Open workspace symbol picker",
         syntax_workspace_symbol_picker, "Open workspace symbol picker from syntax information",
@@ -681,8 +674,7 @@ impl std::str::FromStr for MappableCommand {
                 keys,
             })
         } else {
-            MappableCommand::STATIC_COMMAND_LIST
-                .iter()
+            crate::feature::static_commands()
                 .find(|cmd| cmd.name() == s)
                 .cloned()
                 .ok_or_else(|| anyhow!("No command named '{}'", s))
@@ -3509,34 +3501,6 @@ fn changed_file_picker(cx: &mut Context) {
     changed_file::changed_file_picker(cx);
 }
 
-fn review_open(cx: &mut Context) {
-    review::open(cx);
-}
-
-fn review_next_hunk(cx: &mut Context) {
-    review::next_hunk(cx);
-}
-
-fn review_prev_hunk(cx: &mut Context) {
-    review::prev_hunk(cx);
-}
-
-fn review_first_hunk(cx: &mut Context) {
-    review::first_hunk(cx);
-}
-
-fn review_last_hunk(cx: &mut Context) {
-    review::last_hunk(cx);
-}
-
-fn review_undo(cx: &mut Context) {
-    review::undo(cx);
-}
-
-fn review_redo(cx: &mut Context) {
-    review::redo(cx);
-}
-
 pub fn command_palette(cx: &mut Context) {
     let register = cx.register;
     let count = cx.count;
@@ -3547,14 +3511,12 @@ pub fn command_palette(cx: &mut Context) {
                 [&cx.editor.mode]
                 .reverse_map();
 
-            let commands = MappableCommand::STATIC_COMMAND_LIST.iter().cloned().chain(
-                typed::TYPABLE_COMMAND_LIST
-                    .iter()
-                    .map(|cmd| MappableCommand::Typable {
-                        name: cmd.name.to_owned(),
-                        args: String::new(),
-                        doc: cmd.doc.to_owned(),
-                    }),
+            let commands = crate::feature::static_commands().cloned().chain(
+                crate::feature::typable_commands().map(|cmd| MappableCommand::Typable {
+                    name: cmd.name.to_owned(),
+                    args: String::new(),
+                    doc: cmd.doc.to_owned(),
+                }),
             );
 
             let columns = [

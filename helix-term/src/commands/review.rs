@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use anyhow::{anyhow, Context as _};
-use helix_core::command_line::Args;
+use helix_core::command_line::{Args, Signature};
 use helix_core::fuzzy::fuzzy_match;
 use helix_core::line_ending::line_end_char_index;
 use helix_core::movement::Direction;
@@ -35,11 +35,115 @@ pub(super) use restore::review_restore;
 pub(super) use stage::{stage_hunk, unstage_hunk};
 
 use super::{push_jump, Context};
+use crate::commands::typed::{CommandCompleter, TypableCommand};
+use crate::commands::MappableCommand;
 use crate::commands::WriteOptions;
 use crate::events::EditorWillUpdate;
+use crate::feature::Feature;
 use crate::keymap::KeyTrie;
 use crate::kind::{self, BufferKindUi};
 use crate::ui::text_decorations::DecorationManager;
+
+/// The review's commands.
+pub(crate) const FEATURE: Feature = Feature {
+    name: "review",
+    commands: &[
+        OPEN, NEXT_HUNK, PREV_HUNK, FIRST_HUNK, LAST_HUNK, UNDO, REDO,
+    ],
+    typable: &[
+        TypableCommand {
+            name: "review",
+            aliases: &[],
+            doc: "Show the changes of every changed file in one buffer, in a tab of its own, or switch to it. Scopes: all (HEAD against the files, the default), unstaged (the index against the files), staged (HEAD against the index)",
+            fun: review,
+            completer: CommandCompleter::positional(&[complete_scope]),
+            signature: Signature {
+                positionals: (0, Some(1)),
+                ..Signature::DEFAULT
+            },
+        },
+        TypableCommand {
+            name: "stage-hunk",
+            aliases: &[],
+            doc: "Stage the hunks the selections touch in the review",
+            fun: stage_hunk,
+            completer: CommandCompleter::none(),
+            signature: Signature {
+                positionals: (0, Some(0)),
+                ..Signature::DEFAULT
+            },
+        },
+        TypableCommand {
+            name: "unstage-hunk",
+            aliases: &[],
+            doc: "Unstage the hunks the selections touch in the review",
+            fun: unstage_hunk,
+            completer: CommandCompleter::none(),
+            signature: Signature {
+                positionals: (0, Some(0)),
+                ..Signature::DEFAULT
+            },
+        },
+        TypableCommand {
+            name: "review-restore",
+            aliases: &[],
+            doc: "Put the base's text back over the hunks the selections touch in the review, in each file's buffer",
+            fun: review_restore,
+            completer: CommandCompleter::none(),
+            signature: Signature {
+                positionals: (0, Some(0)),
+                ..Signature::DEFAULT
+            },
+        },
+        TypableCommand {
+            name: "review-context",
+            aliases: &[],
+            doc: "Show the given number of unchanged lines around each hunk of the review, or say how many it shows",
+            fun: review_context,
+            completer: CommandCompleter::none(),
+            signature: Signature {
+                positionals: (0, Some(1)),
+                ..Signature::DEFAULT
+            },
+        },
+    ],
+};
+
+pub(crate) const OPEN: MappableCommand = MappableCommand::Static {
+    name: "review_open",
+    fun: open,
+    doc: "Open the file of the review row under the cursor, or show the lines of a gap",
+};
+pub(crate) const NEXT_HUNK: MappableCommand = MappableCommand::Static {
+    name: "review_next_hunk",
+    fun: next_hunk,
+    doc: "Select the next hunk of the review",
+};
+pub(crate) const PREV_HUNK: MappableCommand = MappableCommand::Static {
+    name: "review_prev_hunk",
+    fun: prev_hunk,
+    doc: "Select the previous hunk of the review",
+};
+pub(crate) const FIRST_HUNK: MappableCommand = MappableCommand::Static {
+    name: "review_first_hunk",
+    fun: first_hunk,
+    doc: "Select the first hunk of the review",
+};
+pub(crate) const LAST_HUNK: MappableCommand = MappableCommand::Static {
+    name: "review_last_hunk",
+    fun: last_hunk,
+    doc: "Select the last hunk of the review",
+};
+pub(crate) const UNDO: MappableCommand = MappableCommand::Static {
+    name: "review_undo",
+    fun: undo,
+    doc: "Undo the review's last edit in the files it changed",
+};
+pub(crate) const REDO: MappableCommand = MappableCommand::Static {
+    name: "review_redo",
+    fun: redo,
+    doc: "Redo the review's last undone edit in the files it changed",
+};
 
 /// The `helix-term` side of the review's buffer kind.
 struct Ui;
@@ -113,11 +217,7 @@ use crate::ui::PromptEvent;
 
 const SCOPES: [ChangeView; 3] = [ChangeView::All, ChangeView::Unstaged, ChangeView::Staged];
 
-pub(super) fn review(
-    cx: &mut compositor::Context,
-    args: Args,
-    event: PromptEvent,
-) -> anyhow::Result<()> {
+fn review(cx: &mut compositor::Context, args: Args, event: PromptEvent) -> anyhow::Result<()> {
     if event != PromptEvent::Validate {
         return Ok(());
     }
@@ -142,7 +242,7 @@ pub(super) fn review(
     Ok(())
 }
 
-pub(super) fn complete_scope(_editor: &Editor, input: &str) -> Vec<Completion> {
+fn complete_scope(_editor: &Editor, input: &str) -> Vec<Completion> {
     fuzzy_match(input, SCOPES.iter().map(|scope| scope.label()), false)
         .into_iter()
         .map(|(label, _)| ((0..), label.into()))
@@ -157,7 +257,7 @@ fn reload(cx: &mut compositor::Context) {
     }
 }
 
-pub(super) fn review_context(
+fn review_context(
     cx: &mut compositor::Context,
     args: Args,
     event: PromptEvent,
@@ -386,7 +486,7 @@ fn decode(
     }
 }
 
-pub(super) fn open(cx: &mut Context) {
+fn open(cx: &mut Context) {
     let (view, doc) = current_ref!(cx.editor);
     let Some(stream) = cx.editor.features.review().stream_of(doc.id()) else {
         not_a_review(cx.editor);
@@ -432,11 +532,11 @@ pub(super) fn open(cx: &mut Context) {
     align_view(doc, view, Align::Center);
 }
 
-pub(super) fn next_hunk(cx: &mut Context) {
+fn next_hunk(cx: &mut Context) {
     step_hunk(cx, Direction::Forward);
 }
 
-pub(super) fn prev_hunk(cx: &mut Context) {
+fn prev_hunk(cx: &mut Context) {
     step_hunk(cx, Direction::Backward);
 }
 
@@ -473,11 +573,11 @@ fn step_hunk(cx: &mut Context, direction: Direction) {
     });
 }
 
-pub(super) fn first_hunk(cx: &mut Context) {
+fn first_hunk(cx: &mut Context) {
     edge_hunk(cx, Direction::Backward);
 }
 
-pub(super) fn last_hunk(cx: &mut Context) {
+fn last_hunk(cx: &mut Context) {
     edge_hunk(cx, Direction::Forward);
 }
 
@@ -525,13 +625,13 @@ fn select_rows(
     Range::new(range.anchor, head)
 }
 
-pub(super) fn undo(cx: &mut Context) {
+fn undo(cx: &mut Context) {
     if stream_rows(cx.editor, |_| ()).is_some() {
         review::undo(cx.editor, cx.count());
     }
 }
 
-pub(super) fn redo(cx: &mut Context) {
+fn redo(cx: &mut Context) {
     if stream_rows(cx.editor, |_| ()).is_some() {
         review::redo(cx.editor, cx.count());
     }
@@ -599,5 +699,30 @@ mod tests {
         );
         let in_editor = load("[editor.review]\nrow-background = false", None).unwrap_err();
         assert!(in_editor.contains("unknown field `review`"), "{in_editor}");
+    }
+
+    #[test]
+    fn keys_bind_the_reviews_commands_by_name() {
+        use std::str::FromStr;
+
+        use helix_view::document::Mode;
+        use helix_view::input::KeyEvent;
+
+        use crate::keymap::KeyTrie;
+
+        let config = load(
+            "[keys.normal]\nC-r = \"review_open\"\nC-t = \":review staged\"",
+            None,
+        )
+        .unwrap();
+        let name = |key: &str| {
+            let key = KeyEvent::from_str(key).unwrap();
+            match config.keys[&Mode::Normal].search(&[key]) {
+                Some(KeyTrie::MappableCommand(command)) => command.name().to_owned(),
+                _ => panic!("{key} is bound to a command"),
+            }
+        };
+        assert_eq!(name("C-r"), "review_open");
+        assert_eq!(name("C-t"), "review");
     }
 }

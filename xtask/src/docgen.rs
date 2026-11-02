@@ -2,8 +2,7 @@ use crate::helpers;
 use crate::path;
 use crate::DynError;
 
-use helix_term::commands::MappableCommand;
-use helix_term::commands::TYPABLE_COMMAND_LIST;
+use helix_term::feature;
 use helix_term::health::TsFeature;
 use helix_view::document::Mode;
 
@@ -39,7 +38,7 @@ pub fn typable_commands() -> Result<String, DynError> {
     // escape | so it doesn't get rendered as a column separator
     let cmdify = |s: &str| format!("`:{}`", s.replace('|', "\\|"));
 
-    for cmd in TYPABLE_COMMAND_LIST {
+    for cmd in feature::typable_commands() {
         let names = std::iter::once(&cmd.name)
             .chain(cmd.aliases.iter())
             .map(|a| cmdify(a))
@@ -69,7 +68,7 @@ pub fn static_commands() -> Result<String, DynError> {
         "Default keybinds".to_owned(),
     ]));
 
-    for cmd in MappableCommand::STATIC_COMMAND_LIST {
+    for cmd in feature::static_commands() {
         let keymap_strings: Vec<_> = keymaps
             .iter()
             .map(|(mode, keymap)| {

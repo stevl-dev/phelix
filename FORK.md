@@ -157,7 +157,7 @@ Each entry says what the feature adds, and where its code, tests, and book pages
 
 ### feature-hooks
 
-- Plan: `fork/feature-hooks.md`, done through phase 10.
+- Plan: `fork/feature-hooks.md`, done through phase 11a.
 - Adds: general hooks the core calls where it used to check for a feature. A feature's config is a top-level table of `config.toml` of its own, and an unknown top-level table is still refused.
 - Hooks:
   - `EditorWillUpdate { editor, completing }`, an event before each key and each frame. Defined in `helix-term/src/events.rs`, and dispatched at the top of `EditorView::handle_event`, before the keymap swap, and of `EditorView::render`, in `helix-term/src/ui/editor.rs`. `completing` is whether a completion menu is open.
@@ -176,12 +176,13 @@ Each entry says what the feature adds, and where its code, tests, and book pages
   - `BufferKind::gutter`, which `line_numbers`, `diff` and `diagnostic` in `helix-view/src/gutter.rs` ask first, through `kind_gutter`. `None` draws the core's column.
   - `Editor::features` in `helix-view/src/features.rs`, a feature's state by its type, with `get` and `get_or_default`. A field, not a method, so a borrow of a feature's state and one of `editor.documents` can sit side by side.
   - `FeatureTable` in `helix-term/src/config.rs`: a feature's top-level table, and its `apply`, which reads it into the feature's state. `helix-term`'s `Config::features` keeps the registered tables as TOML, merged from both files as `[editor]` is. `Config::load` refuses a top-level name that's neither the core's nor a registered table's, and runs each `apply` against a scratch state, so a bad table refuses the file. `Config::apply_features` reads them into `Editor::features` in `Application::new` and in `refresh_config`, behind `:config-reload`.
+  - `Feature` in `helix-term/src/feature.rs`: a feature's static and typable commands. `feature::static_commands` and `typable_commands` list the core's, then each feature's, and every lookup by name goes through them: `MappableCommand::from_str` for the keymap, `TYPABLE_COMMAND_MAP` and the command line's completion in `typed.rs`, the command palette, and `xtask/src/docgen.rs`. `FEATURES` there lists the features Helix is built with. `CommandCompleter`'s constructors are public so a feature can build its typable rows.
   - Tab names: `Tab` in `helix-view/src/tree.rs` is a name a feature declares, as the review's `REVIEW_TAB`. `TABS` in `helix-term/src/commands/typed.rs` lists the ones features register, for `:tab`'s messages.
   - `TabOptions::keeps` in `helix-view/src/editor.rs`, a property `Editor::open_tab` gives a tab: the name of a buffer kind whose buffers the tab keeps. `Editor::send_out_of_kept_tabs` runs on `EditorWillUpdate`, from a hook `handlers::setup` registers before any feature's.
   - `Editor::close_tab`, which closes every view of a tab, and with them the tab.
   - `BufferKindUi::decorate`, which `render_view` in `helix-term/src/ui/editor.rs` calls after the syntax highlights' overlay and before the rainbow brackets'. `ui::text_decorations` is crate-visible so a kind can name `DecorationManager`.
 - Book: `book/src/configuration.md` (`[review]`), the first feature table.
-- Tests: `config_refuses_a_top_level_table_no_one_reads` in `helix-term/src/config.rs`.
+- Tests: `config_refuses_a_top_level_table_no_one_reads` in `helix-term/src/config.rs`, and the review's `keys_bind_the_reviews_commands_by_name` in `commands/review.rs`, which reads its commands' names through the registry.
 - Core rules for a kind's buffer:
   - A refused close or quit doesn't swap it out of its view to show the first unsaved buffer: `buffer_close_by_ids_impl` and `buffers_remaining_impl` in `typed.rs`.
   - `Editor::switch` in `helix-view/src/editor.rs` never discards it as an empty scratch buffer.
