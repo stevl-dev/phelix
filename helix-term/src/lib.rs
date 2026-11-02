@@ -26,10 +26,6 @@ use std::process::Stdio;
 use futures_util::Future;
 mod handlers;
 
-/// The review, for the list of features in `hx` and in the tests, while it
-/// still lives in this crate.
-pub use commands::review::FEATURE as REVIEW_FEATURE;
-
 use helix_stdx::Url;
 use ignore::DirEntry;
 
@@ -64,7 +60,7 @@ fn true_color() -> bool {
 /// legitimately contains NUL bytes, so it must be excluded before the NUL scan);
 /// otherwise a NUL byte in the first kilobyte — or a known binary magic number —
 /// means binary.
-pub(crate) fn is_binary(buffer: &[u8]) -> bool {
+pub fn is_binary(buffer: &[u8]) -> bool {
     // UTF-32 BOMs must be checked before UTF-16 (their BOMs overlap).
     const BYTE_ORDER_MARKS: &[&[u8]] = &[
         &[0xEF, 0xBB, 0xBF],       // UTF-8

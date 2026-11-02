@@ -15,14 +15,14 @@
 //! Syntax colors come first, from parses of each file's two sides, so these
 //! styles patch over them.
 
+use crate::view::{self as review, ReviewState, Row};
 use helix_core::syntax::{Highlight, OverlayHighlights};
 use helix_core::unicode::width::UnicodeWidthStr;
 use helix_view::graphics::{Rect, Style};
-use helix_view::review::{self, ReviewState, Row};
 use helix_view::{Document, Editor, Theme, View};
 
-use crate::ui::document::{LinePos, TextRenderer};
-use crate::ui::text_decorations::DecorationManager;
+use helix_term::ui::document::{LinePos, TextRenderer};
+use helix_term::ui::text_decorations::DecorationManager;
 
 pub fn render<'a>(
     editor: &'a Editor,

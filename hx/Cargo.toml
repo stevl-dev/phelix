@@ -42,6 +42,7 @@ path = "src/main.rs"
 [dependencies]
 helix-core = { path = "../helix-core" }
 helix-loader = { path = "../helix-loader" }
+helix-review = { path = "../helix-review" }
 helix-stdx = { path = "../helix-stdx" }
 helix-term = { path = "../helix-term", default-features = false }
 

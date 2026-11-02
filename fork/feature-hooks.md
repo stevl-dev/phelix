@@ -3,7 +3,7 @@
 Snapshot: `main` at `4a60f8c`, on upstream `master` at `ba40e547`.
 Goes in `fork/feature-hooks.md`. Feature slug: `feature-hooks`.
 
-Status: phases 0 to 14a done. Section 9's questions are answered under Decisions. Phase 14b is next.
+Status: done. Every phase is committed, so this file is history.
 
 ## Bottom line
 
@@ -323,7 +323,7 @@ Each phase is one commit that builds and passes `tools/fork/land.sh --check`. Ea
 | 12 | done | Let features add actions to the changed-file picker. | 3.9, picker actions. Tests: `picker_keys_overlay_defaults_and_no_op_unbinds` in `config.rs` with `review_jump` as a registered action, its default, an override, and `no_op`. |
 | 13 | done | Move the binary into an hx crate. | 3.10, `hx`. Build files and the docs that name `--path helix-term`. No new test. `land.sh --check`, and `cargo install --path hx --locked` at the manual check. |
 | 14a | done | Move the integration harness into helix_term::test_support. | 3.10's harness, by Decisions 4. `helix-term/tests/test/helpers.rs` becomes `helix-term/src/test_support.rs` behind the `integration` feature, and the tests import it from there. The harness sets no features: the review's and the tabs' tests call `feature::init` in a `builder` of their own. `agents/TESTING.md` says so. No new test. |
-| 14b | | Move the review into a helix-review crate. | 3.10, `helix-review`. The `pub` items, the review's tests on `test_support`, `tabs.rs` on a test tab of its own, `AGENTS.md`, `agents/*.md`, `FORK.md`. Section 7's count reaches 0. |
+| 14b | done | Move the review into a helix-review crate. | 3.10, `helix-review`. The `pub` items, the review's tests on `test_support`, `tabs.rs` on a test tab of its own, `AGENTS.md`, `agents/*.md`, `FORK.md`. Section 7's count reaches 0. |
 
 ### Order
 
@@ -553,4 +553,17 @@ Each phase records here what it found, the count from section 7, and any hook si
 - `helix-term/tests/test/helpers.rs` is `helix-term/src/test_support.rs`, `pub mod test_support` behind `#[cfg(feature = "integration")]`. Its `helix_term::` paths are `crate::`. `tempfile` is an optional dependency that `integration` turns on, beside the dev-dependency. `tests/integration.rs` imports it as `helpers`, so the tests' `helpers::` paths stay.
 - The harness no longer calls `init`: a library can't know which features a test binary wants. `review.rs` and `tabs.rs` call it in a `builder` of their own, and `rust_analyzer.rs` uses the review's. All three pass the review, since they share one binary and so one registry. `tabs.rs` moves to a tab of its own in 14b, when the review's tests leave the binary.
 - As library code, the harness compiles under clippy with `--features integration`, which flagged one needless borrow in `reload_file`. Fixed. The dead `line_feed_handling` warning is gone, since the field is public now.
+
+### Phase 14b
+
+- The count from section 7 is 5, from 11, and the plain `git grep -i -E '(^|[^p])review' -- helix-term/src helix-view/src` finds the same 5, all text. The docs of `:reload`, `:reload-all` and `:tab` in `typed.rs` tell the user what they do in the review. Two doc comments in `document.rs`, on `listed` and `name_without_path`, name the review as an example. `AGENTS.md` (Fork) allows both. No code in the core names the review.
+- One crate, by Decisions 6: `helix-review/src/view.rs` with `view/`, from `helix-view/src/review.rs` and `review/`, and `src/term.rs` with `term/`, from `helix-term/src/commands/review.rs` and `review/`, `keymap/review.rs` as `term/keymap.rs`, and `ui/text_decorations/review.rs` as `term/decorations.rs`. `lib.rs` re-exports `term::FEATURE`. The view part's `crate::` paths are `helix_view::`, and the term part's `helix_term::`. The term part imports `crate::view` as `review`, as it named `helix_view::review` before, since a bare `view` would clash with the `view!` macro.
+- The items `helix-term` and `helix-view` made `pub` for it, each listed in `FORK.md` (review-stream): `push_jump` and `make_format_callback` in `commands.rs`, the three trim functions in `typed.rs`, `is_binary` in `lib.rs`, and the modules `ui::document` and `ui::text_decorations`. They're helpers any feature that edits or draws a buffer would use, so none is a missing hook. `Document::language_servers`, a private field the review's `source` read, stays private: `Document::language_server_starting` answers the one question it asked.
+- `imara-diff` moved from `helix-view/Cargo.toml` to `helix-review/Cargo.toml`, since only the review uses it.
+- The review's `pub(in crate::commands)` visibilities became `pub(crate)`. The decoration tests' `super::rule_style` is the review's own function, and stays.
+- Tests, by Decisions 4: `helix-review/tests/integration.rs` holds the review's 57 integration tests and the ignored `rust_analyzer` test, on `helix_term::test_support`, behind its own `integration` feature, which turns on `helix-term`'s. `cargo integration-test` runs both crates' binaries: 57 there and 185 in `helix-term`, the 242 of before. The ignored test passes from its new crate, run by hand. The unit tests add up as before too: 74 in `helix-view`, 19 in `helix-term` and 37 in `helix-review`, the 130 that `helix-view` and `helix-term` had.
+- `helix-review`'s dev-dependency on `helix-term` turns on `git`, so `cargo test -p helix-review` alone reads changes. `hx`'s default `git` feature does that for the binary.
+- `tabs.rs` opens `Tab("other")`, from a test `Feature` that declares only that tab, now that the review's tests no longer share its binary. Its `:tab` messages name `other`.
+- `hx` depends on `helix-review`, and `hx::FEATURES` is `&[helix_review::FEATURE]`. `helix-term`'s `REVIEW_FEATURE` re-export went.
+- The rule is in `AGENTS.md` (Fork), and `agents/REVIEW.md` blocks a diff that breaks it. `agents/HELIX.md` (Where to start) has a row for features and hooks, and `agents/TESTING.md` says where a feature's tests go and how to run them. `docs/architecture.md` has a `helix-review` row.
 

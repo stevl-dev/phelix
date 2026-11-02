@@ -29,6 +29,7 @@ Run it after adding or renaming a command, and commit the result with the comman
 | Changed files, diffs | `helix-vcs/`. The fork's changed-file picker is `helix-term/src/commands/changed_file.rs`. |
 | Drawing a view | `render_view` in `helix-term/src/ui/editor.rs`, and `helix-view/src/view.rs` |
 | Virtual text | `helix-core/src/text_annotations.rs`, `helix-view/src/annotations/`, `helix-term/src/ui/text_decorations/` |
+| Features and hooks | `helix-term/src/feature.rs` (`Feature`, the registry), `helix-view/src/kind.rs` (`BufferKind`), `helix-term/src/kind.rs` (`BufferKindUi`), `helix-view/src/features.rs` (state), `TabOptions` in `helix-view/src/editor.rs`, and `hx/src/lib.rs`, the list. The review in `helix-review/` uses every one. |
 
 ## Comments
 

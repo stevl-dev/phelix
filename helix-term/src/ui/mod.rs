@@ -1,5 +1,5 @@
 mod completion;
-mod document;
+pub mod document;
 pub(crate) mod editor;
 mod info;
 pub mod lsp;
@@ -13,7 +13,7 @@ mod select;
 mod spinner;
 mod statusline;
 mod text;
-pub(crate) mod text_decorations;
+pub mod text_decorations;
 
 use crate::compositor::Compositor;
 use crate::filter_picker_entry;

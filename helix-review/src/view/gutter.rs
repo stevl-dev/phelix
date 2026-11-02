@@ -6,8 +6,8 @@ use std::fmt::Write;
 
 use helix_core::diagnostic::Severity;
 
-use crate::gutter::GutterFn;
-use crate::{Document, Editor, Theme};
+use helix_view::gutter::GutterFn;
+use helix_view::{Document, Editor, Theme};
 
 use super::ReviewState;
 use super::Row;

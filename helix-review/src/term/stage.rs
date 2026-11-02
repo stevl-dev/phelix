@@ -4,6 +4,7 @@
 
 use std::ops::Range;
 
+use crate::view::{layout, Picked};
 use anyhow::{anyhow, bail, Context as _};
 use helix_core::command_line::Args;
 use helix_core::encoding::Encoding;
@@ -12,13 +13,12 @@ use helix_loader::workspace_trust::TrustQuery;
 use helix_vcs::{index, Hunk};
 use helix_view::current_ref;
 use helix_view::document::{from_reader, to_writer};
-use helix_view::review::{layout, Picked};
 
 use super::{open_stream, read_changes};
-use crate::compositor;
-use crate::ui::PromptEvent;
+use helix_term::compositor;
+use helix_term::ui::PromptEvent;
 
-pub(in crate::commands) fn stage_hunk(
+pub(crate) fn stage_hunk(
     cx: &mut compositor::Context,
     _args: Args,
     event: PromptEvent,
@@ -57,7 +57,7 @@ pub(in crate::commands) fn stage_hunk(
     Ok(())
 }
 
-pub(in crate::commands) fn unstage_hunk(
+pub(crate) fn unstage_hunk(
     cx: &mut compositor::Context,
     _args: Args,
     event: PromptEvent,

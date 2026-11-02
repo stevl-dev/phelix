@@ -19,7 +19,6 @@ mod test {
     mod command_line;
     mod commands;
     mod movement;
-    mod review;
     mod splits;
     mod statusline;
     mod tabs;

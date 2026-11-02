@@ -1951,6 +1951,14 @@ impl Document {
             .unwrap_or_else(|| self.config.load().path_completion)
     }
 
+    /// Whether a server of the buffer is still starting, so `language_servers`
+    /// leaves it out for now.
+    pub fn language_server_starting(&self) -> bool {
+        self.language_servers
+            .values()
+            .any(|ls| !ls.is_initialized())
+    }
+
     /// maintains the order as configured in the language_servers TOML array
     pub fn language_servers(&self) -> impl Iterator<Item = &helix_lsp::Client> {
         self.language_config().into_iter().flat_map(move |config| {

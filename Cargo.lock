@@ -1645,6 +1645,33 @@ name = "helix-parsec"
 version = "25.7.1"
 
 [[package]]
+name = "helix-review"
+version = "25.7.1"
+dependencies = [
+ "anyhow",
+ "crossterm",
+ "helix-core",
+ "helix-event",
+ "helix-loader",
+ "helix-lsp",
+ "helix-stdx",
+ "helix-term",
+ "helix-vcs",
+ "helix-view",
+ "imara-diff",
+ "indexmap",
+ "indoc",
+ "log",
+ "parking_lot",
+ "serde",
+ "tempfile",
+ "termina",
+ "tokio",
+ "tokio-stream",
+ "toml",
+]
+
+[[package]]
 name = "helix-stdx"
 version = "25.7.1"
 dependencies = [
@@ -1763,7 +1790,6 @@ dependencies = [
  "helix-stdx",
  "helix-tui",
  "helix-vcs",
- "imara-diff",
  "kstring",
  "libc",
  "log",
@@ -1803,6 +1829,7 @@ dependencies = [
  "anyhow",
  "helix-core",
  "helix-loader",
+ "helix-review",
  "helix-stdx",
  "helix-term",
  "log",

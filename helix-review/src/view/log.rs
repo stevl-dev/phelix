@@ -9,7 +9,7 @@ use helix_vcs::ChangeView;
 
 use super::ReviewState;
 use super::{sync, Row};
-use crate::{Document, DocumentId, Editor, ViewId};
+use helix_view::{Document, DocumentId, Editor, ViewId};
 
 #[derive(Default)]
 pub(super) struct Log {

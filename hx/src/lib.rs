@@ -3,4 +3,4 @@
 
 use helix_term::feature::Feature;
 
-pub const FEATURES: &[Feature] = &[helix_term::REVIEW_FEATURE];
+pub const FEATURES: &[Feature] = &[helix_review::FEATURE];

@@ -6,12 +6,12 @@ use std::process::Command;
 use anyhow::bail;
 use helix_lsp::util::generate_transaction_from_edits;
 use helix_lsp::{lsp, OffsetEncoding};
+use helix_review::view::REVIEW_TAB;
+use helix_review::view::{ReviewState, Stream};
 use helix_term::application::Application;
 use helix_view::document::Mode;
 use helix_view::graphics::Color;
 use helix_view::input::parse_macro;
-use helix_view::review::REVIEW_TAB;
-use helix_view::review::{ReviewState, Stream};
 use helix_view::tree::Tab;
 use helix_view::{current_ref, doc, view};
 use tempfile::TempDir;
@@ -71,7 +71,7 @@ fn repo(committed: &[(&str, &str)], changes: &[(&str, Option<&str>)]) -> TempDir
 
 /// An app builder, with the review among the features.
 fn builder() -> AppBuilder {
-    helix_term::feature::init(&[helix_term::REVIEW_FEATURE]);
+    helix_term::feature::init(&[helix_review::FEATURE]);
     AppBuilder::new()
 }
 
@@ -2565,12 +2565,12 @@ async fn focus_file_puts_the_cursor_on_a_files_header() -> anyhow::Result<()> {
     let mut app = app_on(repo.path().join("a.txt"))?;
     start_review(&mut app).await?;
 
-    assert!(helix_view::review::focus_file(
+    assert!(helix_review::view::focus_file(
         &mut app.editor,
         &repo.path().join("b.txt")
     ));
     assert_eq!(cursor(&app), (13, 0));
-    assert!(!helix_view::review::focus_file(
+    assert!(!helix_review::view::focus_file(
         &mut app.editor,
         &repo.path().join("c.txt")
     ));

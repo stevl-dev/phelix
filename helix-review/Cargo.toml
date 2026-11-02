@@ -1,0 +1,48 @@
+[package]
+name = "helix-review"
+description = "The review: every changed file's hunks in one buffer, in a tab of its own."
+include = ["src/**/*"]
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+categories.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[features]
+integration = ["helix-term/integration"]
+
+[dependencies]
+helix-core = { path = "../helix-core" }
+helix-event = { path = "../helix-event" }
+helix-loader = { path = "../helix-loader" }
+helix-lsp = { path = "../helix-lsp" }
+helix-stdx = { path = "../helix-stdx" }
+helix-term = { path = "../helix-term", default-features = false }
+helix-vcs = { path = "../helix-vcs" }
+helix-view = { path = "../helix-view" }
+
+anyhow = "1"
+imara-diff = "0.2.0"
+indexmap = "2.14"
+log = "0.4"
+parking_lot.workspace = true
+serde = { version = "1.0", features = ["derive"] }
+tokio = { version = "1", features = ["rt", "sync"] }
+toml.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+helix-term = { path = "../helix-term", default-features = false, features = ["git"] }
+tokio = { version = "1", features = ["rt", "rt-multi-thread", "macros", "time"] }
+tokio-stream = "0.1"
+indoc = "2.0.6"
+
+[target.'cfg(windows)'.dev-dependencies]
+crossterm = { version = "0.28", features = ["event-stream"] }
+
+[target.'cfg(not(windows))'.dev-dependencies]
+termina.workspace = true
+

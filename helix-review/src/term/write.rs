@@ -6,17 +6,18 @@
 use std::future::Future;
 use std::path::PathBuf;
 
+use crate::view as review;
+use crate::view::ReviewState;
 use anyhow::bail;
 use helix_vcs::ChangeView;
-use helix_view::review::ReviewState;
-use helix_view::{doc, doc_mut, review, view_mut, DocumentId, Editor};
+use helix_view::{doc, doc_mut, view_mut, DocumentId, Editor};
 
-use crate::commands::typed::{
+use helix_term::commands::{code_actions_on_save, make_format_callback};
+use helix_term::commands::{
     insert_final_newline, trim_final_newlines, trim_trailing_whitespace, WriteOptions,
 };
-use crate::commands::{code_actions_on_save, make_format_callback};
-use crate::compositor;
-use crate::job::{self, Callback, Job};
+use helix_term::compositor;
+use helix_term::job::{self, Callback, Job};
 
 // WHY: a copy of `write_all_impl`'s chain, which writes every modified buffer
 // and has no seam to log the trims and the format as steps of the review's

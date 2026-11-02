@@ -1,10 +1,13 @@
 //! `:review` and the commands of the review stream. The rows and the buffer
-//! live in `helix_view::review`. This module lists the changed files, reads
+//! live in `crate::view`. This module lists the changed files, reads
 //! both sides of each, and opens a row's file.
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
+use crate::view::{
+    self as review, Content, ReviewConfig, ReviewState, Row, Section, Stream, REVIEW_TAB,
+};
 use anyhow::{anyhow, Context as _};
 use helix_core::command_line::{Args, Signature};
 use helix_core::fuzzy::fuzzy_match;
@@ -21,14 +24,13 @@ use helix_view::editor::Action;
 use helix_view::features::Features;
 use helix_view::input::KeyEvent;
 use helix_view::keyboard::{KeyCode, KeyModifiers};
-use helix_view::review::{
-    self, Content, ReviewConfig, ReviewState, Row, Section, Stream, REVIEW_TAB,
-};
 use helix_view::tree::Tab;
 use helix_view::{
     align_view, current, current_ref, doc, view, Align, Document, DocumentId, Editor, Theme, View,
 };
 
+mod decorations;
+mod keymap;
 mod lsp;
 mod restore;
 mod stage;
@@ -38,16 +40,16 @@ pub(crate) use lsp::replacement;
 pub(super) use restore::review_restore;
 pub(super) use stage::{stage_hunk, unstage_hunk};
 
-use super::{push_jump, Context};
-use crate::commands::typed::{CommandCompleter, TypableCommand};
-use crate::commands::MappableCommand;
-use crate::commands::WriteOptions;
-use crate::config::FeatureTable;
-use crate::events::EditorWillUpdate;
-use crate::feature::{Feature, PickerAction};
-use crate::keymap::KeyTrie;
-use crate::kind::{self, BufferKindUi};
-use crate::ui::text_decorations::DecorationManager;
+use helix_term::commands::MappableCommand;
+use helix_term::commands::WriteOptions;
+use helix_term::commands::{push_jump, Context};
+use helix_term::commands::{CommandCompleter, TypableCommand};
+use helix_term::config::FeatureTable;
+use helix_term::events::EditorWillUpdate;
+use helix_term::feature::{Feature, PickerAction};
+use helix_term::keymap::KeyTrie;
+use helix_term::kind::{self, BufferKindUi};
+use helix_term::ui::text_decorations::DecorationManager;
 
 /// The review's commands.
 pub const FEATURE: Feature = Feature {
@@ -185,7 +187,7 @@ impl BufferKindUi for Ui {
     }
 
     fn keymap(&self, user: &HashMap<Mode, KeyTrie>) -> Option<HashMap<Mode, KeyTrie>> {
-        Some(crate::keymap::review::keymap(user))
+        Some(crate::term::keymap::keymap(user))
     }
 
     fn decorate<'a>(
@@ -197,14 +199,7 @@ impl BufferKindUi for Ui {
         decorations: &mut DecorationManager<'a>,
         overlays: &mut Vec<OverlayHighlights>,
     ) {
-        crate::ui::text_decorations::review::render(
-            editor,
-            doc,
-            view,
-            theme,
-            decorations,
-            overlays,
-        );
+        crate::term::decorations::render(editor, doc, view, theme, decorations, overlays);
     }
 }
 
@@ -229,10 +224,10 @@ fn register() {
         Ok(())
     });
 }
-use crate::compositor;
-use crate::job::Callback;
-use crate::ui::prompt::Completion;
-use crate::ui::PromptEvent;
+use helix_term::compositor;
+use helix_term::job::Callback;
+use helix_term::ui::prompt::Completion;
+use helix_term::ui::PromptEvent;
 
 const SCOPES: [ChangeView; 3] = [ChangeView::All, ChangeView::Unstaged, ChangeView::Staged];
 
@@ -478,15 +473,16 @@ impl File {
             Some(doc) => (doc.text().clone(), doc.encoding()),
             None => decode(&self.source, None),
         };
-        let content =
-            if crate::is_binary(&self.base) || (doc.is_none() && crate::is_binary(&self.source)) {
-                Content::Binary
-            } else {
-                Content::Text {
-                    base: decode(&self.base, Some(encoding)).0,
-                    source,
-                }
-            };
+        let content = if helix_term::is_binary(&self.base)
+            || (doc.is_none() && helix_term::is_binary(&self.source))
+        {
+            Content::Binary
+        } else {
+            Content::Text {
+                base: decode(&self.base, Some(encoding)).0,
+                source,
+            }
+        };
         Section {
             change: self.change,
             content,
@@ -674,13 +670,13 @@ fn not_a_review(editor: &mut Editor) {
 
 #[cfg(test)]
 mod tests {
+    use crate::view::{ReviewConfig, ReviewState};
     use helix_view::features::Features;
-    use helix_view::review::{ReviewConfig, ReviewState};
 
-    use crate::config::{Config, ConfigLoadError};
+    use helix_term::config::{Config, ConfigLoadError};
 
     fn load(global: &str, local: Option<&str>) -> Result<Config, String> {
-        crate::feature::init(&[super::FEATURE]);
+        helix_term::feature::init(&[super::FEATURE]);
         let local = local
             .map(str::to_owned)
             .ok_or_else(ConfigLoadError::default);
@@ -728,7 +724,7 @@ mod tests {
         use helix_view::document::Mode;
         use helix_view::input::KeyEvent;
 
-        use crate::keymap::KeyTrie;
+        use helix_term::keymap::KeyTrie;
 
         let config = load(
             "[keys.normal]\nC-r = \"review_open\"\nC-t = \":review staged\"",

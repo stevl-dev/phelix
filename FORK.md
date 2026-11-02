@@ -106,15 +106,16 @@ Each entry says what the feature adds, and where its code, tests, and book pages
   Rows get syntax colors from parses of each file's whole base and source.
   Removed and added rows get tints, headers a rule, and changed words a mark, from theme scopes: `diff.{plus,minus}.view`, `diff.delta.view.text`, and the fork's `ui.review.header` and `ui.review.gap`.
   `[review]`'s `row-background` and `word-background`, a top-level table of `config.toml`, turn the tints and the marks off. `:config-reload` reads it again, and `:set` and `:toggle` don't reach it.
-- Code: `helix-view/src/review.rs` and `review/{layout,reconcile,forward,gutter,diagnostics,source,log,sync,syntax,words,complete}.rs`, `helix-term/src/commands/review.rs` and `review/{lsp,stage,restore,write}.rs`, `helix-term/src/keymap/review.rs`, `helix-term/src/ui/text_decorations/review.rs`, and `helix-vcs/src/git/index.rs` with the `helix-vcs/src/index.rs` facade.
+- Code: the `helix-review` crate. `src/view.rs` and `view/{layout,reconcile,forward,gutter,diagnostics,source,log,sync,syntax,words,complete}.rs` hold the stream and its sync, beside `helix-view`. `src/term.rs` and `term/{lsp,stage,restore,write,keymap,decorations}.rs` hold its commands, keys and drawing, beside `helix-term`. `helix-vcs/src/git/index.rs`, with the `helix-vcs/src/index.rs` facade, writes the index.
   It hooks in at:
-  - `hx/src/lib.rs`: `FEATURES` lists the review's `Feature`, which `helix-term` re-exports as `REVIEW_FEATURE` until the review leaves the crate. So do the review's and the tabs' integration tests, in their `builder`. The `Feature` holds the review's commands, its tab, its `[review]` table, its `review_jump` picker action on `Alt-r`, and its `register`, which runs `review::sync` on `EditorWillUpdate` and registers the UI part of its buffer kind (`feature-hooks`).
+  - `hx/src/lib.rs`: `FEATURES` lists `helix_review::FEATURE`. So do the review's integration tests, in their `builder`. The `Feature` holds the review's commands, its tab, its `[review]` table, its `review_jump` picker action on `Alt-r`, and its `register`, which runs `review::sync` on `EditorWillUpdate` and registers the UI part of its buffer kind (`feature-hooks`).
 - Book: `book/src/keymap.md` (Review), `book/src/themes.md` (the review's scopes), `book/src/configuration.md` (`[review]`), and `book/src/generated/static-cmd.md` and `typable-cmd.md`, generated.
-- Tests: unit tests in `review.rs`, `review/layout.rs`, `review/reconcile.rs`, `review/forward.rs`, `review/syntax.rs`, `review/words.rs`, `review/complete.rs`, `helix-vcs/src/git/index.rs`, `commands/review.rs` (`[review]`), and `commands/review/stage.rs`. Integration tests in `helix-term/tests/test/review.rs` over a temporary git repository. `review/rust_analyzer.rs` runs completion and a goto against rust-analyzer. It's ignored, since it changes the working directory, and runs alone at a manual check: `cargo integration-test -- --ignored rust_analyzer --test-threads=1`.
+- Tests: unit tests in `helix-review`'s `view.rs`, `view/layout.rs`, `view/reconcile.rs`, `view/forward.rs`, `view/syntax.rs`, `view/words.rs`, `view/complete.rs`, `term.rs` (`[review]`, its commands and `review_jump` by name), `term/stage.rs` and `term/decorations.rs`, and `helix-vcs/src/git/index.rs`: `cargo test -p helix-review`. Integration tests in `helix-review/tests/test/review.rs` over a temporary git repository, on `helix_term::test_support`. `review/rust_analyzer.rs` runs completion and a goto against rust-analyzer. It's ignored, since it changes the working directory, and runs alone at a manual check: `cargo integration-test -- --ignored rust_analyzer --test-threads=1`.
 - Relies on:
-  - The review's rename in `commands/review/lsp.rs` follows `rename_symbol`'s request and edit, without `prepareRename`. A cherry-pick that changes them updates it.
-  - `commands/review/write.rs` copies `write_all_impl`'s save chain. A cherry-pick that changes the chain updates the copy.
-  - `imara-diff` in `helix-view/Cargo.toml` moves together with helix-core's and helix-vcs's.
+  - The review's rename in `helix-review/src/term/lsp.rs` follows `rename_symbol`'s request and edit, without `prepareRename`. A cherry-pick that changes them updates it.
+  - `helix-review/src/term/write.rs` copies `write_all_impl`'s save chain. A cherry-pick that changes the chain updates the copy.
+  - `imara-diff` in `helix-review/Cargo.toml` moves together with helix-core's and helix-vcs's.
+  - The core items it uses that `helix-term` and `helix-view` made public for it: `commands::push_jump`, `commands::make_format_callback`, `trim_trailing_whitespace`, `trim_final_newlines` and `insert_final_newline` in `typed.rs`, `is_binary`, `ui::document`, `ui::text_decorations`, and `Document::language_server_starting`. A cherry-pick that changes one updates the review.
 - Rulings:
   - The dropped diff review feature's plan and code stay under the local tag `archive/diff-review`. The tag is never pushed.
   - Staging runs the `git` binary: `git hash-object --path` and `git update-index`, which convert text the way `git add` does. Upstream reads diffs with gix only and never needs it.
@@ -148,7 +149,7 @@ Each entry says what the feature adds, and where its code, tests, and book pages
   - `Document::name_without_path` in `helix-view/src/document.rs`, read by `display_name`, the statusline's three file name elements in `helix-term/src/ui/statusline.rs`, and `%{buffer_name}` in `helix-view/src/expansion.rs`.
   - `Document::listed` in `helix-view/src/document.rs`, which the review clears. The lists filter on it: `render_bufferline` in `ui/editor.rs`, `buffer_picker` and `goto_buffer` in `commands.rs`, the two `buffer_gather_*_impl` in `typed.rs`, `completers::buffer` in `ui/mod.rs`, and `close_document`'s new view in `editor.rs`.
 - Book: `book/src/keymap.md` (Review), `book/src/command-line.md` (`buffer_name`), and `book/src/generated/typable-cmd.md`, generated.
-- Tests: unit tests in `tree.rs`, integration tests in `helix-term/tests/test/tabs.rs`.
+- Tests: unit tests in `tree.rs`, integration tests in `helix-term/tests/test/tabs.rs`, on a tab of their own that a test feature opens.
 - Relies on: `Tree::views` walks every tab's views, and `Tree::traverse` the active tab's. Upstream code that walks `views()` for what's on screen, as a cherry-pick may add, has to use `traverse()`.
   A cherry-pick that adds a list of buffers, or a sweep over them, filters on `Document::listed`.
 - Rulings:
@@ -157,8 +158,8 @@ Each entry says what the feature adds, and where its code, tests, and book pages
 
 ### feature-hooks
 
-- Plan: `fork/feature-hooks.md`, done through phase 14a.
-- Adds: the `hx` crate, which holds the binary and the list of features, so `helix-term` is a library. General hooks the core calls where it used to check for a feature. A feature's config is a top-level table of `config.toml` of its own, and an unknown top-level table is still refused.
+- Plan: `fork/feature-hooks.md`, done.
+- Adds: the rule that the core names no feature (`AGENTS.md`, Fork). The `hx` crate, which holds the binary and the list of features, so `helix-term` is a library, and the review as a crate of its own, `helix-review`. General hooks the core calls where it used to check for a feature. A feature's config is a top-level table of `config.toml` of its own, and an unknown top-level table is still refused.
 - Hooks:
   - `EditorWillUpdate { editor, completing }`, an event before each key and each frame. Defined in `helix-term/src/events.rs`, and dispatched at the top of `EditorView::handle_event`, before the keymap swap, and of `EditorView::render`, in `helix-term/src/ui/editor.rs`. `completing` is whether a completion menu is open.
   - `BufferKind` in `helix-view/src/kind.rs`, the answers a feature's buffer gives where the core would act on an ordinary one, and `Document::kind`, which points at one. A feature declares its kind as a `static`.
@@ -183,7 +184,7 @@ Each entry says what the feature adds, and where its code, tests, and book pages
   - `Editor::close_tab`, which closes every view of a tab, and with them the tab.
   - `BufferKindUi::decorate`, which `render_view` in `helix-term/src/ui/editor.rs` calls after the syntax highlights' overlay and before the rainbow brackets'. `ui::text_decorations` is crate-visible so a kind can name `DecorationManager`.
 - Book: `book/src/configuration.md` (`[review]`), the first feature table.
-- Tests: `config_refuses_a_top_level_table_no_one_reads` in `helix-term/src/config.rs`, and the review's `keys_bind_the_reviews_commands_by_name` and `picker_keys_bind_review_jump_by_default_by_name_and_unbind_it` in `commands/review.rs`, which read its commands' and its picker action's names through the registry.
+- Tests: `config_refuses_a_top_level_table_no_one_reads` in `helix-term/src/config.rs`, and the review's `keys_bind_the_reviews_commands_by_name` and `picker_keys_bind_review_jump_by_default_by_name_and_unbind_it` in `helix-review/src/term.rs`, which read its commands' and its picker action's names through the registry.
 - Core rules for a kind's buffer:
   - A refused close or quit doesn't swap it out of its view to show the first unsaved buffer: `buffer_close_by_ids_impl` and `buffers_remaining_impl` in `typed.rs`.
   - `Editor::switch` in `helix-view/src/editor.rs` never discards it as an empty scratch buffer.

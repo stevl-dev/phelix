@@ -15,7 +15,7 @@ use helix_stdx::rope::RopeSliceExt;
 use parking_lot::Mutex;
 
 use super::{Content, Row, Stream};
-use crate::Editor;
+use helix_view::Editor;
 
 /// The syntax tree of one side of a file.
 #[derive(Clone, Default)]
@@ -233,8 +233,8 @@ mod tests {
     use helix_vcs::FileChange;
 
     use super::*;
-    use crate::review::{File, Section};
-    use crate::Theme;
+    use crate::view::{File, Section};
+    use helix_view::Theme;
 
     #[test]
     fn highlights_land_on_the_rows_of_their_lines() {
@@ -261,7 +261,7 @@ mod tests {
             encoding: helix_core::encoding::UTF_8,
         });
         file.language = Some(language);
-        let stream = crate::review::tests::stream_of(vec![file]);
+        let stream = crate::view::tests::stream_of(vec![file]);
         let text = stream.text.to_string();
         assert_eq!(
             text,

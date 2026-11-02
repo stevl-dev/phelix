@@ -2,13 +2,14 @@
 //! upstream's own, which ask the review's buffer kind for the file of the row
 //! under the cursor.
 
+use crate::view as review;
 use helix_core::syntax::config::LanguageServerFeature;
 use helix_core::textobject::{textobject_word, TextObject};
 use helix_lsp::block_on;
-use helix_view::{doc, review};
+use helix_view::doc;
 
-use crate::commands::{Context, MappableCommand};
-use crate::ui::{self, PromptEvent};
+use helix_term::commands::{Context, MappableCommand};
+use helix_term::ui::{self, PromptEvent};
 
 /// The review's version of `command`, swapped into the review's keymap.
 /// Built here rather than in the command table: it exists only as that swap.

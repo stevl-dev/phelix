@@ -1,7 +1,6 @@
 mod changed_file;
 pub(crate) mod dap;
 pub(crate) mod lsp;
-pub(crate) mod review;
 pub(crate) mod syntax;
 pub(crate) mod typed;
 
@@ -3681,7 +3680,7 @@ fn insert_with_indent(cx: &mut Context, cursor_fallback: IndentFallbackPos) {
 //
 // TODO: provide some way to cancel this, probably as part of a more general job cancellation
 // scheme
-async fn make_format_callback(
+pub async fn make_format_callback(
     doc_id: DocumentId,
     doc_version: i32,
     view_id: ViewId,
@@ -3902,7 +3901,7 @@ fn normal_mode(cx: &mut Context) {
 }
 
 // Store a jump on the jumplist.
-fn push_jump(view: &mut View, doc: &mut Document) {
+pub fn push_jump(view: &mut View, doc: &mut Document) {
     doc.append_changes_to_history(view);
     let jump = (doc.id(), doc.selection(view.id).clone());
     view.push_jump(doc, jump);

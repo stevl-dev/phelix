@@ -2,19 +2,19 @@
 //! touches in the review, in each file's buffer, as one step of the review's
 //! undo log. The review follows the buffer like any other edit.
 
+use crate::view::{self as review, layout};
 use anyhow::{bail, Context as _};
 use helix_core::command_line::Args;
 use helix_core::Transaction;
 use helix_vcs::ChangeView;
-use helix_view::review::{self, layout};
 use helix_view::{current_ref, Editor};
 
 use super::open_stream;
 use super::stage::under;
-use crate::compositor;
-use crate::ui::PromptEvent;
+use helix_term::compositor;
+use helix_term::ui::PromptEvent;
 
-pub(in crate::commands) fn review_restore(
+pub(crate) fn review_restore(
     cx: &mut compositor::Context,
     _args: Args,
     event: PromptEvent,

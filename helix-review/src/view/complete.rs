@@ -11,7 +11,7 @@ use helix_lsp::{lsp, util::generate_transaction_from_edits, OffsetEncoding};
 
 use super::ReviewState;
 use super::{edit_file, sync::view_of, Review, Row, Stream};
-use crate::{Document, Editor, ViewId};
+use helix_view::{Document, Editor, ViewId};
 
 /// An accepted item's other edits, for the file it was asked of.
 pub(super) struct Deferred {
@@ -174,8 +174,8 @@ mod tests {
     use helix_vcs::FileChange;
 
     use super::*;
-    use crate::review::tests::stream_of;
-    use crate::review::{Content, File, Section};
+    use crate::view::tests::stream_of;
+    use crate::view::{Content, File, Section};
 
     fn file(name: &str, base: &str, source: &str) -> File {
         File::from(Section {

@@ -306,8 +306,8 @@ mod tests {
     use helix_vcs::FileChange;
 
     use super::*;
-    use crate::review::tests::stream_of;
-    use crate::review::{File, Section};
+    use crate::view::tests::stream_of;
+    use crate::view::{File, Section};
 
     fn file(name: &str, base: &str, source: &str) -> File {
         File::from(Section {

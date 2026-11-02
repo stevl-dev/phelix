@@ -2,7 +2,9 @@
 
 This is a hard fork of Helix. It no longer rebases onto upstream, so upstream's code is the fork's own. Change it where the work needs it, its defaults and behavior included. A config key is for a choice the human wants to keep, not for keeping upstream's behavior.
 
-Put code where it reads best. A large feature still gets its own module, as the review does in `helix-view/src/review/` and `helix-term/src/commands/review/`. Update the call sites and delete the old code instead of keeping a shim.
+Put code where it reads best. Update the call sites and delete the old code instead of keeping a shim.
+
+The core names no feature. A feature that owns buffers, tabs, state, or commands is a crate of its own, as the review is in `helix-review/`, and `hx` lists it. When a feature needs the core to act differently, the core grows a general hook, never an `if` for that feature: the hooks are in `FORK.md` (feature-hooks). Text may name a feature for the user, as a command's doc does, or as an example in a doc comment. The small features that change core behavior and own none of those are core code.
 
 Some fork code still has the soft fork's shapes: thin wrappers in `commands.rs` and `typed.rs` with the body in a module of its own, and copies of upstream code instead of a shared function. Fold one back only when a change has its own reason to touch it.
 

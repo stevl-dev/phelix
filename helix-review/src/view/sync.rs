@@ -11,10 +11,10 @@ use helix_vcs::ChangeView;
 
 use super::ReviewState;
 use super::{complete, diagnostics, edit_file, forward, layout, log, update, Content, Row, Stream};
-use crate::document::{from_reader, DocumentOpenError, Mode};
-use crate::editor::Action;
-use crate::tree::Tree;
-use crate::{Document, DocumentId, Editor, ViewId};
+use helix_view::document::{from_reader, DocumentOpenError, Mode};
+use helix_view::editor::Action;
+use helix_view::tree::Tree;
+use helix_view::{Document, DocumentId, Editor, ViewId};
 
 /// `completing` is whether a completion menu is open.
 pub fn sync(editor: &mut Editor, completing: bool) {

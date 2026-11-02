@@ -21,13 +21,14 @@ use helix_lsp::{lsp, OffsetEncoding};
 use helix_vcs::{ChangeView, FileChange, Hunk};
 use serde::Deserialize;
 
-use crate::document::Mode;
-use crate::editor::{Action, GutterType, TabOptions};
-use crate::features::Features;
-use crate::gutter::GutterFn;
-use crate::kind::BufferKind;
-use crate::tree::Tab;
-use crate::{align_view, Align, Document, DocumentId, Editor, Theme, ViewId};
+use helix_view::document::Mode;
+use helix_view::editor::{Action, GutterType, TabOptions};
+use helix_view::features::Features;
+use helix_view::gutter::GutterFn;
+use helix_view::kind::BufferKind;
+use helix_view::tree::Tab;
+use helix_view::{align_view, Align, Document, DocumentId, Editor, Theme, ViewId};
+use helix_view::{current, view};
 use reconcile::Key;
 
 mod complete;

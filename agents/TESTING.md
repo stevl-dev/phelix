@@ -24,7 +24,7 @@ Pure wiring needs no test: a command-table row, a `mod` line, a re-export, or a 
 | Layer | Owns | Where |
 | --- | --- | --- |
 | Unit | Logic that needs no running editor: config merging, git status, list filtering, row math | `#[cfg(test)] mod tests` in the file that holds the logic. Git fixtures go in `helix-vcs/src/git/test.rs`. |
-| Integration | What keys do to the editor: commands, picker actions, what ends up open, selected, or yanked | The file in `helix-term/tests/test/` for the area, or a new `<area>.rs` there, plus its `mod` line in `helix-term/tests/integration.rs` |
+| Integration | What keys do to the editor: commands, picker actions, what ends up open, selected, or yanked | The file in `helix-term/tests/test/` for the area, or a new `<area>.rs` there, plus its `mod` line in `helix-term/tests/integration.rs`. A feature's own tests go in its crate, in `<crate>/tests/integration.rs`, as the review's are in `helix-review/tests/`. `cargo integration-test` runs every crate's. |
 
 ## One home per behavior
 
@@ -82,7 +82,7 @@ The harness sets no features. A test that needs a feature's commands, tabs, or c
 Run the commands for the crates the change touched:
 
 - `cargo test -p helix-vcs [filter]`, `cargo test -p helix-view [filter]`
-- `cargo test -p helix-term --lib [filter]`
+- `cargo test -p helix-term --lib [filter]`, `cargo test -p helix-review --lib [filter]`
 - `cargo integration-test -- [filter]`. It's a cargo alias that turns on the `integration` feature.
   `HELIX_LOG_LEVEL=debug` adds logs.
 

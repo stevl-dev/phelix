@@ -15,7 +15,7 @@ use helix_vcs::ChangeView;
 
 use super::ReviewState;
 use super::{Content, Row};
-use crate::{Document, Editor};
+use helix_view::{Document, Editor};
 
 /// Each file's report, as the stream last placed it.
 pub(super) type Reports = HashMap<PathBuf, Vec<(lsp::Diagnostic, DiagnosticProvider)>>;

@@ -9,7 +9,7 @@ use helix_vcs::ChangeView;
 
 use super::ReviewState;
 use super::{load, Content, Row, Stream};
-use crate::{DocumentId, Editor, ViewId};
+use helix_view::{DocumentId, Editor, ViewId};
 
 /// The file, source line, and column of a stream position on an added or
 /// unchanged line.
@@ -103,8 +103,7 @@ pub fn source(editor: &mut Editor, view: ViewId) -> Result<DocumentId, String> {
 
     // WHY: upstream's commands see only servers that are up, and would say
     // there's no definition, or no server, while one starts.
-    let starting = doc.language_servers.values().any(|ls| !ls.is_initialized());
-    if starting && doc.language_servers().next().is_none() {
+    if doc.language_server_starting() && doc.language_servers().next().is_none() {
         return Err(format!(
             "{}'s language server is starting. Try again when it's ready",
             shown.display()
