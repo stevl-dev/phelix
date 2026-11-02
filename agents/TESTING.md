@@ -84,6 +84,6 @@ Run the commands for the crates the change touched:
 - `cargo test -p helix-vcs [filter]`, `cargo test -p helix-view [filter]`
 - `cargo test -p helix-term --lib [filter]`, `cargo test -p helix-review --lib [filter]`
 - `cargo integration-test -- [filter]`. It's a cargo alias that turns on the `integration` feature.
-  `HELIX_LOG_LEVEL=debug` adds logs.
+  `PHELIX_LOG_LEVEL=debug` adds logs.
 
 `tools/fork/land.sh --check` runs every check in the workspace. It's the gate, not the edit loop.

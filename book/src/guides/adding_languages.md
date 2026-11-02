@@ -65,7 +65,7 @@ below.
   grammars.
 - If a parser is causing a segfault, or you want to remove it, make sure to
   remove the compiled parser located at `runtime/grammars/<name>.so`.
-- If you are attempting to add queries and Helix is unable to locate them, ensure that the environment variable `HELIX_RUNTIME` is set to the location of the `runtime` folder you're developing in.
+- If you are attempting to add queries and Helix is unable to locate them, ensure that the environment variable `PHELIX_RUNTIME` is set to the location of the `runtime` folder you're developing in.
 - Validate queries with `cargo xtask query-check [language]` (every query file
   must compile against the grammar). `highlight-check` and `indent-check`
   additionally run the real highlighter and indenter over the test fixtures catch mistakes.

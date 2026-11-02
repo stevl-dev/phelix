@@ -62,16 +62,16 @@ in
     };
 
     # Helix attempts to reach out to the network and get the grammars. Nix doesn't allow this.
-    HELIX_DISABLE_AUTO_GRAMMAR_BUILD = "1";
+    PHELIX_DISABLE_AUTO_GRAMMAR_BUILD = "1";
 
     # So Helix knows what rev it is.
-    HELIX_NIX_BUILD_REV = gitRev;
+    PHELIX_NIX_BUILD_REV = gitRev;
 
     doCheck = false;
     strictDeps = true;
 
     # Sets the Helix runtime dir to the grammars
-    env.HELIX_DEFAULT_RUNTIME = "${runtimeDir}";
+    env.PHELIX_DEFAULT_RUNTIME = "${runtimeDir}";
 
     # Get all the application stuff in the output directory.
     postInstall = ''

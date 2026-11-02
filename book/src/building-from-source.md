@@ -50,7 +50,7 @@ RUSTFLAGS="-C target-feature=-crt-static"
    Either command will create the `hx` executable and construct the tree-sitter
    grammars in the local `runtime` folder.
 
-> 💡 If you do not want to fetch or build grammars, set an environment variable `HELIX_DISABLE_AUTO_GRAMMAR_BUILD`
+> 💡 If you do not want to fetch or build grammars, set an environment variable `PHELIX_DISABLE_AUTO_GRAMMAR_BUILD`
 
 > 💡 Tree-sitter grammars can be fetched and compiled if not pre-packaged. Fetch
 > grammars with `hx --grammar fetch` and compile them with
@@ -65,11 +65,11 @@ RUSTFLAGS="-C target-feature=-crt-static"
 #### Linux and macOS
 
 The **runtime** directory is one below the Helix source, so either export a
-`HELIX_RUNTIME` environment variable to point to that directory and add it to
+`PHELIX_RUNTIME` environment variable to point to that directory and add it to
 your `~/.bashrc` or equivalent:
 
 ```sh
-export HELIX_RUNTIME=~/src/helix/runtime
+export PHELIX_RUNTIME=~/src/helix/runtime
 ```
 
 Or, create a symbolic link:
@@ -80,12 +80,12 @@ ln -Tsf $PWD/runtime ~/.config/phelix/runtime
 
 #### Windows
 
-Either set the `HELIX_RUNTIME` environment variable to point to the runtime files using the Windows setting (search for
+Either set the `PHELIX_RUNTIME` environment variable to point to the runtime files using the Windows setting (search for
 `Edit environment variables for your account`) or use the `setx` command in
 Cmd:
 
 ```sh
-setx HELIX_RUNTIME "%userprofile%\src\helix\runtime"
+setx PHELIX_RUNTIME "%userprofile%\src\helix\runtime"
 ```
 
 > 💡 `%userprofile%` resolves to your user directory like
@@ -109,9 +109,9 @@ following order:
 1. `runtime/` sibling directory to `$CARGO_MANIFEST_DIR` directory (this is intended for
   developing and testing helix only).
 2. `runtime/` subdirectory of OS-dependent helix user config directory.
-3. `$HELIX_RUNTIME`
+3. `$PHELIX_RUNTIME`
 4. Distribution-specific fallback directory (set at compile time—not run time—
-   with the `HELIX_DEFAULT_RUNTIME` environment variable)
+   with the `PHELIX_DEFAULT_RUNTIME` environment variable)
 5. `runtime/` subdirectory of path to Helix executable.
 
 This order also sets the priority for selecting which file will be used if multiple runtime
@@ -120,20 +120,20 @@ directories have files with the same name.
 #### Note to packagers
 
 If you are making a package of Helix for end users, to provide a good out of
-the box experience, you should set the `HELIX_DEFAULT_RUNTIME` environment
+the box experience, you should set the `PHELIX_DEFAULT_RUNTIME` environment
 variable at build time (before invoking `cargo build`) to a directory which
 will store the final runtime files after installation. For example, say you want
 to package the runtime into `/usr/lib/helix/runtime`. The rough steps a build
 script could follow are:
 
-1. `export HELIX_DEFAULT_RUNTIME=/usr/lib/helix/runtime`
+1. `export PHELIX_DEFAULT_RUNTIME=/usr/lib/helix/runtime`
 1. `cargo build --profile opt --locked`
 1. `cp -r runtime $BUILD_DIR/usr/lib/helix/`
 1. `cp target/opt/hx $BUILD_DIR/usr/bin/hx`
 
 This way the resulting `hx` binary will always look for its runtime directory in
 `/usr/lib/helix/runtime` if the user has no custom runtime in `~/.config/phelix`
-or `HELIX_RUNTIME`.
+or `PHELIX_RUNTIME`.
 
 ### Validating the installation
 

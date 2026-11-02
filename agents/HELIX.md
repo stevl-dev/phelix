@@ -4,7 +4,7 @@ Upstream's docs still describe the code. This guide points to them and adds the 
 
 ## Upstream docs
 
-- `docs/CONTRIBUTING.md`: building, `cargo integration-test`, `cargo xtask docgen`, `HELIX_LOG_LEVEL`, the MSRV policy.
+- `docs/CONTRIBUTING.md`: building, `cargo integration-test`, `cargo xtask docgen`, `PHELIX_LOG_LEVEL`, the MSRV policy.
 - `docs/architecture.md`: what each crate owns.
 - `book/src/`: the user docs.
   A feature updates the page that owns the behavior, in place, and its `FORK.md` entry lists the page.
