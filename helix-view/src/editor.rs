@@ -1,4 +1,5 @@
 use crate::{
+    align_view,
     annotations::diagnostics::{DiagnosticFilter, InlineDiagnosticsConfig},
     clipboard::ClipboardProvider,
     document::{
@@ -12,7 +13,7 @@ use crate::{
     register::Registers,
     theme::{self, Theme},
     tree::{self, Tab, Tree},
-    Document, DocumentId, View, ViewId,
+    Align, Document, DocumentId, View, ViewId,
 };
 use helix_event::dispatch;
 use helix_loader::workspace_trust::{ImplicitTrustLevel, TrustQuery, WorkspaceTrust};
@@ -1352,6 +1353,24 @@ pub struct Editor {
     pub cursor_cache: CursorCache,
     pub workspace_trust: WorkspaceTrust,
     pub features: crate::features::Features,
+    /// The tabs opened with `TabOptions::keeps`, and the views that showed a
+    /// buffer of the kind at the last check.
+    kept_tabs: Vec<KeptTab>,
+}
+
+/// How a feature's tab treats what opens in it.
+#[derive(Debug, Default, Clone, Copy)]
+pub struct TabOptions {
+    /// A buffer kind's name. A view of the tab that showed a buffer of the
+    /// kind and now shows another gives that one to the code tab, and gets
+    /// its buffer back.
+    pub keeps: Option<&'static str>,
+}
+
+struct KeptTab {
+    tab: Tab,
+    kind: &'static str,
+    views: Vec<(ViewId, DocumentId)>,
 }
 
 pub type Motion = Box<dyn Fn(&mut Editor)>;
@@ -1478,6 +1497,7 @@ impl Editor {
             dir_stack: VecDeque::with_capacity(DIR_STACK_CAP),
             workspace_trust,
             features: Default::default(),
+            kept_tabs: Vec::new(),
         }
     }
 
@@ -1950,7 +1970,7 @@ impl Editor {
         }
     }
 
-    pub(crate) fn replace_document_in_view(&mut self, current_view: ViewId, doc_id: DocumentId) {
+    fn replace_document_in_view(&mut self, current_view: ViewId, doc_id: DocumentId) {
         let scrolloff = self.config().scrolloff;
         let view = self.tree.get_mut(current_view);
 
@@ -2199,7 +2219,15 @@ impl Editor {
     }
 
     /// Opens `tab` with one view of `doc_id`, and switches to it.
-    pub fn open_tab(&mut self, tab: Tab, doc_id: DocumentId) -> ViewId {
+    pub fn open_tab(&mut self, tab: Tab, doc_id: DocumentId, options: TabOptions) -> ViewId {
+        if let Some(kind) = options.keeps {
+            self.kept_tabs.retain(|kept| kept.tab != tab);
+            self.kept_tabs.push(KeptTab {
+                tab,
+                kind,
+                views: Vec::new(),
+            });
+        }
         self.enter_normal_mode();
         let (view, doc) = current!(self);
         doc.append_changes_to_history(view);
@@ -2217,6 +2245,64 @@ impl Editor {
             doc: focus_lost,
         });
         view_id
+    }
+
+    /// Closes every view of `tab`, and with them the tab. The code tab gets a
+    /// new view instead, as it does when its last view closes.
+    pub fn close_tab(&mut self, tab: Tab) {
+        let views: Vec<_> = self
+            .tree
+            .views()
+            .filter(|(view, _)| self.tree.tab_of(view.id) == tab)
+            .map(|(view, _)| view.id)
+            .collect();
+        for view in views {
+            self.close(view);
+        }
+    }
+
+    /// In each tab opened with `TabOptions::keeps`, gives the code tab what a
+    /// view shows in place of a buffer of the kind, as a jump there with the
+    /// view's selection, and puts the buffer back in the view. The check
+    /// reads what views show, not which command ran, so it catches a goto
+    /// whose answer comes after the key, a picker, and `:e` alike. A split
+    /// opened on a file never showed the kind's buffer, so it stays.
+    pub fn send_out_of_kept_tabs(&mut self) {
+        let open: Vec<_> = self.tree.tabs().collect();
+        self.kept_tabs.retain(|kept| open.contains(&kept.tab));
+        for index in 0..self.kept_tabs.len() {
+            let moved: Vec<_> = self.kept_tabs[index]
+                .views
+                .iter()
+                .copied()
+                .filter(|&(view, kept)| {
+                    self.documents.contains_key(&kept)
+                        && self.tree.try_get(view).is_some_and(|view| view.doc != kept)
+                })
+                .collect();
+            for (view, kept) in moved {
+                let file = self.tree.get(view).doc;
+                let selection = self.documents[&file].selection(view).clone();
+                self.replace_document_in_view(view, kept);
+                self.switch_tab(Tab::CODE);
+                self.switch(file, Action::Replace);
+                let (view, doc) = current!(self);
+                doc.set_selection(view.id, selection);
+                align_view(doc, view, Align::Center);
+            }
+            let KeptTab { tab, kind, .. } = self.kept_tabs[index];
+            self.kept_tabs[index].views = self
+                .tree
+                .views()
+                .filter(|(view, _)| {
+                    self.tree.tab_of(view.id) == tab
+                        && self.documents[&view.doc]
+                            .kind
+                            .is_some_and(|shown| shown.name() == kind)
+                })
+                .map(|(view, _)| (view.id, view.doc))
+                .collect();
+        }
     }
 
     /// Switches to `tab`, at the view it last focused. `false` when it isn't

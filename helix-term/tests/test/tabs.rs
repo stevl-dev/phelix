@@ -6,14 +6,18 @@ use helix_core::diagnostic::Severity;
 use helix_stdx::path;
 use helix_term::application::Application;
 use helix_view::review::REVIEW_TAB;
-use helix_view::{doc, editor::Action, tree::Tab};
+use helix_view::{
+    doc,
+    editor::{Action, TabOptions},
+    tree::Tab,
+};
 
 use super::*;
 
 /// Opens the review tab on a new scratch buffer.
 fn open_review_tab(app: &mut Application) {
     let doc = app.editor.new_file(Action::Load);
-    app.editor.open_tab(REVIEW_TAB, doc);
+    app.editor.open_tab(REVIEW_TAB, doc, TabOptions::default());
 }
 
 #[tokio::test(flavor = "multi_thread")]

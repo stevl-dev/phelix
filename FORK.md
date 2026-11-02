@@ -105,7 +105,6 @@ Each entry says what the feature adds, and where its code, tests, and book pages
   `[review]`'s `row-background` and `word-background`, a top-level table of `config.toml`, turn the tints and the marks off. `:config-reload` reads it again, and `:set` and `:toggle` don't reach it.
 - Code: `helix-view/src/review.rs` and `review/{layout,reconcile,forward,gutter,diagnostics,source,log,sync,syntax,words,complete}.rs`, `helix-term/src/commands/review.rs` and `review/{lsp,stage,restore,write}.rs`, `helix-term/src/keymap/review.rs`, `helix-term/src/ui/text_decorations/review.rs`, and `helix-vcs/src/git/index.rs` with the `helix-vcs/src/index.rs` facade.
   It hooks in at:
-  - `helix-view/src/editor.rs`: `replace_document_in_view` is crate-visible, so the sync can put the stream back in its view.
   - `helix-term/src/config.rs`: the review's row in `FEATURE_TABLES`, which reads `[review]` through `commands::review::apply_config` (`feature-hooks`).
   - `helix-term/src/handlers.rs`: `setup` calls `commands::review::register`, which runs `review::sync` on `EditorWillUpdate` and registers the UI part of the review's buffer kind (`feature-hooks`).
   - `helix-term/src/ui/picker.rs`: the `on_review_jump` hook, its builder, and its key arm.
@@ -140,7 +139,7 @@ Each entry says what the feature adds, and where its code, tests, and book pages
   `:review` opens the review tab (`review-stream`). `:tab <name>` switches to an open tab, and `:tab` names the active one.
   A feature's buffer can stay out of the buffer lists, as the review's does: the bufferline, `Space b`, `:buffer`'s completion, `:bn` and `:bp`, and `:bca` and `:bco`. When a buffer close empties the code tab, its new view takes a listed buffer.
   A buffer with no path can go by a name of its own in place of `[scratch]`, as the review's `[review]` does, in the statusline and `%{buffer_name}`.
-- Code: `Tab` and the tabs in `helix-view/src/tree.rs`. A tab is a name, `Tab("review")`, with `Tab::CODE` the home tab. Every tab's root container is in the tree's one node map, and `root` and `focus` are the active tab's. `Tree::tabs` lists the open tabs in the order they opened, the code tab first. `Editor::open_tab`, `switch_tab`, and `quit_view` in `helix-view/src/editor.rs`.
+- Code: `Tab` and the tabs in `helix-view/src/tree.rs`. A tab is a name, `Tab("review")`, with `Tab::CODE` the home tab. Every tab's root container is in the tree's one node map, and `root` and `focus` are the active tab's. `Tree::tabs` lists the open tabs in the order they opened, the code tab first. `Editor::open_tab`, `switch_tab`, `close_tab`, and `quit_view` in `helix-view/src/editor.rs`. A tab opened with `TabOptions { keeps: Some(kind) }` keeps that kind's buffers: `Editor::send_out_of_kept_tabs` gives the code tab what a view of it shows in place of one, and puts the buffer back.
   It hooks in at:
   - `helix-view/src/editor.rs`: `focus` switches to a hidden view's tab, `close_document` gives the code tab a view, `should_close` checks every tab, and `switch` keeps a scratch buffer that a view in another tab shows.
   - `helix-term/src/commands/typed.rs`: `quit` and `force_quit` call `quit_view`. `helix-term/src/commands.rs`: so does `wclose`, and `wonly` closes the active tab's views only.
@@ -158,7 +157,7 @@ Each entry says what the feature adds, and where its code, tests, and book pages
 
 ### feature-hooks
 
-- Plan: `fork/feature-hooks.md`, done through phase 9.
+- Plan: `fork/feature-hooks.md`, done through phase 10.
 - Adds: general hooks the core calls where it used to check for a feature. A feature's config is a top-level table of `config.toml` of its own, and an unknown top-level table is still refused.
 - Hooks:
   - `EditorWillUpdate { editor, completing }`, an event before each key and each frame. Defined in `helix-term/src/events.rs`, and dispatched at the top of `EditorView::handle_event`, before the keymap swap, and of `EditorView::render`, in `helix-term/src/ui/editor.rs`. `completing` is whether a completion menu is open.
@@ -178,6 +177,8 @@ Each entry says what the feature adds, and where its code, tests, and book pages
   - `Editor::features` in `helix-view/src/features.rs`, a feature's state by its type, with `get` and `get_or_default`. A field, not a method, so a borrow of a feature's state and one of `editor.documents` can sit side by side.
   - `FeatureTable` in `helix-term/src/config.rs`: a feature's top-level table, and its `apply`, which reads it into the feature's state. `helix-term`'s `Config::features` keeps the registered tables as TOML, merged from both files as `[editor]` is. `Config::load` refuses a top-level name that's neither the core's nor a registered table's, and runs each `apply` against a scratch state, so a bad table refuses the file. `Config::apply_features` reads them into `Editor::features` in `Application::new` and in `refresh_config`, behind `:config-reload`.
   - Tab names: `Tab` in `helix-view/src/tree.rs` is a name a feature declares, as the review's `REVIEW_TAB`. `TABS` in `helix-term/src/commands/typed.rs` lists the ones features register, for `:tab`'s messages.
+  - `TabOptions::keeps` in `helix-view/src/editor.rs`, a property `Editor::open_tab` gives a tab: the name of a buffer kind whose buffers the tab keeps. `Editor::send_out_of_kept_tabs` runs on `EditorWillUpdate`, from a hook `handlers::setup` registers before any feature's.
+  - `Editor::close_tab`, which closes every view of a tab, and with them the tab.
   - `BufferKindUi::decorate`, which `render_view` in `helix-term/src/ui/editor.rs` calls after the syntax highlights' overlay and before the rainbow brackets'. `ui::text_decorations` is crate-visible so a kind can name `DecorationManager`.
 - Book: `book/src/configuration.md` (`[review]`), the first feature table.
 - Tests: `config_refuses_a_top_level_table_no_one_reads` in `helix-term/src/config.rs`.

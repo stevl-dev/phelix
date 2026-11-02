@@ -2,10 +2,10 @@ use std::sync::Arc;
 
 use arc_swap::ArcSwap;
 use diagnostics::PullAllDocumentsDiagnosticHandler;
-use helix_event::AsyncHook;
+use helix_event::{register_hook, AsyncHook};
 
 use crate::config::Config;
-use crate::events;
+use crate::events::{self, EditorWillUpdate};
 use crate::handlers::auto_save::AutoSaveHandler;
 use crate::handlers::diagnostics::PullDiagnosticsHandler;
 use crate::handlers::signature_help::SignatureHelpHandler;
@@ -64,6 +64,12 @@ pub fn setup(config: Arc<ArcSwap<Config>>) -> Handlers {
     document_links::register_hooks(&handlers);
     prompt::register_hooks(&handlers);
     workspace_trust::register_hooks(&handlers);
+    // INVARIANT: before any feature's hooks, so a feature's update sees the
+    // views as the kept tabs' check left them.
+    register_hook!(move |event: &mut EditorWillUpdate<'_>| {
+        event.editor.send_out_of_kept_tabs();
+        Ok(())
+    });
     crate::commands::review::register();
     handlers
 }

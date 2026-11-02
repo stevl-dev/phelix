@@ -3,7 +3,7 @@
 Snapshot: `main` at `4a60f8c`, on upstream `master` at `ba40e547`.
 Goes in `fork/feature-hooks.md`. Feature slug: `feature-hooks`.
 
-Status: phases 0 to 9 done. Section 9's questions are answered under Decisions. Phase 10 is next.
+Status: phases 0 to 10 done. Section 9's questions are answered under Decisions. Phase 11 is next.
 
 ## Bottom line
 
@@ -317,7 +317,7 @@ Each phase is one commit that builds and passes `tools/fork/land.sh --check`. Ea
 | 7 | done | Draw a buffer kind's gutter and decorations through its hooks. | 3.6. Tests that must pass unchanged: `review_backgrounds_follow_their_keys`, `files_diagnostics_land_on_their_rows_open_or_not`, and the review's tests that read line numbers and signs. |
 | 8 | done | Keep the review's state and config out of the editor's fields. | 3.7. `Editor::features`. `Config::review` moves to a top-level `[review]`, with the registered table names. Book: `book/src/editor.md`'s `[editor.review]` section becomes `[review]`. Tests in `config.rs`, parsed from TOML: `[review]`'s default and an override, an unknown key in it, an unregistered top-level table refused, and `[editor.review]` refused. |
 | 9 | done | Name tabs by the features that open them. | 3.8, phase 9 half. `Tree::tabs` without `Tab::ALL`, and the registered tab names. Tests: `tree.rs`'s, with a test tab name, and one for `Tree::tabs`'s order; `tabs.rs` and the `:tab` tests in `review.rs` pass unchanged, since the messages stay. |
-| 10 | | Send what opens in a feature's tab to the code tab from the core. | 3.8, phase 10 half. `TabOptions`, the core check, `Editor::close_tab`. Tests that must pass unchanged: `a_file_opened_in_the_reviews_view_lands_in_the_code_tab`, `a_split_opened_on_a_file_in_the_review_tab_stays_there_until_the_review_closes`, `ret_opens_the_file_in_the_code_tab_and_review_comes_back`, and the goto in the `rust_analyzer` test at a manual run. |
+| 10 | done | Send what opens in a feature's tab to the code tab from the core. | 3.8, phase 10 half. `TabOptions`, the core check, `Editor::close_tab`. Tests that must pass unchanged: `a_file_opened_in_the_reviews_view_lands_in_the_code_tab`, `a_split_opened_on_a_file_in_the_review_tab_stays_there_until_the_review_closes`, `ret_opens_the_file_in_the_code_tab_and_review_comes_back`, and the goto in the `rust_analyzer` test at a manual run. |
 | 11 | | Let features register commands. | 3.9, commands. `helix-term/src/feature.rs`, `init`, the registry's users, the review's `Feature`, with phase 8's table name and phase 9's tab. `cargo xtask docgen`. Test: a unit test in `config.rs` parses `[keys.normal]` TOML that binds `review_open` by name, after `init`. It fails if the review's commands aren't in the registry. The `keymap!` macro in the integration tests names commands as Rust paths, not strings, so they don't cover this. |
 | 12 | | Let features add actions to the changed-file picker. | 3.9, picker actions. Tests: `picker_keys_overlay_defaults_and_no_op_unbinds` in `config.rs` with `review_jump` as a registered action, its default, an override, and `no_op`. |
 | 13 | | Move the binary into an hx crate. | 3.10, `hx`. Build files and the docs that name `--path helix-term`. No new test. `land.sh --check`, and `cargo install --path hx --locked` at the manual check. |
@@ -492,4 +492,13 @@ Each phase records here what it found, the count from section 7, and any hook si
 - `TABS` in `typed.rs` is the registered tabs, `[Tab::CODE, REVIEW_TAB]`, counted until phase 11 moves the review's to its `Feature`. `:tab`'s unknown-name message lists them, joined with commas and a last "and", so it reads as before.
 - `tree.rs`'s unit tests open a tab of their own, `Tab("other")`. The integration tests in `tabs.rs` keep the review's tab, since they switch to it with `:tab review`, which needs a registered name.
 - `tabs.rs` and the `:tab` tests in `review.rs` pass unchanged.
+
+### Phase 10
+
+- The count from section 7 stays at 61. `move_out`, `note_views` and `Stream::views` lived in the review's own files, and the core's version names no feature.
+- `TabOptions { keeps: Option<&'static str> }` is in `helix-view/src/editor.rs`, and `Editor::open_tab` takes it. The editor keeps a `KeptTab` per such tab: the tab, the kind's name, and the views that showed a buffer of the kind at the last check, each with that buffer. `send_out_of_kept_tabs` is `move_out` made general, and records the views again after it, as `note_views` did. It drops the record of a tab that has closed, so a tab closed by its last view leaves nothing behind.
+- `Editor::close_tab(tab)` closes every view of a tab. The review's `shut` calls it in place of closing the views by hand.
+- `replace_document_in_view` is private again, as upstream has it. Only the review's `move_out` needed it crate-visible.
+- The check's hook is registered in `handlers::setup` before the review's, with an `INVARIANT`. The risk table in section 6 said `a_file_opened_in_the_reviews_view_lands_in_the_code_tab` would fail if the order flipped. It doesn't: with the order flipped, every review and tabs test passes. The review's sync reads nothing that differs whether the check runs before or after it in the same update. `keep_shown` sees a moved file shown in the code tab either way. So the order is kept as the rule for any feature, but no test pins it.
+- The tests 3.8 names pass unchanged, and so does the goto in the ignored `rust_analyzer` test, run by hand.
 

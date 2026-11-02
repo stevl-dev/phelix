@@ -22,7 +22,7 @@ use helix_vcs::{ChangeView, FileChange, Hunk};
 use serde::Deserialize;
 
 use crate::document::Mode;
-use crate::editor::{Action, GutterType};
+use crate::editor::{Action, GutterType, TabOptions};
 use crate::features::Features;
 use crate::gutter::GutterFn;
 use crate::kind::BufferKind;
@@ -332,8 +332,6 @@ pub struct Stream {
     pending: Vec<(DocumentId, ViewId)>,
     /// Files' buffers the review opened in the background.
     loaded: Vec<DocumentId>,
-    /// The review tab's views that showed the buffer at the last sync.
-    views: Vec<ViewId>,
     /// Whether an edit was forwarded since the rows were laid out.
     relayout: bool,
     log: log::Log,
@@ -747,7 +745,6 @@ pub fn show(editor: &mut Editor, root: PathBuf, scope: ChangeView, sections: Vec
         indent: doc.indent_style,
         pending: Vec::new(),
         loaded: Vec::new(),
-        views: Vec::new(),
         relayout: false,
         log: log::Log::default(),
         reports: diagnostics::Reports::new(),
@@ -761,7 +758,10 @@ pub fn show(editor: &mut Editor, root: PathBuf, scope: ChangeView, sections: Vec
 /// and shows the stream in the tab's focused view.
 pub fn switch_to(editor: &mut Editor, doc: DocumentId) {
     if !editor.switch_tab(REVIEW_TAB) {
-        editor.open_tab(REVIEW_TAB, doc);
+        let options = TabOptions {
+            keeps: Some(KIND_NAME),
+        };
+        editor.open_tab(REVIEW_TAB, doc, options);
     } else if editor.tree.get(editor.tree.focus).doc != doc {
         editor.switch(doc, Action::Replace);
     }
@@ -828,15 +828,7 @@ fn shut(editor: &mut Editor, force: bool) {
     };
     // WHY: closing the buffer closes only the views that show it, so a split
     // you opened on a file would keep the tab open after the review.
-    let views: Vec<_> = editor
-        .tree
-        .views()
-        .filter(|(view, _)| editor.tree.tab_of(view.id) == REVIEW_TAB)
-        .map(|(view, _)| view.id)
-        .collect();
-    for view in views {
-        editor.close(view);
-    }
+    editor.close_tab(REVIEW_TAB);
     let _ = editor.close_document(doc, force);
     let loaded = editor
         .features
@@ -1169,7 +1161,6 @@ mod tests {
             indent: IndentStyle::Tabs,
             pending: Vec::new(),
             loaded: Vec::new(),
-            views: Vec::new(),
             relayout: false,
             log: log::Log::default(),
             reports: diagnostics::Reports::new(),
