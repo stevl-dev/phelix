@@ -1,11 +1,11 @@
 # Verifying changes
 
 Tests cover what they can reach.
-For the rest, the agent writes a short brief, and the human checks it in `hx`.
+For the rest, the agent writes a short brief, and the human checks it in `phx`.
 
 ## Agents must not
 
-- Run `hx` interactively, or drive it through tmux, a pty, or `script`.
+- Run `phx` interactively, or drive it through tmux, a pty, or `script`.
 - Claim a picker, a keymap, or anything drawn on screen works because the tests passed.
 - Ask the human to "try the picker" without saying what to press and what should happen.
 
@@ -23,7 +23,7 @@ Usually 3–7 paths, not a tour of the editor.
 ````markdown
 ## Manual verify
 
-- Build: `cargo install --path hx --locked`
+- Build: `cargo install --path phx --locked`
 - Config, if the change needs one, in `~/.config/phelix/config.toml`, or `~/.config/helix/config.toml` until it's moved:
   ```toml
   [keys.picker]

@@ -172,7 +172,7 @@ impl WorkspaceTrust {
     }
 
     /// A trust state that grants every capability. Use for non-interactive contexts (CLI grammar
-    /// build, `hx --health`) where prompting isn't meaningful.
+    /// build, `phx --health`) where prompting isn't meaningful.
     pub fn fully_trusted() -> Self {
         Self::new(Config {
             level: ImplicitTrustLevel::Insecure,

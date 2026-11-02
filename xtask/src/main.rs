@@ -563,7 +563,7 @@ Usage: Run with `cargo xtask <task>`, eg. `cargo xtask docgen`.
 }
 
 fn main() -> Result<(), DynError> {
-    helix_term::feature::init(hx::FEATURES);
+    helix_term::feature::init(phx::FEATURES);
     let mut args = env::args().skip(1);
     let task = args.next();
     match task {

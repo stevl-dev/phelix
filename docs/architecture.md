@@ -10,7 +10,7 @@
 | helix-loader    | Functions for building, fetching, and loading external resources |
 | helix-view      | UI abstractions for use in backends, imperative shell.           |
 | helix-term      | Terminal UI                                                      |
-| hx              | The `hx` binary, and the list of features it's built with        |
+| phx             | The `phx` binary, and the list of features it's built with       |
 | helix-review    | The review, a feature: its stream, commands, keys, and drawing   |
 | helix-tui       | TUI primitives, forked from tui-rs, inspired by Cursive          |
 

@@ -2,7 +2,7 @@
 //! with edits that go to the files. `view` holds the stream and its sync,
 //! beside `helix-view`, and `term` its commands, keys and drawing, beside
 //! `helix-term`. The core names neither: the review reaches it through
-//! `FEATURE`, which the `hx` crate lists.
+//! `FEATURE`, which the `phx` crate lists.
 
 pub mod term;
 pub mod view;

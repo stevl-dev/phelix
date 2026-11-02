@@ -61,7 +61,7 @@ These look like good practice but don't belong in a review.
 - Shims or compatibility wrappers: `AGENTS.md` (Fork).
 - Parameters or branches for cases nobody asked for: `agents/HELIX.md` (Change discipline).
 - Doc comments on ordinary functions.
-- Running the change in `hx`: `agents/VERIFY.md`.
+- Running the change in `phx`: `agents/VERIFY.md`.
 
 ## Writing a finding
 

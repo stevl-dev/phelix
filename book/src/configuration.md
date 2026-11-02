@@ -10,7 +10,7 @@ If that directory doesn't exist but Helix's does (`~/.config/helix`, or
 which holds [workspace trust](./workspace-trust.md) grants, falls back the same
 way. To switch, move the directory, for example
 `mv ~/.config/helix ~/.config/phelix`. Don't create an empty one: an empty
-`phelix` directory wins over a full `helix` one. `hx --health` shows the config
+`phelix` directory wins over a full `helix` one. `phx --health` shows the config
 file in use.
 
 > 💡 You can easily open the config file by typing `:config-open` within Helix normal mode.
@@ -34,9 +34,9 @@ hidden = false
 ```
 
 You can use a custom configuration file by specifying it with the `-c` or
-`--config` command line argument, for example `hx -c path/to/custom-config.toml`.
+`--config` command line argument, for example `phx -c path/to/custom-config.toml`.
 You can reload the config file by issuing the `:config-reload` command. Alternatively, on Unix operating systems, you can reload it by sending the USR1
-signal to the Helix process, such as by using the command `pkill -USR1 hx`.
+signal to the Helix process, such as by using the command `pkill -USR1 phx`.
 
 Finally, you can have a `config.toml` and a `languages.toml` local to a project by putting it under a `.helix` directory in your repository.
 Its settings will be merged with the configuration directory and the built-in configuration.

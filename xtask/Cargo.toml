@@ -13,7 +13,7 @@ homepage.workspace = true
 
 [dependencies]
 helix-term = { path = "../helix-term" }
-hx = { path = "../hx" }
+phx = { path = "../phx" }
 helix-core = { path = "../helix-core" }
 helix-view = { path = "../helix-view" }
 helix-loader = { path = "../helix-loader" }

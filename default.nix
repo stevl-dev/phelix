@@ -55,7 +55,7 @@ in
 
     buildType = "release";
 
-    name = with builtins; (fromTOML (readFile ./hx/Cargo.toml)).package.name;
+    name = with builtins; (fromTOML (readFile ./phx/Cargo.toml)).package.name;
     src = fs.toSource {
       root = ./.;
       fileset = src;
@@ -76,12 +76,12 @@ in
     # Get all the application stuff in the output directory.
     postInstall = ''
       mkdir -p $out/lib
-      installShellCompletion ${./contrib/completion}/hx.{bash,fish,zsh}
+      installShellCompletion ${./contrib/completion}/phx.{bash,fish,zsh}
       mkdir -p $out/share/{applications,icons/hicolor/{256x256,scalable}/apps}
       cp ${./contrib/Helix.desktop} $out/share/applications/Helix.desktop
       cp ${./logo.svg} $out/share/icons/hicolor/scalable/apps/helix.svg
       cp ${./contrib/helix.png} $out/share/icons/hicolor/256x256/apps/helix.png
     '';
 
-    meta.mainProgram = "hx";
+    meta.mainProgram = "phx";
   })

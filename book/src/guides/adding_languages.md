@@ -60,8 +60,8 @@ below.
 ## Common issues
 
 - If you encounter errors when running Helix after switching branches, you may
-  need to update the tree-sitter grammars. Run the command `hx --grammar fetch`
-  to fetch the grammars and `hx --grammar build` to build any out-of-date
+  need to update the tree-sitter grammars. Run the command `phx --grammar fetch`
+  to fetch the grammars and `phx --grammar build` to build any out-of-date
   grammars.
 - If a parser is causing a segfault, or you want to remove it, make sure to
   remove the compiled parser located at `runtime/grammars/<name>.so`.
