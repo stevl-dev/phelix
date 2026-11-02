@@ -75,7 +75,7 @@ use crate::job::{self, Jobs};
 use std::{
     char::{ToLowercase, ToUppercase},
     cmp::Ordering,
-    collections::{HashMap, HashSet},
+    collections::HashSet,
     fmt,
     future::Future,
     io::Read,
@@ -250,7 +250,7 @@ impl MappableCommand {
     pub fn execute(&self, cx: &mut Context) {
         match &self {
             Self::Typable { name, args, doc: _ } => {
-                if let Some(command) = typed::TYPABLE_COMMAND_MAP.get(name.as_str()) {
+                if let Some(command) = crate::feature::typable_command(name.as_str()) {
                     let mut cx = compositor::Context {
                         editor: cx.editor,
                         jobs: cx.jobs,
@@ -653,8 +653,7 @@ impl std::str::FromStr for MappableCommand {
         if let Some(suffix) = s.strip_prefix(':') {
             let (name, args, _) = command_line::split(suffix);
             ensure!(!name.is_empty(), "Expected typable command name");
-            typed::TYPABLE_COMMAND_MAP
-                .get(name)
+            crate::feature::typable_command(name)
                 .map(|cmd| {
                     let doc = if args.is_empty() {
                         cmd.doc.to_string()

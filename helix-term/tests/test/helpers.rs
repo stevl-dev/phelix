@@ -291,7 +291,11 @@ pub fn temp_file_with_contents<S: AsRef<str>>(
 }
 
 /// Generates a config with defaults more suitable for integration tests
+/// The features the tests run with.
+pub const FEATURES: &[helix_term::feature::Feature] = &[helix_term::REVIEW_FEATURE];
+
 pub fn test_config() -> Config {
+    helix_term::feature::init(FEATURES);
     Config {
         editor: test_editor_config(),
         keys: helix_term::keymap::default(),
@@ -404,6 +408,7 @@ impl AppBuilder {
     }
 
     pub fn build(self) -> anyhow::Result<Application> {
+        helix_term::feature::init(FEATURES);
         if let Some(path) = &self.args.working_directory {
             bail!("Changing the working directory to {path:?} is not yet supported for integration tests");
         }

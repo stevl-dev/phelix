@@ -24,6 +24,10 @@ use std::process::Stdio;
 use futures_util::Future;
 mod handlers;
 
+/// The review, for the list of features in `hx` and in the tests, while it
+/// still lives in this crate.
+pub use commands::review::FEATURE as REVIEW_FEATURE;
+
 use helix_stdx::Url;
 use ignore::DirEntry;
 

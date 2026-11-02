@@ -4201,16 +4201,6 @@ pub const TYPABLE_COMMAND_LIST: &[TypableCommand] = &[
     }
 ];
 
-pub static TYPABLE_COMMAND_MAP: LazyLock<HashMap<&'static str, &'static TypableCommand>> =
-    LazyLock::new(|| {
-        crate::feature::typable_commands()
-            .flat_map(|cmd| {
-                std::iter::once((cmd.name, cmd))
-                    .chain(cmd.aliases.iter().map(move |&alias| (alias, cmd)))
-            })
-            .collect()
-    });
-
 fn execute_command_line(
     cx: &mut compositor::Context,
     input: &str,
@@ -4223,11 +4213,11 @@ fn execute_command_line(
 
     // If command is numeric, interpret as line number and go there.
     if command.parse::<usize>().is_ok() && rest.trim().is_empty() {
-        let cmd = TYPABLE_COMMAND_MAP.get("goto").unwrap();
+        let cmd = crate::feature::typable_command("goto").unwrap();
         return execute_command(cx, cmd, command, event);
     }
 
-    match typed::TYPABLE_COMMAND_MAP.get(command) {
+    match crate::feature::typable_command(command) {
         Some(cmd) => execute_command(cx, cmd, rest, event),
         None if event == PromptEvent::Validate => Err(anyhow!("no such command: '{command}'")),
         None => Ok(()),
@@ -4274,7 +4264,7 @@ pub(super) fn command_mode(cx: &mut Context) {
 
 fn command_line_doc(input: &str) -> Option<Cow<'_, str>> {
     let (command, _, _) = command_line::split(input);
-    let command = TYPABLE_COMMAND_MAP.get(command)?;
+    let command = crate::feature::typable_command(command)?;
 
     if command.aliases.is_empty() && command.signature.flags.is_empty() {
         return Some(Cow::Borrowed(command.doc));
@@ -4357,12 +4347,10 @@ fn complete_command_line(editor: &Editor, input: &str) -> Vec<ui::prompt::Comple
         .map(|(name, _)| (0.., name.into()))
         .collect()
     } else {
-        TYPABLE_COMMAND_MAP
-            .get(command)
-            .map_or_else(Vec::new, |cmd| {
-                let args_offset = command.len() + 1;
-                complete_command_args(editor, cmd.signature, &cmd.completer, rest, args_offset)
-            })
+        crate::feature::typable_command(command).map_or_else(Vec::new, |cmd| {
+            let args_offset = command.len() + 1;
+            complete_command_args(editor, cmd.signature, &cmd.completer, rest, args_offset)
+        })
     }
 }
 

@@ -50,7 +50,7 @@ use crate::kind::{self, BufferKindUi};
 use crate::ui::text_decorations::DecorationManager;
 
 /// The review's commands.
-pub(crate) const FEATURE: Feature = Feature {
+pub const FEATURE: Feature = Feature {
     name: "review",
     commands: &[
         OPEN, NEXT_HUNK, PREV_HUNK, FIRST_HUNK, LAST_HUNK, UNDO, REDO,
@@ -680,6 +680,7 @@ mod tests {
     use crate::config::{Config, ConfigLoadError};
 
     fn load(global: &str, local: Option<&str>) -> Result<Config, String> {
+        crate::feature::init(&[super::FEATURE]);
         let local = local
             .map(str::to_owned)
             .ok_or_else(ConfigLoadError::default);

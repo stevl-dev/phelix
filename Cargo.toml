@@ -4,6 +4,7 @@ members = [
   "helix-core",
   "helix-view",
   "helix-term",
+  "hx",
   "helix-tui",
   "helix-lsp-types",
   "helix-lsp",
@@ -18,7 +19,7 @@ members = [
 ]
 
 default-members = [
-  "helix-term"
+  "hx"
 ]
 
 [profile.release]
@@ -36,6 +37,7 @@ inherits = "test"
 package.helix-core.opt-level = 2
 package.helix-tui.opt-level = 2
 package.helix-term.opt-level = 2
+package.hx.opt-level = 2
 
 [workspace.dependencies]
 tree-house = { version = "0.4", default-features = false }

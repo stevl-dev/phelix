@@ -3,7 +3,7 @@
 Snapshot: `main` at `4a60f8c`, on upstream `master` at `ba40e547`.
 Goes in `fork/feature-hooks.md`. Feature slug: `feature-hooks`.
 
-Status: phases 0 to 12 done. Section 9's questions are answered under Decisions. Phase 13 is next.
+Status: phases 0 to 13 done. Section 9's questions are answered under Decisions. Phase 14 is next.
 
 ## Bottom line
 
@@ -321,7 +321,7 @@ Each phase is one commit that builds and passes `tools/fork/land.sh --check`. Ea
 | 11a | done | Let features register commands. | 3.9, commands. `helix-term/src/feature.rs`, the registry's users, the review's `Feature` with its commands. `cargo xtask docgen`. Test: a unit test parses `[keys.normal]` TOML that binds `review_open` by name. It fails if the review's commands aren't in the registry. The `keymap!` macro in the integration tests names commands as Rust paths, not strings, so they don't cover this. |
 | 11b | done | Gather the review's tab, config table and hooks into its Feature. | 3.9, the rest. `TABS` and `FEATURE_TABLES` become `Feature::tabs` and `Feature::config`, and `handlers::setup` calls each feature's `register`. No new test: the tests of `:tab`, `[review]` and the review's hooks pin it. |
 | 12 | done | Let features add actions to the changed-file picker. | 3.9, picker actions. Tests: `picker_keys_overlay_defaults_and_no_op_unbinds` in `config.rs` with `review_jump` as a registered action, its default, an override, and `no_op`. |
-| 13 | | Move the binary into an hx crate. | 3.10, `hx`. Build files and the docs that name `--path helix-term`. No new test. `land.sh --check`, and `cargo install --path hx --locked` at the manual check. |
+| 13 | done | Move the binary into an hx crate. | 3.10, `hx`. Build files and the docs that name `--path helix-term`. No new test. `land.sh --check`, and `cargo install --path hx --locked` at the manual check. |
 | 14 | | Move the review into a helix-review crate. | 3.10, `helix-review`. The `pub` items, the harness, the tests, `AGENTS.md`, `agents/*.md`, `FORK.md`. Section 7's count reaches 0. |
 
 ### Order
@@ -533,4 +533,15 @@ Each phase records here what it found, the count from section 7, and any hook si
 - The test of `review_jump`'s default, an override and `no_op` is in `commands/review.rs`, since it names the review's action. 3.9 had it in `config.rs`'s `picker_keys_overlay_defaults_and_no_op_unbinds`, which stays the core's own.
 - `review::jump` is private again.
 - What the count still finds: the four `mod review` lines, which phase 14 moves; `FEATURES`, which phase 13 moves; and the docs of `:reload`, `:reload-all` and `:tab`, and two doc comments in `document.rs`, which name the review for the user or as an example.
+
+### Phase 13
+
+- The count from section 7 is 11, from 10. `FEATURES` left `helix-term/src/feature.rs` for `hx/src/lib.rs`, and `helix-term/src/lib.rs` gained `pub use commands::review::FEATURE as REVIEW_FEATURE` with its doc comment, two lines, so `hx` and the tests can list the review while it lives in `helix-term`. Phase 14 removes them.
+- `feature::init` and the `OnceLock` came with this phase, not 11a. `init` checks a second call by the features' names, since two slices of the same features needn't share an address. Before `init`, `features()` is empty rather than a panic, as 3.9 had it: the core's unit tests in `helix-term` read the registry without any feature, and an empty registry is what they test.
+- `TYPABLE_COMMAND_MAP` was a `LazyLock`. Built before `init`, it would have kept the features' typable commands out for good, so which tests ran first would have decided whether `:review` exists. `feature::typable_command(name)` searches `typable_commands()` by name and alias instead, and every user of the map calls it.
+- `hx/Cargo.toml` has the `[[bin]]`, `default-run`, `[package.metadata.deb]`, and the `git` and `unicode-lines` features, which it passes to `helix-term`. `hx/build.rs` has the Windows icon. `helix-term/build.rs` keeps the grammar build, since `helix-term`'s tests load grammars. The root `Cargo.toml` has `hx` in `members`, `default-members` and `[profile.integration]`.
+- `cargo integration-test` keeps `--features integration --workspace`: `hx` and `xtask` have no `integration` feature, and cargo applies a plain feature name to the packages that have it.
+- The harness calls `init` in `test_config` and `AppBuilder::build`, and the review's unit tests in their `load`, with the review's `Feature`. `xtask`'s `main` calls it with `hx::FEATURES`, so docgen still lists the review's commands, and `cargo xtask docgen` leaves `book/src/generated` as it was.
+- `cargo install --path hx --locked` replaces `--path helix-term` in `book/src/building-from-source.md`, `FORK.md` and `agents/VERIFY.md`. The book's `cargo deb` names `-p hx`, since a virtual workspace's default member is a weak thing to rely on. `cargo-deb` isn't installed here, so that command wasn't run. `default.nix` reads `hx/Cargo.toml`. `docs/architecture.md` has an `hx` row.
+- `cargo build` builds `target/debug/hx`, and `hx --version` runs.
 

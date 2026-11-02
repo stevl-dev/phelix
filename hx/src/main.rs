@@ -18,6 +18,8 @@ fn setup_logging(verbosity: u64) -> Result<()> {
 }
 
 fn main() -> Result<()> {
+    // INVARIANT: before anything reads a command or a config table by name.
+    helix_term::feature::init(hx::FEATURES);
     let exit_code = main_impl()?;
     std::process::exit(exit_code);
 }

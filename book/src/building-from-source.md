@@ -36,14 +36,14 @@ RUSTFLAGS="-C target-feature=-crt-static"
 
    ```sh
    # Reproducible
-   cargo install --path helix-term --locked
+   cargo install --path hx --locked
    ```
    ```sh
    # Optimized
    cargo install \
       --profile opt \
       --config 'build.rustflags=["-C", "target-cpu=native"]' \
-      --path helix-term \
+      --path hx \
       --locked
    ```
 
@@ -189,7 +189,7 @@ After cloning and entering the Helix repository as previously described,
 use the following command to build the release binary and package it into a `.deb` file in a single step.
 
 ```sh
-cargo deb -- --locked
+cargo deb -p hx -- --locked
 ```
 
 > 💡 This locks you into the `--release` profile. But you can also build helix in any way you like.

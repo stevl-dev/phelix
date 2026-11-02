@@ -1,6 +1,8 @@
 //! Features: what each adds to the core's tables, so the core names none of
 //! them. Every lookup of a command by name goes through here.
 
+use std::sync::OnceLock;
+
 use helix_vcs::{ChangeView, FileChange};
 use helix_view::input::KeyEvent;
 use helix_view::tree::Tab;
@@ -36,11 +38,25 @@ pub struct PickerAction {
     pub run: fn(&mut compositor::Context, ChangeView, &FileChange),
 }
 
-/// The features Helix is built with.
-const FEATURES: &[Feature] = &[crate::commands::review::FEATURE];
+static FEATURES: OnceLock<&'static [Feature]> = OnceLock::new();
 
+/// Sets the features Helix is built with. The binary calls it before it reads
+/// a config, and a test harness before it builds an `Application`. Again
+/// with the same features does nothing, so every test can call it.
+pub fn init(features: &'static [Feature]) {
+    let set = FEATURES.get_or_init(|| features);
+    let names = |features: &[Feature]| {
+        features
+            .iter()
+            .map(|feature| feature.name)
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(names(set), names(features), "the features are set once");
+}
+
+/// The features Helix is built with, or none before `init`.
 pub fn features() -> &'static [Feature] {
-    FEATURES
+    FEATURES.get().copied().unwrap_or(&[])
 }
 
 /// The core's static commands, then each feature's.
@@ -48,6 +64,13 @@ pub fn static_commands() -> impl Iterator<Item = &'static MappableCommand> {
     MappableCommand::STATIC_COMMAND_LIST
         .iter()
         .chain(features().iter().flat_map(|feature| feature.commands))
+}
+
+/// The typable command `name` names, by its name or an alias.
+// WHY: no map built once. One built before `init` would leave the features'
+// commands out for good.
+pub fn typable_command(name: &str) -> Option<&'static TypableCommand> {
+    typable_commands().find(|command| command.name == name || command.aliases.contains(&name))
 }
 
 /// The core's typable commands, then each feature's.

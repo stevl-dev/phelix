@@ -23,7 +23,7 @@ Usually 3–7 paths, not a tour of the editor.
 ````markdown
 ## Manual verify
 
-- Build: `cargo install --path helix-term --locked`
+- Build: `cargo install --path hx --locked`
 - Config, if the change needs one, in `~/.config/helix/config.toml`:
   ```toml
   [keys.picker]

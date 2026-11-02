@@ -55,7 +55,7 @@ in
 
     buildType = "release";
 
-    name = with builtins; (fromTOML (readFile ./helix-term/Cargo.toml)).package.name;
+    name = with builtins; (fromTOML (readFile ./hx/Cargo.toml)).package.name;
     src = fs.toSource {
       root = ./.;
       fileset = src;

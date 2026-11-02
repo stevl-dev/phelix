@@ -1797,6 +1797,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "hx"
+version = "25.7.1"
+dependencies = [
+ "anyhow",
+ "helix-core",
+ "helix-loader",
+ "helix-stdx",
+ "helix-term",
+ "log",
+ "tokio",
+]
+
+[[package]]
 name = "hybrid-array"
 version = "0.4.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3513,6 +3526,7 @@ dependencies = [
  "helix-stdx",
  "helix-term",
  "helix-view",
+ "hx",
  "ropey",
  "toml",
 ]
