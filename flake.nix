@@ -20,12 +20,12 @@
     pkgsFor = eachSystem (system:
       import nixpkgs {
         localSystem.system = system;
-        overlays = [(import rust-overlay) self.overlays.helix];
+        overlays = [(import rust-overlay) self.overlays.phelix];
       });
     gitRev = self.rev or self.dirtyRev or null;
   in {
     packages = eachSystem (system: {
-      inherit (pkgsFor.${system}) helix;
+      inherit (pkgsFor.${system}) phelix;
       /*
       The default Helix build. Uses the latest stable Rust toolchain, and unstable
       nixpkgs.
@@ -38,7 +38,7 @@
 
       packages.${system}.default.overrideAttrs { buildType = "debug"; };
       */
-      default = self.packages.${system}.helix;
+      default = self.packages.${system}.phelix;
     });
     checks =
       lib.mapAttrs (system: pkgs: let
@@ -49,7 +49,7 @@
           rustc = msrvToolchain;
         };
       in {
-        helix = self.packages.${system}.helix.override {
+        phelix = self.packages.${system}.phelix.override {
           rustPlatform = msrvPlatform;
         };
       })
@@ -64,7 +64,7 @@
         in
           pkgs.mkShell {
             inputsFrom = [
-              (self.checks.${system}.helix.override {
+              (self.checks.${system}.phelix.override {
                 includeGrammarIf = _: false;
               })
             ];
@@ -86,11 +86,11 @@
       pkgsFor;
 
     overlays = {
-      helix = final: prev: {
-        helix = final.callPackage ./default.nix {inherit gitRev;};
+      phelix = final: prev: {
+        phelix = final.callPackage ./default.nix {inherit gitRev;};
       };
 
-      default = self.overlays.helix;
+      default = self.overlays.phelix;
     };
   };
   nixConfig = {

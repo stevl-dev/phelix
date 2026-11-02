@@ -30,7 +30,7 @@
   # grammars.nix file, then taking the runtime directory in the git repo
   # and hooking symlinks up to it.
   grammars = callPackage ./grammars.nix {inherit grammarOverlays includeGrammarIf;};
-  runtimeDir = runCommand "helix-runtime" {} ''
+  runtimeDir = runCommand "phelix-runtime" {} ''
     mkdir -p $out
     ln -s ${./runtime}/* $out
     rm -r $out/grammars
@@ -55,7 +55,7 @@ in
 
     buildType = "release";
 
-    name = with builtins; (fromTOML (readFile ./phx/Cargo.toml)).package.name;
+    name = "phelix";
     src = fs.toSource {
       root = ./.;
       fileset = src;
@@ -78,9 +78,9 @@ in
       mkdir -p $out/lib
       installShellCompletion ${./contrib/completion}/phx.{bash,fish,zsh}
       mkdir -p $out/share/{applications,icons/hicolor/{256x256,scalable}/apps}
-      cp ${./contrib/Helix.desktop} $out/share/applications/Helix.desktop
-      cp ${./logo.svg} $out/share/icons/hicolor/scalable/apps/helix.svg
-      cp ${./contrib/helix.png} $out/share/icons/hicolor/256x256/apps/helix.png
+      cp ${./contrib/Phelix.desktop} $out/share/applications/Phelix.desktop
+      cp ${./logo.svg} $out/share/icons/hicolor/scalable/apps/phelix.svg
+      cp ${./contrib/phelix.png} $out/share/icons/hicolor/256x256/apps/phelix.png
     '';
 
     meta.mainProgram = "phx";

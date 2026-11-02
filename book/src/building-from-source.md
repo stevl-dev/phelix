@@ -123,16 +123,16 @@ If you are making a package of Helix for end users, to provide a good out of
 the box experience, you should set the `PHELIX_DEFAULT_RUNTIME` environment
 variable at build time (before invoking `cargo build`) to a directory which
 will store the final runtime files after installation. For example, say you want
-to package the runtime into `/usr/lib/helix/runtime`. The rough steps a build
+to package the runtime into `/usr/lib/phelix/runtime`. The rough steps a build
 script could follow are:
 
-1. `export PHELIX_DEFAULT_RUNTIME=/usr/lib/helix/runtime`
+1. `export PHELIX_DEFAULT_RUNTIME=/usr/lib/phelix/runtime`
 1. `cargo build --profile opt --locked`
-1. `cp -r runtime $BUILD_DIR/usr/lib/helix/`
+1. `cp -r runtime $BUILD_DIR/usr/lib/phelix/`
 1. `cp target/opt/phx $BUILD_DIR/usr/bin/phx`
 
 This way the resulting `phx` binary will always look for its runtime directory in
-`/usr/lib/helix/runtime` if the user has no custom runtime in `~/.config/phelix`
+`/usr/lib/phelix/runtime` if the user has no custom runtime in `~/.config/phelix`
 or `PHELIX_RUNTIME`.
 
 ### Validating the installation
@@ -155,22 +155,22 @@ you can configure Helix to show up in the application menu by copying the
 provided `.desktop` and icon files to their correct folders:
 
 ```sh
-cp contrib/Helix.desktop ~/.local/share/applications
-cp contrib/helix.png ~/.icons # or ~/.local/share/icons
+cp contrib/Phelix.desktop ~/.local/share/applications
+cp contrib/phelix.png ~/.icons # or ~/.local/share/icons
 ```
 It is recommended to convert the links in the `.desktop` file to absolute paths to avoid potential problems:
 
 ```sh
 sed -i -e "s|Exec=phx %F|Exec=$(readlink -f ~/.cargo/bin/phx) %F|g" \
-  -e "s|Icon=helix|Icon=$(readlink -f ~/.icons/helix.png)|g" ~/.local/share/applications/Helix.desktop
+  -e "s|Icon=phelix|Icon=$(readlink -f ~/.icons/phelix.png)|g" ~/.local/share/applications/Phelix.desktop
 ```
 
 To use another terminal than the system default, you can modify the `.desktop`
 file. For example, to use `kitty`:
 
 ```sh
-sed -i "s|Exec=phx %F|Exec=kitty phx %F|g" ~/.local/share/applications/Helix.desktop
-sed -i "s|Terminal=true|Terminal=false|g" ~/.local/share/applications/Helix.desktop
+sed -i "s|Exec=phx %F|Exec=kitty phx %F|g" ~/.local/share/applications/Phelix.desktop
+sed -i "s|Terminal=true|Terminal=false|g" ~/.local/share/applications/Phelix.desktop
 ```
 
 ### Building the Debian package

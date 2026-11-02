@@ -14,20 +14,20 @@ homepage.workspace = true
 
 [package.metadata.deb]
 # generate a .deb in target/debian/ with the command: cargo deb --no-build
-name = "helix"
+name = "phelix"
 assets = [
-  { source = "target/release/phx", dest = "/usr/lib/helix/", mode = "755" },
+  { source = "target/release/phx", dest = "/usr/lib/phelix/", mode = "755" },
   { source = "../contrib/phx_launcher.sh", dest = "/usr/bin/phx", mode = "755" },
-  { source = "../runtime/*", dest = "/usr/lib/helix/runtime/", mode = "644" },
-  { source = "../runtime/grammars/*", dest = "/usr/lib/helix/runtime/grammars/", mode = "644" }, # to avoid sources/
-  { source = "../runtime/queries/**/*", dest = "/usr/lib/helix/runtime/queries/", mode = "644" },
-  { source = "../runtime/themes/**/*", dest = "/usr/lib/helix/runtime/themes/", mode = "644" },
-  { source = "../README.md", dest = "/usr/share/doc/helix/", mode = "644" },
+  { source = "../runtime/*", dest = "/usr/lib/phelix/runtime/", mode = "644" },
+  { source = "../runtime/grammars/*", dest = "/usr/lib/phelix/runtime/grammars/", mode = "644" }, # to avoid sources/
+  { source = "../runtime/queries/**/*", dest = "/usr/lib/phelix/runtime/queries/", mode = "644" },
+  { source = "../runtime/themes/**/*", dest = "/usr/lib/phelix/runtime/themes/", mode = "644" },
+  { source = "../README.md", dest = "/usr/share/doc/phelix/", mode = "644" },
   { source = "../contrib/completion/phx.bash", dest = "/usr/share/bash-completion/completions/phx", mode = "644" },
   { source = "../contrib/completion/phx.fish", dest = "/usr/share/fish/vendor_completions.d/phx.fish", mode = "644" },
   { source = "../contrib/completion/phx.zsh", dest = "/usr/share/zsh/vendor-completions/_phx", mode = "644" },
-  { source = "../contrib/Helix.desktop", dest = "/usr/share/applications/Helix.desktop", mode = "644" },
-  { source = "../contrib/helix.png", dest = "/usr/share/icons/hicolor/256x256/apps/helix.png", mode = "644" },
+  { source = "../contrib/Phelix.desktop", dest = "/usr/share/applications/Phelix.desktop", mode = "644" },
+  { source = "../contrib/phelix.png", dest = "/usr/share/icons/hicolor/256x256/apps/phelix.png", mode = "644" },
 ]
 
 [features]
