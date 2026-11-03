@@ -3,7 +3,7 @@
 Snapshot: `main` at `afb38609`, on upstream `master` at `ba40e547`.
 Goes in `fork/rename.md`. Feature slug: `rename`.
 
-Status: approved 2026-11-02. Phases 0–5 are committed. The GitHub rename at the end of phase 5 waits for the human's ask.
+Status: done 2026-11-03. Phases 0–5 are committed, and the GitHub repo is `stevl-dev/phelix`.
 
 ## Bottom line
 
@@ -121,3 +121,4 @@ The human approved the plan with the answer it assumed to each of these:
   The fork's author went into `authors` by name only, without an email.
   `title-page.md` lost its tiles for upstream's stable and `master` docs, which the fork doesn't publish. `version.js` stays, and finds no tiles to mark.
   `mdbook` isn't installed here, so the book wasn't built. `package-managers.md` had one link to it, from `install.md`, which phase 5 rewrote.
+  The GitHub rename ran on 2026-11-03, after one more commit that replaced Helix's tagline, "A post-modern text editor.", with "Personal Helix: an opinionated fork of the Helix editor." in `--help`, the Cargo and nix descriptions, and the repo's description.
