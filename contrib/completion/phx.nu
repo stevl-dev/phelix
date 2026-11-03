@@ -12,7 +12,7 @@ def health_categories [] {
 
 def grammar_categories [] { ["fetch", "build"] }
 
-# A post-modern text editor.
+# Personal Helix: an opinionated fork of the Helix editor.
 export extern phx [
     --help(-h),                                 # Prints help information
     --strict,                                   # Bail on error for commands that can fail

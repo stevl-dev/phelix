@@ -1,6 +1,6 @@
 [package]
 name = "phx"
-description = "A post-modern text editor."
+description = "Personal Helix: an opinionated fork of the Helix editor."
 include = ["src/**/*", "build.rs"]
 default-run = "phx"
 version.workspace = true

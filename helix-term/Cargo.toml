@@ -1,6 +1,6 @@
 [package]
 name = "helix-term"
-description = "A post-modern text editor."
+description = "Personal Helix: an opinionated fork of the Helix editor."
 include = ["src/**/*", "README.md"]
 version.workspace = true
 authors.workspace = true
