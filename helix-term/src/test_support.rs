@@ -213,6 +213,7 @@ pub async fn test_key_sequence_with_input_text<T: Into<TestCase>>(
             test_config(),
             test_syntax_loader(None),
             WorkspaceTrust::fully_trusted(),
+            test_recovery_dir(),
         )?,
     };
 
@@ -354,11 +355,18 @@ pub fn new_readonly_tempfile_in_dir(
     file.as_file_mut().set_permissions(perms)?;
     Ok(file)
 }
+/// Where an app's unsaved buffers go when a test panics on its loop, unless
+/// the test names a dir of its own. Never the human's data dir.
+fn test_recovery_dir() -> PathBuf {
+    std::env::temp_dir().join("phelix-test-recovery")
+}
+
 pub struct AppBuilder {
     args: Args,
     config: Config,
     syn_loader: helix_core::syntax::Loader,
     input: Option<(String, Selection)>,
+    recovery_dir: PathBuf,
 }
 
 impl Default for AppBuilder {
@@ -368,6 +376,7 @@ impl Default for AppBuilder {
             config: test_config(),
             syn_loader: test_syntax_loader(None),
             input: None,
+            recovery_dir: test_recovery_dir(),
         }
     }
 }
@@ -408,6 +417,11 @@ impl AppBuilder {
         self
     }
 
+    pub fn with_recovery_dir<P: Into<PathBuf>>(mut self, recovery_dir: P) -> Self {
+        self.recovery_dir = recovery_dir.into();
+        self
+    }
+
     pub fn build(self) -> anyhow::Result<Application> {
         if let Some(path) = &self.args.working_directory {
             bail!("Changing the working directory to {path:?} is not yet supported for integration tests");
@@ -422,6 +436,7 @@ impl AppBuilder {
             self.config,
             self.syn_loader,
             WorkspaceTrust::fully_trusted(),
+            self.recovery_dir,
         )?;
 
         if let Some((text, selection)) = self.input {

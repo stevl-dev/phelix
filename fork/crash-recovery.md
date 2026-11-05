@@ -92,7 +92,7 @@ Each phase is one commit that builds and passes its tests, and marks itself done
 | # | Status | Commit | Work |
 | --- | --- | --- | --- |
 | 0 | Done | Add the crash recovery plan. | This file. |
-| 1 | | Write unsaved buffers to a recovery dir when the event loop panics. | `helix-view/src/recovery.rs`. The catch in `event_loop_until_idle`. The recovery dir passed through `Application::new` from `phx/src/main.rs`, with a temp dir from `helix-term/src/test_support.rs`. A unit test of the write into a temp dir: a modified file, an unmodified one that isn't written, an edited one whose history was reset so `is_modified` says false, a scratch buffer, two files with the same name in different dirs, a path whose name is too long, a missing `recovery/`, and the modes. An integration test: edit a buffer, dispatch a job that panics, and run the loop under `catch_unwind`. The panic still reaches the test, and the dir holds the edited text. A "Recovering unsaved work" section in `book/src/usage.md`. A `crash-recovery` entry in `FORK.md`. |
+| 1 | Done | Write unsaved buffers to a recovery dir when the event loop panics. | `helix-view/src/recovery.rs`. The catch in `event_loop_until_idle`. The recovery dir passed through `Application::new` from `phx/src/main.rs`, with a temp dir from `helix-term/src/test_support.rs`. A unit test of the write into a temp dir: a modified file, an unmodified one that isn't written, an edited one whose history was reset so `is_modified` says false, a scratch buffer, two files with the same name in different dirs, a path whose name is too long, a missing `recovery/`, and the modes. An integration test: edit a buffer, dispatch a job that panics, and run the loop under `catch_unwind`. The panic still reaches the test, and the dir holds the edited text. A "Recovering unsaved work" section in `book/src/usage.md`. A `crash-recovery` entry in `FORK.md`. |
 | 2 | | Write unsaved buffers on SIGTERM, SIGINT, and a hangup. | `handle_signals`, with SIGHUP registered. An input error handled as a hangup. `run` skipping the terminal after a hangup. A table-driven integration test after an edit, with SIGTERM, SIGINT, SIGHUP, and an input error: the loop stops and the dir holds the text. With nothing modified, no dir is made. A test that `run` returns 129 after a hangup. The book section and the `FORK.md` entry. |
 | 3 | | Say at startup where unsaved work from a crash is. | `Application::new` checks the recovery dir, sets the status line, and marks what it named as seen. A unit test of the check: a missing dir, an empty one, one holding a new crash's dir, one holding only seen ones, and one holding both, where only the new one is named. An integration test: an app built with a new crash's dir shows the message, and a second app built on the same dir shows none. The book section. |
 
@@ -145,3 +145,11 @@ Accepted as proposed:
 - A restore command.
 
 ## Found
+
+Phase 1:
+
+- `Document::open` gives a missing file a buffer holding one line ending, not an empty one. So a missing file counts as matching a buffer that's empty or one line ending, and a new file that wasn't typed into isn't copied. A scratch buffer is "not empty" by the same rule.
+- A feature's own buffer (`Document::kind` set) with no path holds text the feature made. It's written only when modified, or every crash would copy every review buffer.
+- A copy is opened with `create_new`. If two buffers map to the same name (decision 6), the second fails and is listed, rather than overwriting the first.
+- The harness doesn't make a temp dir per app: an app writes only when a test panics on its loop, so a dir per app would be made and left behind for nothing. Apps write into one shared `phelix-test-recovery` under the system temp dir unless `AppBuilder::with_recovery_dir` names one, as the integration test does.
+- The hash in a too-long name is std's `DefaultHasher`. It only has to tell paths apart within one crash's dir, so it needn't be stable across Rust releases.

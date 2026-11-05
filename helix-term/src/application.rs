@@ -32,7 +32,7 @@ use crate::{
 use log::{debug, error, info, warn};
 use std::{
     io::{stdin, IsTerminal},
-    path::Path,
+    path::{Path, PathBuf},
     sync::Arc,
 };
 
@@ -79,6 +79,9 @@ pub struct Application {
     lsp_progress: LspProgressMap,
 
     theme_mode: Option<theme::Mode>,
+
+    /// Where unsaved buffers go when the editor goes down.
+    recovery_dir: PathBuf,
 }
 
 #[cfg(feature = "integration")]
@@ -96,6 +99,7 @@ impl Application {
         config: Config,
         lang_loader: syntax::Loader,
         workspace_trust: helix_loader::workspace_trust::WorkspaceTrust,
+        recovery_dir: PathBuf,
     ) -> Result<Self, Error> {
         #[cfg(feature = "integration")]
         setup_integration_logging();
@@ -254,6 +258,7 @@ impl Application {
             jobs,
             lsp_progress: LspProgressMap::new(),
             theme_mode,
+            recovery_dir,
         };
 
         Ok(app)
@@ -310,7 +315,31 @@ impl Application {
         }
     }
 
+    /// Runs the loop until the editor goes idle, and returns `false` once it
+    /// should exit. A panic on the loop writes the unsaved buffers before it
+    /// goes on.
     pub async fn event_loop_until_idle<S>(&mut self, input_stream: &mut S) -> bool
+    where
+        S: Stream<Item = std::io::Result<TerminalEvent>> + Unpin,
+    {
+        use futures_util::FutureExt;
+
+        // INVARIANT: after a panic, the write only reads each document's text
+        // and path, which ropey keeps valid through a panicking edit. It
+        // doesn't trust the history, which a panic can leave taken.
+        let looped = std::panic::AssertUnwindSafe(self.loop_until_idle(input_stream))
+            .catch_unwind()
+            .await;
+        match looped {
+            Ok(keep_going) => keep_going,
+            Err(panic) => {
+                self.write_unsaved();
+                std::panic::resume_unwind(panic)
+            }
+        }
+    }
+
+    async fn loop_until_idle<S>(&mut self, input_stream: &mut S) -> bool
     where
         S: Stream<Item = std::io::Result<TerminalEvent>> + Unpin,
     {
@@ -1280,6 +1309,24 @@ impl Application {
             };
         };
         lsp::ShowDocumentResult { success: true }
+    }
+
+    /// Writes the unsaved buffers into the recovery dir, and says where on
+    /// stderr.
+    fn write_unsaved(&self) {
+        use std::io::Write as _;
+
+        let message = match helix_view::recovery::write(self.editor.documents(), &self.recovery_dir)
+        {
+            Ok(Some(report)) => report.to_string(),
+            Ok(None) => return,
+            Err(err) => format!(
+                "Couldn't write unsaved buffers to {}: {err}",
+                self.recovery_dir.display()
+            ),
+        };
+        // WHY: not `eprintln!`, which panics when stderr is gone.
+        let _ = writeln!(std::io::stderr(), "{message}");
     }
 
     fn restore_term(&mut self) -> std::io::Result<()> {

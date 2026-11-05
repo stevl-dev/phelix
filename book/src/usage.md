@@ -31,3 +31,11 @@ Also inspired by Kakoune, multiple selections are a core mode of interaction in 
 
 Motions are commands that move the cursor or modify selections. They're used for navigation and text manipulation. Examples include `w` to move to the next word, or `f` to find a character. See the [Movement](./keymap.md#movement) section of the keymap for more motions.
 
+
+## Recovering unsaved work
+
+If the editor crashes with unsaved buffers, it writes a copy of each one before it exits, and prints where on the terminal. The copies go in a directory of their own for each crash, under `recovery` in the data directory: `~/.local/share/phelix/recovery/<time>-<pid>/` on Linux and macOS, or `%AppData%\phelix\recovery\` on Windows. The data directory falls back to Helix's as the [config directory](./configuration.md) does.
+
+Each copy is a plain UTF-8 file, named after the buffer's path with each `/` (and on Windows each `\` and `:`) replaced by `%`, as in `%home%user%src%main.rs`. A buffer with no path is written as `scratch-<id>`. A path too long for one file name keeps its end behind a hash of the whole path. On Unix, only you can read the copies.
+
+Nothing reads the copies back or deletes them. To recover your work, open a copy, take what you need, and remove the directory.

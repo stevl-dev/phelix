@@ -19,6 +19,7 @@ mod test {
     mod command_line;
     mod commands;
     mod movement;
+    mod recovery;
     mod splits;
     mod statusline;
     mod tabs;

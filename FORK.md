@@ -198,3 +198,12 @@ Each entry says what the feature adds, and where its code, tests, and book pages
 - Code: `own_or_helix_dir`, `config_dir`, `cache_dir`, `data_dir`, and `default_log_file` in `helix-loader/src/lib.rs`, with the unit test in its `dir_tests`. The `.config/phelix/ignore` glob in `languages.toml`.
 - Book: `configuration.md` says how the fallback works and how to move. The pages that name the dirs: `building-from-source.md`, `editor.md`, `install.md`, `languages.md`, `remapping.md`, `themes.md`, `workspace-trust.md`, `guides/tags.md`, `guides/textobject.md`.
 - Relies on: every user dir going through `config_dir`, `cache_dir`, or `data_dir`. A cherry-pick that builds a dir from `etcetera` itself, or names `helix` in a user path, uses them instead.
+
+### crash-recovery
+
+- Plan: `fork/crash-recovery.md`.
+- Adds: when the editor goes down with unsaved buffers, it writes their text to plain files, one dir per crash under `<data_dir>/recovery/`, and says where on stderr. A buffer is written if it's modified, or if its text differs from its file on disk, since a panic can leave `is_modified` wrong.
+- Code: `helix-view/src/recovery.rs` picks the buffers and writes them. `Application::event_loop_until_idle` in `helix-term/src/application.rs` runs the loop under `catch_unwind`, writes on a panic, and resumes it. `Application::new` takes the recovery dir: `phx/src/main.rs` passes the data dir's, and `test_support.rs` a temp one, or the one `AppBuilder::with_recovery_dir` names.
+- Book: `book/src/usage.md`, "Recovering unsaved work".
+- Tests: the unit tests in `recovery.rs`, and `a_panic_on_the_event_loop_writes_the_unsaved_buffers` in `helix-term/tests/test/recovery.rs`.
+- Relies on: termina's panic hook restoring the terminal before the unwind, and `TerminaBackend`'s `Drop` leaving it alone while panicking. A document's text staying readable after a panic in an edit, which ropey keeps.
