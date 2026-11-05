@@ -1,5 +1,5 @@
 {
-  description = "Personal Helix: an opinionated fork of the Helix editor.";
+  description = "Personal Helix: opinionated fork of the Helix editor.";
 
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
