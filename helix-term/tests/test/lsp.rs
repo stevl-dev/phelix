@@ -224,3 +224,83 @@ async fn rename_is_dropped_when_the_buffer_changes_first() -> anyhow::Result<()>
     )
     .await
 }
+
+/// A server that completes `o` to `one`, with an extra edit that comments
+/// out the line once the item is resolved. `ask` is the request it sends
+/// before it answers `completionItem/resolve`.
+fn completion_server(ask: serde_json::Value) -> serde_json::Value {
+    json!({
+        "capabilities": {
+            "completionProvider": { "resolveProvider": true },
+            "textDocumentSync": 2,
+        },
+        "answers": {
+            "textDocument/completion": { "result": [{ "label": "one", "data": 1 }] },
+            "completionItem/resolve": {
+                "ask": ask,
+                "result": {
+                    "label": "one",
+                    "data": 1,
+                    "additionalTextEdits": [{
+                        "range": {
+                            "start": { "line": 0, "character": 0 },
+                            "end": { "line": 0, "character": 0 },
+                        },
+                        "newText": "// ",
+                    }],
+                },
+            },
+        },
+    })
+}
+
+/// Accepts the completion before the editor resolves it on idle, so the
+/// accept resolves it, from a server that sends `ask` first.
+async fn accept_resolves_when_the_server_asks(ask: serde_json::Value) -> anyhow::Result<()> {
+    let (file, _) = fake_file("o\n")?;
+    let mut app = helpers::AppBuilder::new()
+        .with_file(file.path(), None)
+        .with_fake_lsp(completion_server(ask))
+        .build()?;
+    helpers::wait_for_language_servers(&mut app).await;
+
+    test_key_sequences(
+        &mut app,
+        vec![
+            (Some("A<C-x>"), None),
+            (
+                Some("<C-n><ret><esc>"),
+                Some(&|app| {
+                    helpers::assert_status_not_error(&app.editor);
+                    assert_eq!("// one\n", doc!(app.editor).text().to_string());
+                }),
+            ),
+        ],
+        false,
+    )
+    .await
+}
+
+// WHY: two tests, not a table: a second app in one test's runtime registers
+// the editor's hooks again, and its completions never open.
+#[tokio::test(flavor = "multi_thread")]
+async fn completion_resolves_on_accept_when_the_server_asks_for_its_configuration(
+) -> anyhow::Result<()> {
+    accept_resolves_when_the_server_asks(json!({
+        "method": "workspace/configuration",
+        "params": { "items": [{ "section": "fake.answer" }] },
+        "expect": [42],
+    }))
+    .await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn completion_resolves_on_accept_when_the_server_asks_for_its_workspace_folders(
+) -> anyhow::Result<()> {
+    accept_resolves_when_the_server_asks(json!({
+        "method": "workspace/workspaceFolders",
+        "params": null,
+        "expect": [],
+    }))
+    .await
+}

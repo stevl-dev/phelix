@@ -1118,29 +1118,6 @@ impl Application {
                             })
                         }
                     }
-                    Ok(MethodCall::WorkspaceFolders) => {
-                        Ok(json!(&*language_server!().workspace_folders().await))
-                    }
-                    Ok(MethodCall::WorkspaceConfiguration(params)) => {
-                        let language_server = language_server!();
-                        let result: Vec<_> = params
-                            .items
-                            .iter()
-                            .map(|item| {
-                                let mut config = language_server.config()?;
-                                if let Some(section) = item.section.as_ref() {
-                                    // for some reason some lsps send an empty string (observed in 'vscode-eslint-language-server')
-                                    if !section.is_empty() {
-                                        for part in section.split('.') {
-                                            config = config.get(part)?;
-                                        }
-                                    }
-                                }
-                                Some(config)
-                            })
-                            .collect();
-                        Ok(json!(result))
-                    }
                     Ok(MethodCall::RegisterCapability(params)) => {
                         if let Some(client) = self.editor.language_servers.get_by_id(server_id) {
                             for reg in params.registrations {

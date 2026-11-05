@@ -82,6 +82,8 @@ The harness sets no features. A test that needs a feature's commands, tabs, or c
 Its doc comment has the script's format: the capabilities, an answer for each request, a notification to wait for before answering, and a request of its own to send first, with the answer it expects back.
 
 - `AppBuilder::with_fake_lsp(script)` turns LSP on and serves `.fake` files with it. A request it doesn't answer fails in a second.
+  The server's `config` is `{ "fake": { "answer": 42 } }`, so a script can check the editor's answer to `workspace/configuration`.
+- One app per test. A second app in the same test registers the editor's hooks again, and LSP features such as completion stay bound to the first.
 - `wait_for_language_servers` runs the loop until the server is up and has the documents. Before that, LSP commands find no server.
 - A key that opens a menu from an answer, like `<space>a`, goes in a sequence of its own. Keys sent together all run before the answer arrives.
 - To make the buffer change before an answer, have the server wait for `textDocument/didChange`, and type in the next sequence.

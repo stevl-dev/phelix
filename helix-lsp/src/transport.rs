@@ -49,6 +49,10 @@ pub struct Transport {
     inject_tx: UnboundedSender<Payload>,
     /// Notified once the `exit` notification has been flushed to the server's stdin
     shutdown_flushed: Arc<Notify>,
+    /// The client's, for answering `workspace/configuration`.
+    config: Option<Value>,
+    /// The client's, for answering `workspace/workspaceFolders`.
+    workspace_folders: Arc<parking_lot::Mutex<Vec<lsp::WorkspaceFolder>>>,
 }
 
 impl Transport {
@@ -59,6 +63,8 @@ impl Transport {
         server_stderr: BufReader<ChildStderr>,
         id: LanguageServerId,
         name: String,
+        config: Option<Value>,
+        workspace_folders: Arc<parking_lot::Mutex<Vec<lsp::WorkspaceFolder>>>,
     ) -> (
         UnboundedReceiver<(LanguageServerId, jsonrpc::Call)>,
         UnboundedSender<Payload>,
@@ -78,6 +84,8 @@ impl Transport {
             shutdown_requested: AtomicBool::new(false),
             inject_tx,
             shutdown_flushed: shutdown_flushed.clone(),
+            config,
+            workspace_folders,
         };
 
         let transport = Arc::new(transport);
@@ -233,23 +241,78 @@ impl Transport {
                 // vscode-languageserver-node (including gopls) treat an error response to
                 // client/registerCapability as fatal and abort rather than completing the
                 // handshake.
-                let _ = self
-                    .inject_tx
-                    .send(Payload::Response(jsonrpc::Output::Success(
-                        jsonrpc::Success {
-                            jsonrpc: Some(jsonrpc::Version::V2),
-                            id: method_call.id.clone(),
-                            result: serde_json::Value::Null,
-                        },
-                    )));
+                self.reply(method_call.id.clone(), Ok(Value::Null));
             }
             ServerMessage::Call(call) => {
+                if let jsonrpc::Call::MethodCall(method_call) = &call {
+                    if let Some(result) = self.answer(method_call) {
+                        self.reply(method_call.id.clone(), result);
+                        return Ok(());
+                    }
+                }
                 client_tx
                     .send((self.id, call))
                     .context("failed to send a message to server")?;
             }
         };
         Ok(())
+    }
+
+    /// The transport's own answer to a server request, or `None` for one the
+    /// event loop answers.
+    ///
+    /// INVARIANT: the event loop must not answer these. It may be blocked
+    /// waiting on this server, which may be waiting on the answer.
+    fn answer(
+        &self,
+        call: &jsonrpc::MethodCall,
+    ) -> Option<std::result::Result<Value, jsonrpc::Error>> {
+        use lsp::request::{Request, WorkspaceConfiguration, WorkspaceFoldersRequest};
+        match call.method.as_str() {
+            WorkspaceConfiguration::METHOD => Some(
+                call.params
+                    .clone()
+                    .parse()
+                    .map(|params| self.configuration(params)),
+            ),
+            WorkspaceFoldersRequest::METHOD => {
+                Some(Ok(serde_json::json!(&*self.workspace_folders.lock())))
+            }
+            _ => None,
+        }
+    }
+
+    fn configuration(&self, params: lsp::ConfigurationParams) -> Value {
+        let sections: Vec<_> = params
+            .items
+            .iter()
+            .map(|item| {
+                let mut config = self.config.as_ref()?;
+                if let Some(section) = item.section.as_ref() {
+                    // for some reason some lsps send an empty string (observed in 'vscode-eslint-language-server')
+                    if !section.is_empty() {
+                        for part in section.split('.') {
+                            config = config.get(part)?;
+                        }
+                    }
+                }
+                Some(config)
+            })
+            .collect();
+        serde_json::json!(sections)
+    }
+
+    fn reply(&self, id: jsonrpc::Id, result: std::result::Result<Value, jsonrpc::Error>) {
+        let jsonrpc = Some(jsonrpc::Version::V2);
+        let output = match result {
+            Ok(result) => jsonrpc::Output::Success(jsonrpc::Success {
+                jsonrpc,
+                id,
+                result,
+            }),
+            Err(error) => jsonrpc::Output::Failure(jsonrpc::Failure { jsonrpc, id, error }),
+        };
+        let _ = self.inject_tx.send(Payload::Response(output));
     }
 
     async fn process_request_response(

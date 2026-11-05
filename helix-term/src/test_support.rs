@@ -420,6 +420,8 @@ impl AppBuilder {
     /// Turns LSP on, and serves files ending in `.fake` with the fake
     /// language server playing `script`. `src/bin/fake-lsp.rs` has the
     /// script's format. A request that gets no answer fails in a second.
+    /// The server's `config` is `{ "fake": { "answer": 42 } }`, for what the
+    /// editor answers to `workspace/configuration`.
     pub fn with_fake_lsp(mut self, script: serde_json::Value) -> Self {
         let string = |value: &str| toml::Value::String(value.to_owned());
         let languages = format!(
@@ -434,6 +436,7 @@ impl AppBuilder {
             command = {}
             args = [{}]
             timeout = 1
+            config = {{ fake = {{ answer = 42 }} }}
             "#,
             string(&fake_lsp().to_string_lossy()),
             string(&script.to_string()),

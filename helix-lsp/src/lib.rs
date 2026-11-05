@@ -481,8 +481,6 @@ pub mod util {
 pub enum MethodCall {
     WorkDoneProgressCreate(lsp::WorkDoneProgressCreateParams),
     ApplyWorkspaceEdit(lsp::ApplyWorkspaceEditParams),
-    WorkspaceFolders,
-    WorkspaceConfiguration(lsp::ConfigurationParams),
     RegisterCapability(lsp::RegistrationParams),
     UnregisterCapability(lsp::UnregistrationParams),
     ShowDocument(lsp::ShowDocumentParams),
@@ -501,11 +499,6 @@ impl MethodCall {
             lsp::request::ApplyWorkspaceEdit::METHOD => {
                 let params: lsp::ApplyWorkspaceEditParams = params.parse()?;
                 Self::ApplyWorkspaceEdit(params)
-            }
-            lsp::request::WorkspaceFoldersRequest::METHOD => Self::WorkspaceFolders,
-            lsp::request::WorkspaceConfiguration::METHOD => {
-                let params: lsp::ConfigurationParams = params.parse()?;
-                Self::WorkspaceConfiguration(params)
             }
             lsp::request::RegisterCapability::METHOD => {
                 let params: lsp::RegistrationParams = params.parse()?;

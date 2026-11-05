@@ -125,7 +125,7 @@ Each phase is one commit that builds and passes its tests, and marks itself done
 | 1 | Done | Add a fake language server for the integration tests. | The `fake-lsp` binary and its script format. The helper in `helix-term/src/test_support.rs`. The `gd` test. The section in `agents/TESTING.md`. |
 | 2 | Done | Resolve code actions from the menu without blocking. | `helix-view/src/action.rs` and the menu in `helix-term/src/commands/lsp.rs`. The two tests. |
 | 3 | Done | Send rename requests without blocking. | `rename_symbol` in `helix-term/src/commands/lsp.rs` and `rename` in `helix-review/src/term/lsp.rs`. The two tests for each. |
-| 4 | | Answer configuration and workspace folders in the transport. | `helix-lsp/src/transport.rs` and `client.rs`. The two arms in `application.rs` go. The two completion tests. |
+| 4 | Done | Answer configuration and workspace folders in the transport. | `helix-lsp/src/transport.rs` and `client.rs`. The two arms in `application.rs` go. The two completion tests. |
 
 Phase 1 comes first, because every later phase needs it for its tests.
 Phase 2 is the riskiest: it changes the type that upstream's June refactor (`bc27d0113`) introduced, so it goes as early as the harness allows.
@@ -191,3 +191,11 @@ Phase 3:
 - The three sites share one check, `still_at_version` in `helix-term/src/commands/lsp.rs`. It takes the review's wording: "<file> changed, so nothing was renamed", or "The file closed, so …". The code action menu from phase 2 uses it too, and the review's check before the request goes out.
 - The review's rename had no test. Its first test also checks that `u` undoes the rename as one step, since the revisions for that step are now taken in the callback.
 - All four tests failed before the change: the two that ask for configuration timed out, and the two stale ones applied nothing and showed no message.
+
+Phase 4:
+
+- The two answers left `application.rs`, and their variants left `MethodCall`. A malformed `workspace/configuration` now gets its invalid-params error from the transport. `Client::workspace_folders()` had no other caller and went.
+- The transport's replies skip the queue that holds the editor's messages until the server is initialized. Before, the event loop's answer to a configuration request sent during `initialize` waited in that queue, so a server that asked then never finished initializing. It now gets its answer.
+- `with_fake_lsp` gives the server a fixed `config`, so the configuration test checks the answer (`[42]`), not only that one came.
+- The two completion tests are two tests, not one table: a second app in one test's runtime registers the editor's hooks again, and its completion menu never opened. `agents/TESTING.md` says so.
+- Both tests failed without the transport change and pass with it.

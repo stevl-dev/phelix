@@ -64,7 +64,7 @@ pub struct Client {
     config: Option<Value>,
     root_path: std::path::PathBuf,
     root_uri: Option<lsp::Url>,
-    workspace_folders: Mutex<Vec<lsp::WorkspaceFolder>>,
+    workspace_folders: Arc<Mutex<Vec<lsp::WorkspaceFolder>>>,
     initialize_notify: Arc<Notify>,
     /// Notified by the transport once `exit` has been flushed to the server's stdin.
     shutdown_flushed: Arc<Notify>,
@@ -245,13 +245,21 @@ impl Client {
         let reader = BufReader::new(process.stdout.take().expect("Failed to open stdout"));
         let stderr = BufReader::new(process.stderr.take().expect("Failed to open stderr"));
 
-        let (server_rx, server_tx, initialize_notify, shutdown_flushed) =
-            Transport::start(reader, writer, stderr, id, name.clone());
-
         let workspace_folders = root_uri
             .clone()
             .map(|root| vec![workspace_for_uri(root)])
             .unwrap_or_default();
+        let workspace_folders = Arc::new(Mutex::new(workspace_folders));
+
+        let (server_rx, server_tx, initialize_notify, shutdown_flushed) = Transport::start(
+            reader,
+            writer,
+            stderr,
+            id,
+            name.clone(),
+            config.clone(),
+            workspace_folders.clone(),
+        );
 
         let client = Self {
             id,
@@ -265,7 +273,7 @@ impl Client {
             req_timeout,
             root_path,
             root_uri,
-            workspace_folders: Mutex::new(workspace_folders),
+            workspace_folders,
             initialize_notify: initialize_notify.clone(),
             shutdown_flushed,
         };
@@ -428,12 +436,6 @@ impl Client {
 
     pub fn config(&self) -> Option<&Value> {
         self.config.as_ref()
-    }
-
-    pub async fn workspace_folders(
-        &self,
-    ) -> parking_lot::MutexGuard<'_, Vec<lsp::WorkspaceFolder>> {
-        self.workspace_folders.lock()
     }
 
     /// Execute a RPC request on the language server.
