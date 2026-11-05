@@ -491,18 +491,25 @@ pub async fn run_event_loop_until_idle(app: &mut Application) {
 }
 
 /// Runs the loop until every language server has started, and the editor
-/// has opened its documents with them.
+/// has opened its documents with them. Fails after 10 s, as a server that
+/// failed to initialize never counts as started.
 pub async fn wait_for_language_servers(app: &mut Application) {
+    const TIMEOUT: Duration = Duration::from_secs(10);
     assert!(
         app.editor.language_servers.iter_clients().next().is_some(),
         "no language server started"
     );
+    let start = std::time::Instant::now();
     while !app
         .editor
         .language_servers
         .iter_clients()
         .all(|server| server.is_initialized())
     {
+        assert!(
+            start.elapsed() < TIMEOUT,
+            "a language server didn't start in {TIMEOUT:?}. Its log says why."
+        );
         app.editor.reset_idle_timer();
         run_event_loop_until_idle(app).await;
     }
