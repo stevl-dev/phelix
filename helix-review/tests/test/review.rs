@@ -1284,6 +1284,97 @@ async fn lsp_keys_in_the_review_ask_from_the_rows_file() -> anyhow::Result<()> {
     .await
 }
 
+/// A review of `a.fake`, changed from `one` to `one one`, with a fake
+/// language server that renames both words to `two`. `rename` is added to
+/// how it answers `textDocument/rename`.
+async fn renaming(rename: serde_json::Value) -> anyhow::Result<(TempDir, PathBuf, Application)> {
+    let repo = repo(&[("a.fake", "one\n")], &[("a.fake", Some("one one\n"))]);
+    let file = repo.path().join("a.fake");
+    let uri = lsp::Url::from_file_path(helix_stdx::path::canonicalize(&file)).unwrap();
+    let word = |start: u32| {
+        serde_json::json!({
+            "range": {
+                "start": { "line": 0, "character": start },
+                "end": { "line": 0, "character": start + 3 },
+            },
+            "newText": "two",
+        })
+    };
+    let mut rename = rename;
+    rename["result"] = serde_json::json!({ "changes": { uri.as_str(): [word(0), word(4)] } });
+    let mut app = builder()
+        .with_file(file.clone(), None)
+        .with_fake_lsp(serde_json::json!({
+            "capabilities": { "renameProvider": true, "textDocumentSync": 2 },
+            "answers": { "textDocument/rename": rename },
+        }))
+        .build()?;
+    wait_for_language_servers(&mut app).await;
+    start_review(&mut app).await?;
+    Ok((repo, file, app))
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn rename_in_the_review_applies_when_the_server_asks_the_editor_first() -> anyhow::Result<()>
+{
+    let (_repo, file, mut app) = renaming(serde_json::json!({ "ask": {
+        "method": "workspace/configuration",
+        "params": { "items": [{ "section": "fake" }] },
+    }}))
+    .await?;
+
+    test_key_sequences(
+        &mut app,
+        vec![
+            (
+                Some("/^one one<ret><space>r<ret>"),
+                Some(&|app| {
+                    assert_eq!(status(app), "");
+                    assert_eq!(buffer_text(app, &file).as_deref(), Some("two two\n"));
+                }),
+            ),
+            (
+                Some("u"),
+                Some(&|app| {
+                    assert_eq!(
+                        buffer_text(app, &file).as_deref(),
+                        Some("one one\n"),
+                        "the rename is one step of the review's undo"
+                    );
+                }),
+            ),
+        ],
+        false,
+    )
+    .await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn rename_in_the_review_is_dropped_when_the_file_changes_first() -> anyhow::Result<()> {
+    let (_repo, file, mut app) =
+        renaming(serde_json::json!({ "after": "textDocument/didChange" })).await?;
+
+    test_key_sequences(
+        &mut app,
+        vec![
+            (Some("/^one one<ret><space>r<ret>"), None),
+            (
+                Some("ix<esc>"),
+                Some(&|app| {
+                    assert_eq!(buffer_text(app, &file).as_deref(), Some("xone one\n"));
+                    let name = app.editor.document_by_path(&file).unwrap().display_name();
+                    assert_eq!(
+                        status(app),
+                        format!("{name} changed, so nothing was renamed")
+                    );
+                }),
+            ),
+        ],
+        false,
+    )
+    .await
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn signature_help_in_the_review_asks_from_the_rows_file() -> anyhow::Result<()> {
     use helix_core::hashmap;

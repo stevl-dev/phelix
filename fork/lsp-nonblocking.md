@@ -124,7 +124,7 @@ Each phase is one commit that builds and passes its tests, and marks itself done
 | 0 | Done | Add the plan for LSP requests off the event loop. | This file. |
 | 1 | Done | Add a fake language server for the integration tests. | The `fake-lsp` binary and its script format. The helper in `helix-term/src/test_support.rs`. The `gd` test. The section in `agents/TESTING.md`. |
 | 2 | Done | Resolve code actions from the menu without blocking. | `helix-view/src/action.rs` and the menu in `helix-term/src/commands/lsp.rs`. The two tests. |
-| 3 | | Send rename requests without blocking. | `rename_symbol` in `helix-term/src/commands/lsp.rs` and `rename` in `helix-review/src/term/lsp.rs`. The two tests for each. |
+| 3 | Done | Send rename requests without blocking. | `rename_symbol` in `helix-term/src/commands/lsp.rs` and `rename` in `helix-review/src/term/lsp.rs`. The two tests for each. |
 | 4 | | Answer configuration and workspace folders in the transport. | `helix-lsp/src/transport.rs` and `client.rs`. The two arms in `application.rs` go. The two completion tests. |
 
 Phase 1 comes first, because every later phase needs it for its tests.
@@ -185,3 +185,9 @@ Phase 2:
 - A resolve that fails, a timeout included, still applies the action as the server sent it, as before. Only a stale answer is dropped.
 - The editor sends `didChange` only to a server that announces `textDocumentSync`. The stale test's script announces it, and `agents/TESTING.md` says so.
 - Both tests failed before the change: the first timed out on the configuration request, and the second applied nothing and showed no message.
+
+Phase 3:
+
+- The three sites share one check, `still_at_version` in `helix-term/src/commands/lsp.rs`. It takes the review's wording: "<file> changed, so nothing was renamed", or "The file closed, so …". The code action menu from phase 2 uses it too, and the review's check before the request goes out.
+- The review's rename had no test. Its first test also checks that `u` undoes the rename as one step, since the revisions for that step are now taken in the callback.
+- All four tests failed before the change: the two that ask for configuration timed out, and the two stale ones applied nothing and showed no message.

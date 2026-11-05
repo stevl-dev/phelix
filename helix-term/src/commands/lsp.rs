@@ -1,6 +1,5 @@
 use futures_util::{stream::FuturesUnordered, FutureExt};
 use helix_lsp::{
-    block_on,
     lsp::{
         self, CodeAction, CodeActionKind, CodeActionOrCommand, CodeActionTriggerKind,
         DiagnosticSeverity, NumberOrString,
@@ -679,17 +678,10 @@ pub fn code_action(cx: &mut Context) {
                 };
                 tokio::spawn(async move {
                     let finish = pending.await;
-                    job::dispatch(move |editor, _| match editor.document(doc_id) {
-                        Some(doc) if doc.version() == version => finish(editor),
-                        Some(doc) => {
-                            let error = format!(
-                                "{} changed, so the code action wasn't applied",
-                                doc.display_name()
-                            );
-                            editor.set_error(error);
-                        }
-                        None => {
-                            editor.set_error("The file closed, so the code action wasn't applied")
+                    job::dispatch(move |editor, _| {
+                        let dropped = "the code action wasn't applied";
+                        if still_at_version(editor, doc_id, version, dropped) {
+                            finish(editor);
                         }
                     })
                     .await;
@@ -1196,6 +1188,23 @@ pub fn hover(cx: &mut Context) {
     });
 }
 
+/// Whether the document is still at `version`. If it changed or closed, the
+/// status line says so, and that `dropped`.
+pub fn still_at_version(
+    editor: &mut Editor,
+    doc_id: DocumentId,
+    version: i32,
+    dropped: &str,
+) -> bool {
+    let error = match editor.document(doc_id) {
+        Some(doc) if doc.version() == version => return true,
+        Some(doc) => format!("{} changed, so {dropped}", doc.display_name()),
+        None => format!("The file closed, so {dropped}"),
+    };
+    editor.set_error(error);
+    false
+}
+
 pub fn rename_symbol(cx: &mut Context) {
     fn get_prefill_from_word_boundary(editor: &Editor) -> String {
         let (view, doc) = current_ref!(editor);
@@ -1262,18 +1271,24 @@ pub fn rename_symbol(cx: &mut Context) {
 
                 let offset_encoding = language_server.offset_encoding();
                 let pos = doc.position(view.id, offset_encoding);
+                let (doc_id, version) = (doc.id(), doc.version());
                 let future = language_server
                     .rename_symbol(doc.identifier(), pos, input.to_string())
                     .unwrap();
 
-                match block_on(future) {
-                    Ok(edits) => {
-                        let _ = cx
-                            .editor
-                            .apply_workspace_edit(offset_encoding, &edits.unwrap_or_default());
-                    }
-                    Err(err) => cx.editor.set_error(err.to_string()),
-                }
+                cx.jobs.callback(async move {
+                    let answer = future.await;
+                    let call = move |editor: &mut Editor, _: &mut Compositor| {
+                        let edits = match answer {
+                            Ok(edits) => edits.unwrap_or_default(),
+                            Err(err) => return editor.set_error(err.to_string()),
+                        };
+                        if still_at_version(editor, doc_id, version, "nothing was renamed") {
+                            let _ = editor.apply_workspace_edit(offset_encoding, &edits);
+                        }
+                    };
+                    Ok(Callback::EditorCompositor(Box::new(call)))
+                });
             },
         )
         .with_line(prefill, editor);

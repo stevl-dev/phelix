@@ -5,10 +5,12 @@
 use crate::view as review;
 use helix_core::syntax::config::LanguageServerFeature;
 use helix_core::textobject::{textobject_word, TextObject};
-use helix_lsp::block_on;
-use helix_view::doc;
+use helix_lsp::{lsp, OffsetEncoding};
+use helix_view::{doc, Editor};
 
-use helix_term::commands::{Context, MappableCommand};
+use helix_term::commands::{still_at_version, Context, MappableCommand};
+use helix_term::compositor::Compositor;
+use helix_term::job::Callback;
 use helix_term::ui::{self, PromptEvent};
 
 /// The review's version of `command`, swapped into the review's keymap.
@@ -68,16 +70,7 @@ fn rename(cx: &mut Context) {
             if event != PromptEvent::Validate {
                 return;
             }
-            let Some(doc) = cx.editor.documents.get(&file) else {
-                cx.editor
-                    .set_error("The file closed, so nothing was renamed");
-                return;
-            };
-            if doc.version() != version {
-                cx.editor.set_error(format!(
-                    "{} changed, so nothing was renamed",
-                    doc.display_name()
-                ));
+            if !still_at_version(cx.editor, file, version, "nothing was renamed") {
                 return;
             }
             let Some(server) = cx.editor.language_server_by_id(server) else {
@@ -85,35 +78,48 @@ fn rename(cx: &mut Context) {
                 return;
             };
             let future = server
-                .rename_symbol(doc.identifier(), position, input.to_string())
+                .rename_symbol(
+                    doc!(cx.editor, &file).identifier(),
+                    position,
+                    input.to_string(),
+                )
                 .expect("the server supports renaming");
-            let edit = match block_on(future) {
-                Ok(edit) => edit.unwrap_or_default(),
-                Err(err) => {
-                    cx.editor.set_error(err.to_string());
-                    return;
-                }
-            };
-            // WHY: the rename is one step of the review's undo log, as an
-            // edit is. A file it opens starts at revision 0.
-            let mut before: Vec<_> = cx
-                .editor
-                .documents
-                .iter_mut()
-                .map(|(&id, doc)| (id, doc.get_current_revision()))
-                .collect();
-            let _ = cx.editor.apply_workspace_edit(encoding, &edit);
-            let opened: Vec<_> = cx
-                .editor
-                .documents
-                .keys()
-                .filter(|id| !before.iter().any(|(known, _)| known == *id))
-                .map(|&id| (id, 0))
-                .collect();
-            before.extend(opened);
-            review::log_step(cx.editor, &before);
+            cx.jobs.callback(async move {
+                let answer = future.await;
+                let call = move |editor: &mut Editor, _: &mut Compositor| {
+                    let edit = match answer {
+                        Ok(edit) => edit.unwrap_or_default(),
+                        Err(err) => return editor.set_error(err.to_string()),
+                    };
+                    if still_at_version(editor, file, version, "nothing was renamed") {
+                        apply(editor, encoding, &edit);
+                    }
+                };
+                Ok(Callback::EditorCompositor(Box::new(call)))
+            });
         },
     )
     .with_line(prefill, cx.editor);
     cx.push_layer(Box::new(prompt));
+}
+
+fn apply(editor: &mut Editor, encoding: OffsetEncoding, edit: &lsp::WorkspaceEdit) {
+    // WHY: the rename is one step of the review's undo log, as an edit is. A
+    // file it opens starts at revision 0. The revisions are taken here, not
+    // when the request goes out, so an edit in another file meanwhile isn't
+    // part of the step.
+    let mut before: Vec<_> = editor
+        .documents
+        .iter_mut()
+        .map(|(&id, doc)| (id, doc.get_current_revision()))
+        .collect();
+    let _ = editor.apply_workspace_edit(encoding, edit);
+    let opened: Vec<_> = editor
+        .documents
+        .keys()
+        .filter(|id| !before.iter().any(|(known, _)| known == *id))
+        .map(|&id| (id, 0))
+        .collect();
+    before.extend(opened);
+    review::log_step(editor, &before);
 }

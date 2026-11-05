@@ -1664,6 +1664,7 @@ dependencies = [
  "log",
  "parking_lot",
  "serde",
+ "serde_json",
  "tempfile",
  "termina",
  "tokio",
