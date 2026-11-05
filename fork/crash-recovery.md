@@ -3,7 +3,7 @@
 Snapshot: `main` at `f01713111`, on upstream `master` at `ba40e547`.
 Goes in `fork/crash-recovery.md`. Feature slug: `crash-recovery`.
 
-Status: approved 2026-11-05.
+Status: approved 2026-11-05. All phases done. The manual checks are the human's.
 
 ## Bottom line
 
@@ -94,7 +94,7 @@ Each phase is one commit that builds and passes its tests, and marks itself done
 | 0 | Done | Add the crash recovery plan. | This file. |
 | 1 | Done | Write unsaved buffers to a recovery dir when the event loop panics. | `helix-view/src/recovery.rs`. The catch in `event_loop_until_idle`. The recovery dir passed through `Application::new` from `phx/src/main.rs`, with a temp dir from `helix-term/src/test_support.rs`. A unit test of the write into a temp dir: a modified file, an unmodified one that isn't written, an edited one whose history was reset so `is_modified` says false, a scratch buffer, two files with the same name in different dirs, a path whose name is too long, a missing `recovery/`, and the modes. An integration test: edit a buffer, dispatch a job that panics, and run the loop under `catch_unwind`. The panic still reaches the test, and the dir holds the edited text. A "Recovering unsaved work" section in `book/src/usage.md`. A `crash-recovery` entry in `FORK.md`. |
 | 2 | Done | Write unsaved buffers on SIGTERM, SIGINT, and a hangup. | `handle_signals`, with SIGHUP registered. An input error handled as a hangup. `run` skipping the terminal after a hangup. A table-driven integration test after an edit, with SIGTERM, SIGINT, SIGHUP, and an input error: the loop stops and the dir holds the text. With nothing modified, no dir is made. A test that `run` returns 129 after a hangup. The book section and the `FORK.md` entry. |
-| 3 | | Say at startup where unsaved work from a crash is. | `Application::new` checks the recovery dir, sets the status line, and marks what it named as seen. A unit test of the check: a missing dir, an empty one, one holding a new crash's dir, one holding only seen ones, and one holding both, where only the new one is named. An integration test: an app built with a new crash's dir shows the message, and a second app built on the same dir shows none. The book section. |
+| 3 | Done | Say at startup where unsaved work from a crash is. | `Application::new` checks the recovery dir, sets the status line, and marks what it named as seen. A unit test of the check: a missing dir, an empty one, one holding a new crash's dir, one holding only seen ones, and one holding both, where only the new one is named. An integration test: an app built with a new crash's dir shows the message, and a second app built on the same dir shows none. The book section. |
 
 Phase 1 goes first because it's the riskiest: it decides whether the write can trust a document after a panic.
 Phase 2 reuses the write. Phase 3 is the only way the human hears about a hangup, because stderr went with the terminal.
@@ -159,3 +159,8 @@ Phase 2:
 - Every error from the input stream counts as a hangup. Today each one panics, so ending with the buffers written is no worse for an error that isn't one.
 - The table test calls `handle_signals` for each signal rather than raising it: signals reach the whole test process, and every app in it registers handlers.
 - `run` skipping the terminal after a hangup has no test: the test backend's `restore` can't fail. Phase 2's manual check is what shows it.
+
+Phase 3:
+
+- The notice is a warning, so it stands out, and it replaces "Loaded N files.". One new crash is named by its dir. Several are counted, with the recovery dir: "Unsaved work from 3 crashes is in …".
+- The check only lists and marks dirs, so a recovery dir that can't be read gives no notice rather than an error at startup.

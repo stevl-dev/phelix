@@ -239,6 +239,20 @@ impl Application {
                 .unwrap_or_else(|_| editor.new_file(Action::VerticalSplit));
         }
 
+        let crashes = helix_view::recovery::take_unnamed(&recovery_dir);
+        match crashes.as_slice() {
+            [] => {}
+            [crash] => editor.set_warning(format!(
+                "Unsaved work from a crash is in {}",
+                crash.display()
+            )),
+            _ => editor.set_warning(format!(
+                "Unsaved work from {} crashes is in {}",
+                crashes.len(),
+                recovery_dir.display()
+            )),
+        }
+
         #[cfg(windows)]
         let signals = futures_util::stream::empty();
         #[cfg(not(windows))]

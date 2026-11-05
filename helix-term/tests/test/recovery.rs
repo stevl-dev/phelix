@@ -103,3 +103,32 @@ async fn ending_with_nothing_unsaved_makes_no_recovery_dir() -> anyhow::Result<(
     assert!(!setup.recovery_dir.exists());
     Ok(())
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_start_names_a_crash_once() -> anyhow::Result<()> {
+    use helix_core::diagnostic::Severity;
+
+    let data_dir = tempfile::tempdir()?;
+    let recovery_dir = data_dir.path().join("recovery");
+    let crash = recovery_dir.join("1-1");
+    fs::create_dir_all(&crash)?;
+    fs::write(crash.join("scratch-1"), "one\n")?;
+    let start = || {
+        helpers::AppBuilder::new()
+            .with_recovery_dir(&recovery_dir)
+            .build()
+    };
+
+    let first = start()?;
+    let (status, severity) = first.editor.get_status().expect("a status");
+    assert_eq!(
+        status,
+        &format!("Unsaved work from a crash is in {}", crash.display())
+    );
+    assert_eq!(severity, &Severity::Warning);
+    drop(first);
+
+    assert_eq!(start()?.editor.get_status(), None);
+    assert!(crash.join("scratch-1").exists());
+    Ok(())
+}

@@ -33,7 +33,7 @@ Motions are commands that move the cursor or modify selections. They're used for
 
 ## Recovering unsaved work
 
-If the editor crashes with unsaved buffers, or a signal ends it (`SIGTERM`, `SIGINT`, or `SIGHUP`, which closing its terminal sends), it writes a copy of each one before it exits, and prints where on the terminal. When the terminal is gone, there's nowhere to print, but the copies are still written. The copies go in a directory of their own for each crash, under `recovery` in the data directory: `~/.local/share/phelix/recovery/<time>-<pid>/` on Linux and macOS, or `%AppData%\phelix\recovery\` on Windows. The data directory falls back to Helix's as the [config directory](./configuration.md) does.
+If the editor crashes with unsaved buffers, or a signal ends it (`SIGTERM`, `SIGINT`, or `SIGHUP`, which closing its terminal sends), it writes a copy of each one before it exits, and prints where on the terminal. When the terminal is gone, there's nowhere to print, but the copies are still written. Either way, the next start says where they are, once for each crash. The copies go in a directory of their own for each crash, under `recovery` in the data directory: `~/.local/share/phelix/recovery/<time>-<pid>/` on Linux and macOS, or `%AppData%\phelix\recovery\` on Windows. The data directory falls back to Helix's as the [config directory](./configuration.md) does.
 
 Each copy is a plain UTF-8 file, named after the buffer's path with each `/` (and on Windows each `\` and `:`) replaced by `%`, as in `%home%user%src%main.rs`. A buffer with no path is written as `scratch-<id>`. A path too long for one file name keeps its end behind a hash of the whole path. On Unix, only you can read the copies.
 

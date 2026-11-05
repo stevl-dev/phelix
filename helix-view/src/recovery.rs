@@ -1,8 +1,9 @@
 //! Copies of unsaved buffers, written when the editor goes down.
 //!
 //! [`write()`] gives each crash a dir of its own under the recovery dir, with one
-//! plain UTF-8 file per buffer that any program opens. Nothing here reads the
-//! copies back or deletes them.
+//! plain UTF-8 file per buffer that any program opens. [`take_unnamed`] finds
+//! the crashes the next start should name. Nothing here reads the copies back
+//! or deletes them.
 //!
 //! It runs after a panic, so it trusts as little as it can: plain `std::fs`,
 //! since the async runtime may be going down, and no trust in a document's
@@ -24,6 +25,9 @@ use crate::{document::from_reader, Document};
 const NAME_MAX: usize = 255;
 /// How much of a too-long name is kept, from its end.
 const TAIL_LEN: usize = 200;
+/// The file in a crash's dir that says a start has named it. No copy's name
+/// starts with a `.`: a path's starts with `%`, a drive letter, or its hash.
+const SEEN: &str = ".seen";
 
 /// What [`write()`] wrote into a crash's dir, and what it couldn't.
 #[derive(Debug)]
@@ -166,6 +170,24 @@ fn write_copy(path: &Path, text: &Rope) -> io::Result<()> {
     file.flush()
 }
 
+/// The crash dirs under `recovery_dir` that no start has named yet, oldest
+/// first, each marked as named so the next call leaves it out. A dir whose mark
+/// can't be written is named again next time.
+pub fn take_unnamed(recovery_dir: &Path) -> Vec<PathBuf> {
+    let Ok(entries) = fs::read_dir(recovery_dir) else {
+        return Vec::new();
+    };
+    let mut crashes: Vec<_> = entries
+        .filter_map(|entry| entry.ok().map(|entry| entry.path()))
+        .filter(|dir| dir.is_dir() && !dir.join(SEEN).exists())
+        .collect();
+    crashes.sort();
+    for dir in &crashes {
+        let _ = fs::File::create(dir.join(SEEN));
+    }
+    crashes
+}
+
 #[cfg(test)]
 mod tests {
     use std::sync::Arc;
@@ -304,5 +326,29 @@ mod tests {
         let mode = |path: &Path| fs::metadata(path).unwrap().permissions().mode() & 0o777;
         assert_eq!(mode(&report.dir), 0o700);
         assert_eq!(mode(&report.written[0]), 0o600);
+    }
+
+    #[test]
+    fn take_unnamed_names_each_crash_once() {
+        let tmp = tempfile::tempdir().unwrap();
+        let recovery_dir = tmp.path().join("recovery");
+        assert!(take_unnamed(&recovery_dir).is_empty(), "a missing dir");
+        fs::create_dir(&recovery_dir).unwrap();
+        assert!(take_unnamed(&recovery_dir).is_empty(), "an empty dir");
+
+        let first = write([&scratch("one\n", 1)], &recovery_dir)
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            take_unnamed(&recovery_dir),
+            std::slice::from_ref(&first.dir)
+        );
+        assert!(take_unnamed(&recovery_dir).is_empty(), "only seen crashes");
+
+        let second = recovery_dir.join("0-1");
+        fs::create_dir(&second).unwrap();
+        fs::write(second.join("scratch-1"), "two\n").unwrap();
+        assert_eq!(take_unnamed(&recovery_dir), [second]);
+        assert!(first.dir.exists(), "naming deletes nothing");
     }
 }
