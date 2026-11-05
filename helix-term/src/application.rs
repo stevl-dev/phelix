@@ -82,6 +82,8 @@ pub struct Application {
 
     /// Where unsaved buffers go when the editor goes down.
     recovery_dir: PathBuf,
+    /// Whether the terminal is gone, so nothing may write to it or to stderr.
+    hung_up: bool,
 }
 
 #[cfg(feature = "integration")]
@@ -246,6 +248,7 @@ impl Application {
             signal::SIGUSR1,
             signal::SIGTERM,
             signal::SIGINT,
+            signal::SIGHUP,
         ])
         .context("build signal handler")?;
 
@@ -259,6 +262,7 @@ impl Application {
             lsp_progress: LspProgressMap::new(),
             theme_mode,
             recovery_dir,
+            hung_up: false,
         };
 
         Ok(app)
@@ -333,7 +337,7 @@ impl Application {
         match looped {
             Ok(keep_going) => keep_going,
             Err(panic) => {
-                self.write_unsaved();
+                print_to_stderr(self.write_unsaved());
                 std::panic::resume_unwind(panic)
             }
         }
@@ -359,7 +363,15 @@ impl Application {
                     };
                 }
                 Some(event) = input_stream.next() => {
-                    self.handle_terminal_events(event).await;
+                    match event {
+                        Ok(event) => self.handle_terminal_events(event).await,
+                        // WHY: closing the terminal can show up here before
+                        // its SIGHUP does.
+                        Err(_) => {
+                            self.hang_up();
+                            return false;
+                        }
+                    }
                 }
                 Some(callback) = self.jobs.callbacks.recv() => {
                     if let Some(job) = self.jobs.handle_callback(&mut self.editor, &mut self.compositor, Ok(Some(callback))) {
@@ -608,7 +620,13 @@ impl Application {
                 self.render().await;
             }
             signal::SIGTERM | signal::SIGINT => {
+                let message = self.write_unsaved();
                 self.restore_term().unwrap();
+                print_to_stderr(message);
+                return false;
+            }
+            signal::SIGHUP => {
+                self.hang_up();
                 return false;
             }
             _ => unreachable!(),
@@ -738,7 +756,7 @@ impl Application {
         false
     }
 
-    pub async fn handle_terminal_events(&mut self, event: std::io::Result<TerminalEvent>) {
+    pub async fn handle_terminal_events(&mut self, event: TerminalEvent) {
         #[cfg(not(windows))]
         use termina::escape::csi;
 
@@ -748,7 +766,7 @@ impl Application {
             scroll: None,
         };
         // Handle key events
-        let should_redraw = match event.unwrap() {
+        let should_redraw = match event {
             #[cfg(not(windows))]
             termina::Event::WindowResized(termina::WindowSize { rows, cols, .. }) => {
                 self.terminal
@@ -1311,22 +1329,25 @@ impl Application {
         lsp::ShowDocumentResult { success: true }
     }
 
-    /// Writes the unsaved buffers into the recovery dir, and says where on
-    /// stderr.
-    fn write_unsaved(&self) {
-        use std::io::Write as _;
-
-        let message = match helix_view::recovery::write(self.editor.documents(), &self.recovery_dir)
-        {
-            Ok(Some(report)) => report.to_string(),
-            Ok(None) => return,
-            Err(err) => format!(
+    /// Writes the unsaved buffers into the recovery dir, and returns what to
+    /// tell the human, if anything.
+    fn write_unsaved(&self) -> Option<String> {
+        match helix_view::recovery::write(self.editor.documents(), &self.recovery_dir) {
+            Ok(report) => report.map(|report| report.to_string()),
+            Err(err) => Some(format!(
                 "Couldn't write unsaved buffers to {}: {err}",
                 self.recovery_dir.display()
-            ),
-        };
-        // WHY: not `eprintln!`, which panics when stderr is gone.
-        let _ = writeln!(std::io::stderr(), "{message}");
+            )),
+        }
+    }
+
+    /// The terminal is gone. Writes the unsaved buffers without saying where,
+    /// since nothing may write to the terminal or stderr from here on.
+    fn hang_up(&mut self) {
+        let _ = self.write_unsaved();
+        self.hung_up = true;
+        // As a shell reports a death by SIGHUP.
+        self.editor.exit_code = 129;
     }
 
     fn restore_term(&mut self) -> std::io::Result<()> {
@@ -1388,6 +1409,9 @@ impl Application {
 
         let close_errs = self.close().await;
 
+        if self.hung_up {
+            return Ok(self.editor.exit_code);
+        }
         self.restore_term()?;
 
         for err in close_errs {
@@ -1421,6 +1445,15 @@ impl Application {
         self.editor.close_language_servers(None).await;
 
         errs
+    }
+}
+
+fn print_to_stderr(message: Option<String>) {
+    use std::io::Write as _;
+
+    if let Some(message) = message {
+        // WHY: not `eprintln!`, which panics when stderr is gone.
+        let _ = writeln!(std::io::stderr(), "{message}");
     }
 }
 
