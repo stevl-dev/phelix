@@ -1,20 +1,29 @@
 use std::{borrow::Cow, fmt};
 
-use helix_lsp::{lsp, LanguageServerId};
+use futures_util::future::BoxFuture;
+use helix_lsp::{lsp, LanguageServerId, OffsetEncoding};
 
 use crate::Editor;
 
 /// A titled action against the editor, shown in the code action menu.
 ///
-/// LSP code actions are converted into `Action`s, but the type is provider-agnostic: internal
-/// features (for example the spell checker) produce `Action`s the same way, so they appear in the
-/// same menu without the menu knowing where they came from.
+/// LSP code actions are converted into `Action`s, but the type is provider-agnostic, so the menu
+/// doesn't know where an action came from.
 pub struct Action {
     title: Cow<'static, str>,
     /// Sort key; higher priority actions are shown first. See `lsp_code_action_priority`.
     pub priority: u8,
-    action: Box<dyn Fn(&mut Editor) + Send + Sync + 'static>,
+    action: Box<Run>,
 }
+
+type Run = dyn Fn(&mut Editor) -> Option<Pending> + Send + Sync;
+
+/// An action that waits on its provider first, such as a code action the language server has to
+/// resolve. The caller awaits it off the event loop, and runs its output on the loop.
+pub type Pending = BoxFuture<'static, Finish>;
+
+/// What finishes a pending action, once its provider has answered.
+pub type Finish = Box<dyn FnOnce(&mut Editor) + Send>;
 
 impl fmt::Debug for Action {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -26,7 +35,10 @@ impl fmt::Debug for Action {
 }
 
 impl Action {
-    pub fn new<T: Into<Cow<'static, str>>, F: Fn(&mut Editor) + Send + Sync + 'static>(
+    pub fn new<
+        T: Into<Cow<'static, str>>,
+        F: Fn(&mut Editor) -> Option<Pending> + Send + Sync + 'static,
+    >(
         title: T,
         priority: u8,
         action: F,
@@ -42,8 +54,9 @@ impl Action {
         &self.title
     }
 
-    pub fn execute(&self, editor: &mut Editor) {
-        (self.action)(editor);
+    /// Runs the action, or starts it and returns what it waits on.
+    pub fn execute(&self, editor: &mut Editor) -> Option<Pending> {
+        (self.action)(editor)
     }
 
     /// Builds an `Action` from an LSP code action or command.
@@ -57,40 +70,57 @@ impl Action {
         Self::new(title, priority, move |editor| {
             let Some(language_server) = editor.language_server_by_id(server_id) else {
                 editor.set_error("Language Server disappeared");
-                return;
+                return None;
             };
             let offset_encoding = language_server.offset_encoding();
             match &action {
                 lsp::CodeActionOrCommand::Command(command) => {
                     log::debug!("code action command: {:?}", command);
                     editor.execute_lsp_command(command.clone(), server_id);
+                    None
                 }
                 lsp::CodeActionOrCommand::CodeAction(code_action) => {
                     log::debug!("code action: {:?}", code_action);
                     // We support lsp "codeAction/resolve" for `edit` and `command` fields.
-                    let resolved;
-                    let code_action = if code_action.edit.is_none() || code_action.command.is_none()
-                    {
-                        resolved = language_server
-                            .resolve_code_action(code_action)
-                            .and_then(|future| helix_lsp::block_on(future).ok());
-                        resolved.as_ref().unwrap_or(code_action)
-                    } else {
-                        code_action
-                    };
-
-                    if let Some(ref workspace_edit) = code_action.edit {
-                        let _ = editor.apply_workspace_edit(offset_encoding, workspace_edit);
+                    if code_action.edit.is_none() || code_action.command.is_none() {
+                        if let Some(future) = language_server.resolve_code_action(code_action) {
+                            let sent = code_action.clone();
+                            return Some(Box::pin(async move {
+                                let code_action = future.await.unwrap_or(sent);
+                                let finish: Finish = Box::new(move |editor| {
+                                    apply_code_action(
+                                        editor,
+                                        server_id,
+                                        offset_encoding,
+                                        &code_action,
+                                    )
+                                });
+                                finish
+                            }));
+                        }
                     }
-
-                    // If a code action provides both an edit and a command the edit is applied
-                    // first, then the command.
-                    if let Some(command) = &code_action.command {
-                        editor.execute_lsp_command(command.clone(), server_id);
-                    }
+                    apply_code_action(editor, server_id, offset_encoding, code_action);
+                    None
                 }
             }
         })
+    }
+}
+
+fn apply_code_action(
+    editor: &mut Editor,
+    server_id: LanguageServerId,
+    offset_encoding: OffsetEncoding,
+    code_action: &lsp::CodeAction,
+) {
+    if let Some(ref workspace_edit) = code_action.edit {
+        let _ = editor.apply_workspace_edit(offset_encoding, workspace_edit);
+    }
+
+    // If a code action provides both an edit and a command the edit is applied
+    // first, then the command.
+    if let Some(command) = &code_action.command {
+        editor.execute_lsp_command(command.clone(), server_id);
     }
 }
 

@@ -123,7 +123,7 @@ Each phase is one commit that builds and passes its tests, and marks itself done
 | --- | --- | --- | --- |
 | 0 | Done | Add the plan for LSP requests off the event loop. | This file. |
 | 1 | Done | Add a fake language server for the integration tests. | The `fake-lsp` binary and its script format. The helper in `helix-term/src/test_support.rs`. The `gd` test. The section in `agents/TESTING.md`. |
-| 2 | | Resolve code actions from the menu without blocking. | `helix-view/src/action.rs` and the menu in `helix-term/src/commands/lsp.rs`. The two tests. |
+| 2 | Done | Resolve code actions from the menu without blocking. | `helix-view/src/action.rs` and the menu in `helix-term/src/commands/lsp.rs`. The two tests. |
 | 3 | | Send rename requests without blocking. | `rename_symbol` in `helix-term/src/commands/lsp.rs` and `rename` in `helix-review/src/term/lsp.rs`. The two tests for each. |
 | 4 | | Answer configuration and workspace folders in the transport. | `helix-lsp/src/transport.rs` and `client.rs`. The two arms in `application.rs` go. The two completion tests. |
 
@@ -178,3 +178,10 @@ Phase 1:
 - A server is initialized before the event loop hears of it, and the loop sends `didOpen` only then. `wait_for_language_servers` runs the loop once more after the server is up.
 - Key events win over job callbacks in the event loop's `select!`. A key that opens a menu from a server's answer has to go in a sequence of its own, or the keys after it run before the menu exists.
 - A language with no grammar loads fine: the `fake` language only logs that its parser is missing.
+
+Phase 2:
+
+- `Action`'s function returns `Option<Pending>`, a future whose output finishes the action on the loop, instead of a second kind of function. `Action::lsp` is the only builder, so one shape was enough.
+- A resolve that fails, a timeout included, still applies the action as the server sent it, as before. Only a stale answer is dropped.
+- The editor sends `didChange` only to a server that announces `textDocumentSync`. The stale test's script announces it, and `agents/TESTING.md` says so.
+- Both tests failed before the change: the first timed out on the configuration request, and the second applied nothing and showed no message.

@@ -29,7 +29,7 @@ use helix_view::{
 
 use crate::{
     compositor::{self, Compositor},
-    job::{Callback, Job},
+    job::{self, Callback, Job},
     ui::{self, overlay::overlaid, FileLocation, Picker, Popup, PromptEvent},
 };
 
@@ -613,6 +613,7 @@ pub fn code_action(cx: &mut Context) {
         return;
     };
     let doc = doc!(cx.editor, &doc);
+    let doc_id = doc.id();
 
     let selection_range = doc.selection(view).primary();
 
@@ -665,12 +666,34 @@ pub fn code_action(cx: &mut Context) {
                 editor.set_error("No code actions available");
                 return;
             }
+            let Some(version) = editor.document(doc_id).map(Document::version) else {
+                return;
+            };
             let mut picker = ui::Menu::new(actions, (), move |editor, action, event| {
                 if event != PromptEvent::Validate {
                     return;
                 }
                 // Always present on validate.
-                action.unwrap().execute(editor);
+                let Some(pending) = action.unwrap().execute(editor) else {
+                    return;
+                };
+                tokio::spawn(async move {
+                    let finish = pending.await;
+                    job::dispatch(move |editor, _| match editor.document(doc_id) {
+                        Some(doc) if doc.version() == version => finish(editor),
+                        Some(doc) => {
+                            let error = format!(
+                                "{} changed, so the code action wasn't applied",
+                                doc.display_name()
+                            );
+                            editor.set_error(error);
+                        }
+                        None => {
+                            editor.set_error("The file closed, so the code action wasn't applied")
+                        }
+                    })
+                    .await;
+                });
             });
             picker.move_down(); // pre-select the first item
 

@@ -85,6 +85,7 @@ Its doc comment has the script's format: the capabilities, an answer for each re
 - `wait_for_language_servers` runs the loop until the server is up and has the documents. Before that, LSP commands find no server.
 - A key that opens a menu from an answer, like `<space>a`, goes in a sequence of its own. Keys sent together all run before the answer arrives.
 - To make the buffer change before an answer, have the server wait for `textDocument/didChange`, and type in the next sequence.
+  The editor sends `didChange` only to a server that announces `textDocumentSync`.
 - `cargo integration-test` builds the binary. A feature crate's tests run alone with `cargo test -p` don't, and the helper says so.
 
 `helix-term/tests/test/lsp.rs` shows the setup.
