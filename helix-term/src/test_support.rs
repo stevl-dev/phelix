@@ -417,6 +417,32 @@ impl AppBuilder {
         self
     }
 
+    /// Turns LSP on, and serves files ending in `.fake` with the fake
+    /// language server playing `script`. `src/bin/fake-lsp.rs` has the
+    /// script's format. A request that gets no answer fails in a second.
+    pub fn with_fake_lsp(mut self, script: serde_json::Value) -> Self {
+        let string = |value: &str| toml::Value::String(value.to_owned());
+        let languages = format!(
+            r#"
+            [[language]]
+            name = "fake"
+            scope = "source.fake"
+            file-types = ["fake"]
+            language-servers = ["fake-lsp"]
+
+            [language-server.fake-lsp]
+            command = {}
+            args = [{}]
+            timeout = 1
+            "#,
+            string(&fake_lsp().to_string_lossy()),
+            string(&script.to_string()),
+        );
+        self.syn_loader = test_syntax_loader(Some(languages));
+        self.config.editor.lsp.enable = true;
+        self
+    }
+
     pub fn with_recovery_dir<P: Into<PathBuf>>(mut self, recovery_dir: P) -> Self {
         self.recovery_dir = recovery_dir.into();
         self
@@ -459,6 +485,46 @@ pub async fn run_event_loop_until_idle(app: &mut Application) {
     let (_, rx) = tokio::sync::mpsc::unbounded_channel();
     let mut rx_stream = UnboundedReceiverStream::new(rx);
     app.event_loop_until_idle(&mut rx_stream).await;
+}
+
+/// Runs the loop until every language server has started, and the editor
+/// has opened its documents with them.
+pub async fn wait_for_language_servers(app: &mut Application) {
+    assert!(
+        app.editor.language_servers.iter_clients().next().is_some(),
+        "no language server started"
+    );
+    while !app
+        .editor
+        .language_servers
+        .iter_clients()
+        .all(|server| server.is_initialized())
+    {
+        app.editor.reset_idle_timer();
+        run_event_loop_until_idle(app).await;
+    }
+    // WHY: a server is initialized before the transport tells the event
+    // loop, and the loop opens the documents with it only then.
+    app.editor.reset_idle_timer();
+    run_event_loop_until_idle(app).await;
+}
+
+/// The fake language server, `src/bin/fake-lsp.rs`.
+fn fake_lsp() -> PathBuf {
+    // WHY: Cargo names a package's binaries (`CARGO_BIN_EXE_*`) only to its
+    // own tests. Every test binary is in `deps/`, one level below them.
+    let test = std::env::current_exe().expect("the test binary has a path");
+    let path = test
+        .parent()
+        .and_then(|deps| deps.parent())
+        .expect("the test binary is in target/<profile>/deps")
+        .join(format!("fake-lsp{}", std::env::consts::EXE_SUFFIX));
+    assert!(
+        path.exists(),
+        "{} is missing. `cargo integration-test` builds it.",
+        path.display()
+    );
+    path
 }
 
 pub fn assert_file_has_content(file: &mut NamedTempFile, content: &str) -> anyhow::Result<()> {

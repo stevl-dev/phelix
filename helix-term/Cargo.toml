@@ -17,6 +17,10 @@ unicode-lines = ["helix-core/unicode-lines", "helix-view/unicode-lines"]
 integration = ["helix-event/integration_test", "dep:tempfile"]
 git = ["helix-vcs/git"]
 
+[[bin]]
+name = "fake-lsp"
+required-features = ["integration"]
+
 [dependencies]
 helix-stdx = { path = "../helix-stdx" }
 helix-core = { path = "../helix-core" }

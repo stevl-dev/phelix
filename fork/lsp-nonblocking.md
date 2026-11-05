@@ -3,7 +3,7 @@
 Snapshot: `main` at `c94c9abce`, on upstream `master` at `ba40e547`.
 Goes in `fork/lsp-nonblocking.md`. Feature slug: `lsp-nonblocking`.
 
-Status: draft 2026-11-04. Not approved.
+Status: approved 2026-11-05.
 
 ## Bottom line
 
@@ -121,8 +121,8 @@ Each phase is one commit that builds and passes its tests, and marks itself done
 
 | # | Status | Commit | Work |
 | --- | --- | --- | --- |
-| 0 | Draft | Add the plan for LSP requests off the event loop. | This file. |
-| 1 | | Add a fake language server for the integration tests. | The `fake-lsp` binary and its script format. The helper in `helix-term/src/test_support.rs`. The `gd` test. The section in `agents/TESTING.md`. |
+| 0 | Done | Add the plan for LSP requests off the event loop. | This file. |
+| 1 | Done | Add a fake language server for the integration tests. | The `fake-lsp` binary and its script format. The helper in `helix-term/src/test_support.rs`. The `gd` test. The section in `agents/TESTING.md`. |
 | 2 | | Resolve code actions from the menu without blocking. | `helix-view/src/action.rs` and the menu in `helix-term/src/commands/lsp.rs`. The two tests. |
 | 3 | | Send rename requests without blocking. | `rename_symbol` in `helix-term/src/commands/lsp.rs` and `rename` in `helix-review/src/term/lsp.rs`. The two tests for each. |
 | 4 | | Answer configuration and workspace folders in the transport. | `helix-lsp/src/transport.rs` and `client.rs`. The two arms in `application.rs` go. The two completion tests. |
@@ -146,17 +146,16 @@ No `FORK.md` entry: this is a fix. The fake server is documented in `agents/TEST
 
 ## Decisions
 
-Questions for the human:
+Answered 2026-11-05:
 
-1. Accepting a completion. The plan proposes (a).
+1. Accepting a completion: (a).
    - (a) It keeps waiting. Phase 4 ends the known deadlock, and a slow server still freezes the accept, but only when the item wasn't resolved on idle.
    - (b) It waits at most about 1 s, then inserts the item without its extra edits and says so.
    - (c) It becomes fully async: the item goes in at once, and its extra edits are mapped through what you typed since, the review's deferred path included.
      The maintainers call this hard. It would be phase 2, as the riskiest.
-2. Rename. The plan proposes writing it here, after #16336.
-   The other option is to wait for upstream to merge #16336 and cherry-pick it. The review's rename is done here either way.
+2. Rename: written here, after #16336, not cherry-picked once upstream merges it. The review's rename is done here either way.
 
-The plan assumes these answers unless the human says otherwise:
+Assumed, and approved with the plan:
 
 3. The file operations, DAP, and shell pipes are out of scope.
    So are `window/workDoneProgress/create` and `workspace/applyEdit`, which the event loop keeps answering. (Moving `workspace/workspaceFolders` into the transport was decided on 2026-11-05.)
@@ -172,3 +171,10 @@ The plan assumes these answers unless the human says otherwise:
 - Answering `window/workDoneProgress/create` and `workspace/applyEdit` off the event loop.
 
 ## Found
+
+Phase 1:
+
+- One lookup finds `fake-lsp` for every crate's tests, helix-term's included: one level above the test binary. `CARGO_BIN_EXE_fake-lsp` would be set only while compiling helix-term's tests, and `test_support` is in helix-term's library, so it can't read it.
+- A server is initialized before the event loop hears of it, and the loop sends `didOpen` only then. `wait_for_language_servers` runs the loop once more after the server is up.
+- Key events win over job callbacks in the event loop's `select!`. A key that opens a menu from a server's answer has to go in a sequence of its own, or the keys after it run before the menu exists.
+- A language with no grammar loads fine: the `fake` language only logs that its parser is missing.

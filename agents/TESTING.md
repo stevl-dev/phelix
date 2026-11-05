@@ -75,6 +75,19 @@ The harness sets no features. A test that needs a feature's commands, tabs, or c
 - Build a git fixture in a temporary directory, as `empty_git_repo` and `create_commit` in `helix-vcs/src/git/test.rs` do.
 
 `splits.rs` shows the closure style.
+
+### The fake language server
+
+`fake-lsp` (`helix-term/src/bin/fake-lsp.rs`) is a language server a test scripts, for what the editor does with a server's answers.
+Its doc comment has the script's format: the capabilities, an answer for each request, a notification to wait for before answering, and a request of its own to send first, with the answer it expects back.
+
+- `AppBuilder::with_fake_lsp(script)` turns LSP on and serves `.fake` files with it. A request it doesn't answer fails in a second.
+- `wait_for_language_servers` runs the loop until the server is up and has the documents. Before that, LSP commands find no server.
+- A key that opens a menu from an answer, like `<space>a`, goes in a sequence of its own. Keys sent together all run before the answer arrives.
+- To make the buffer change before an answer, have the server wait for `textDocument/didChange`, and type in the next sequence.
+- `cargo integration-test` builds the binary. A feature crate's tests run alone with `cargo test -p` don't, and the helper says so.
+
+`helix-term/tests/test/lsp.rs` shows the setup.
 `config.rs`'s `picker_keys_overlay_defaults_and_no_op_unbinds` and `git/test.rs`'s `changed_files_include_staged_and_unstaged` are the fork's unit examples.
 
 ## Running
