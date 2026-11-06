@@ -39,7 +39,7 @@ Must be fixed before the change lands:
 - A non-obvious line without a tagged comment, or a comment that narrates: `agents/HELIX.md` (Comments).
 - A std API newer than the MSRV: `agents/HELIX.md` (Upstream docs).
 - Code in a core crate, `helix-view`, `helix-term`, or the crates below them, that names a feature or checks for one, where a hook would do: `AGENTS.md` (Fork). A command's doc or a doc comment's example may name one.
-- A user-visible change handed back without a Manual verify block: `agents/VERIFY.md`.
+- A user-visible change handed back with neither a check in `phx` offered or run nor a Manual verify block: `agents/VERIFY.md`.
 
 ### Nit
 

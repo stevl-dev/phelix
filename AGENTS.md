@@ -50,4 +50,4 @@ Each phase's commit marks the phase done in the plan and records what the work f
 - `agents/TESTING.md`: which tests to write, where they go, and how to run them. Read it before writing or changing a test.
 - `agents/REVIEW.md`: how to review a diff on `main`. Read it for any review.
 - `agents/UPSTREAM.md`: taking changes from upstream by cherry-pick.
-- `agents/VERIFY.md`: how to hand a user-visible change back for a check. Never run `phx` interactively or drive it through a terminal.
+- `agents/VERIFY.md`: how to check a user-visible change. Offer to run the check in `phx` yourself, and run it only with the human's permission. Hand what you can't check to the human as manual steps.
