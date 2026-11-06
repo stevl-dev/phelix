@@ -106,33 +106,50 @@ fn fit_file_style(editor: &mut Editor, doc_id: DocumentId) {
 }
 
 // WHY: a view shows a buffer the review loaded only once you open it there, as
-// by `Enter`, so from then on it's yours, not the review's to close.
+// by `Enter` or `:e`, so from then on it's yours, listed and not the review's
+// to close.
 fn keep_shown(editor: &mut Editor) {
     let Some(stream) = editor.features.review_mut().stream.as_mut() else {
         return;
     };
-    stream
-        .loaded
-        .retain(|&doc| !editor.tree.views().any(|(view, _)| view.doc == doc));
+    let (tree, documents) = (&editor.tree, &mut editor.documents);
+    stream.loaded.retain(|doc_id| {
+        let shown = tree.views().any(|(view, _)| view.doc == *doc_id);
+        if let (true, Some(doc)) = (shown, documents.get_mut(doc_id)) {
+            doc.listed = true;
+        }
+        !shown
+    });
 }
 
 // WHY: no view showed these while the review was open. One may show now, since
 // they close after Helix gives the closed review's view to another buffer, so a
-// view doesn't keep it. Unsaved changes do, unless `force` drops them.
+// view doesn't keep it. Unsaved changes do, unless `force` drops them, and then
+// the buffer is listed so you can find it.
 pub(super) fn close_loaded(editor: &mut Editor, loaded: Vec<DocumentId>, force: bool) {
-    for doc in loaded {
-        let _ = editor.close_document(doc, force);
+    for doc_id in loaded {
+        if editor.close_document(doc_id, force).is_err() {
+            if let Some(doc) = editor.documents.get_mut(&doc_id) {
+                doc.listed = true;
+            }
+        }
     }
 }
 
-/// Opens `path`'s buffer in the background, to close it again with the review.
+/// Opens `path`'s buffer in the background, out of the buffer lists, to close
+/// it again with the review.
 pub fn load(editor: &mut Editor, path: &Path) -> Result<DocumentId, DocumentOpenError> {
     let open = editor.document_by_path(path).map(|doc| doc.id());
-    let doc = editor.open(path, Action::Load)?;
+    let doc_id = editor.open(path, Action::Load)?;
     if let (None, Some(stream)) = (open, editor.features.review_mut().stream.as_mut()) {
-        stream.loaded.push(doc);
+        stream.loaded.push(doc_id);
+        editor
+            .documents
+            .get_mut(&doc_id)
+            .expect("just opened")
+            .listed = false;
     }
-    Ok(doc)
+    Ok(doc_id)
 }
 
 /// The focused view if it shows `doc`, or else any view that does.

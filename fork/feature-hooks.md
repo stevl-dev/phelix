@@ -369,6 +369,7 @@ Each phase records the count in Found. Phase 14 can't reach 0 by dropping the ex
 - Crates for the small features (section 1).
 - Renaming the fork.
 - Keeping the buffers the review loads in the background out of the buffer lists until you open one yourself, or until the review closes and leaves it open with unsaved changes. Today they show in the code tab's bufferline, `Space b` and `:bn`. It's a behavior change, so it comes as a fix after phase 14, by the human's call, and keeps this plan a refactor.
+  Resolved by that fix, in `helix-review` alone: `sync::load` clears `Document::listed` on a buffer it opens, `keep_shown` sets it once a view shows the buffer, and `close_loaded` sets it on a buffer it can't close. The core needed no hook.
 
 ## 9. Questions for the human
 

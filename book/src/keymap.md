@@ -481,6 +481,7 @@ The review stays out of the buffer lists: the bufferline, `Space b`, and `:buffe
 
 An edit to added or unchanged lines goes to the file's buffer as you type, new and deleted lines too, and the rows follow it: an edited line gets its old version above it.
 A file that isn't open gets a buffer in the background, which closes with the review unless you opened it in a view meanwhile. Nothing is saved until you write it.
+Until you open it, with `Enter` in the review, `:e`, or a picker, that buffer stays out of the buffer lists, as the review does. When the review closes and leaves it open with unsaved changes, it joins them, so you can find it.
 `:w` in the review writes every file it shows that has unsaved changes, however they were made. `:x` and `:update` write nothing there, since the review itself never has unsaved changes.
 `u` in the review undoes its last edit in every file the edit changed, and `U` redoes it. One command, or one insert, is one step, and so is a `:review-restore`.
 When one of those files changed since in another way, in its own view for example, nothing is undone, and the status line names the file. `u` in that file undoes there.
@@ -491,7 +492,7 @@ An edit to a file's buffer shows in the review, and the cursor stays on the line
 Each file's diagnostics show on its rows, from its buffer when it's open, or else from what its language servers reported for it. Inline diagnostics, the gutter's dot, and `]d` work as in a file.
 In insert mode, completion offers the items of the row's file's language servers too, and their trigger characters, like `.`, open it. Selecting an item doesn't put it in the text, as with `preview-completion-insert = false`, and `Enter` accepts it. An item's other edits, like an import, go to the file with it, and `u` in the review takes out both.
 Signature help comes from the server of the row's file too, and its trigger characters, like `(`, open it. The signature and completion's docs show without the file's syntax colors.
-The language server keys above work on added and unchanged lines. They open the row's file in the background, which closes with the review, and the first key can find its server still starting.
+The language server keys above work on added and unchanged lines. They open the row's file in the background, as an edit does, and the first key can find its server still starting.
 With a review open, `:review` switches to it, and the status line says which changes it shows. `:reload` in the review lists the changed files again and rereads the ones that aren't open, for changes made outside Helix, such as a commit. `:reload-all` reloads every buffer, then does the same for an open review, and leaves you in the tab you're in.
 When that read, or staging the last hunk, finds no changes left, the review closes, and the status line names any file it showed that has unsaved changes. That file's buffer stays open. `:review` with a scope that has no changes leaves the open review as it is.
 The review swaps these commands for its own, on whatever keys they're bound to:

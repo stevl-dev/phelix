@@ -614,6 +614,63 @@ async fn an_edit_loads_a_file_that_isnt_open() -> anyhow::Result<()> {
     .await
 }
 
+#[tokio::test(flavor = "multi_thread")]
+async fn a_file_the_review_loads_stays_out_of_the_buffer_lists_until_you_open_it(
+) -> anyhow::Result<()> {
+    let repo = three_hunks();
+    let (a, b) = (repo.path().join("a.txt"), repo.path().join("b.txt"));
+    let mut app = app_on(a.clone())?;
+    start_review(&mut app).await?;
+
+    test_key_sequences(
+        &mut app,
+        vec![
+            (
+                Some("/^B<ret>iX<esc>:tab code<ret>:bn<ret>"),
+                Some(&|app| {
+                    assert!(app.editor.document_by_path(&b).is_some(), "loaded");
+                    assert!(doc!(app.editor).path() == Some(&a), "past b.txt");
+                }),
+            ),
+            (
+                Some(&format!(":e {}<ret>:bn<ret>:bn<ret>", b.display())),
+                Some(&|app| assert!(doc!(app.editor).path() == Some(&b), "back to b.txt")),
+            ),
+        ],
+        false,
+    )
+    .await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_file_the_review_leaves_open_with_unsaved_changes_joins_the_buffer_lists(
+) -> anyhow::Result<()> {
+    let repo = three_hunks();
+    let (a, b) = (repo.path().join("a.txt"), repo.path().join("b.txt"));
+    let mut app = app_on(a.clone())?;
+    start_review(&mut app).await?;
+    run_until(&mut app, "/^B<ret>iX<esc>", |app| {
+        buffer_text(app, &b).as_deref() == Some("XB\n")
+    })
+    .await?;
+    git(
+        repo.path(),
+        &["commit", "--quiet", "--all", "--message", "work"],
+    );
+    run_until(&mut app, ":reload<ret>", |app| {
+        app.editor.features.review().stream().is_none()
+    })
+    .await?;
+
+    test_key_sequence(
+        &mut app,
+        Some(":bn<ret>"),
+        Some(&|app| assert!(doc!(app.editor).path() == Some(&b))),
+        false,
+    )
+    .await
+}
+
 fn three_changed() -> TempDir {
     repo(
         &[("a.txt", "a\n"), ("b.txt", "b\n"), ("c.txt", "c\n")],
@@ -1274,6 +1331,7 @@ async fn lsp_keys_in_the_review_ask_from_the_rows_file() -> anyhow::Result<()> {
                             .all(|(view, _)| view.doc != file.id()),
                         "in the background"
                     );
+                    assert!(!file.listed, "lent, not opened");
                     assert_eq!(status(app), "No definition found.");
                     assert_eq!(stream_text(app), review);
                 }),
