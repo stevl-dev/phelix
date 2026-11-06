@@ -3,7 +3,7 @@
 Snapshot: `main` at `c94c9abce`, on upstream `master` at `ba40e547`.
 Goes in `fork/lsp-nonblocking.md`. Feature slug: `lsp-nonblocking`.
 
-Status: approved 2026-11-05.
+Status: done.
 
 ## Bottom line
 
