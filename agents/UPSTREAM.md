@@ -3,7 +3,7 @@
 The fork stopped rebasing at upstream `ba40e547`.
 Upstream's later work comes over by cherry-pick, a commit at a time, and only when the human asks.
 
-Reviewed through: `ba40e547`, on 2026-10-22.
+Reviewed through: `57d864129`, on 2026-11-10.
 
 ## Steps
 
