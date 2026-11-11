@@ -2592,6 +2592,128 @@ async fn unstaging_puts_back_the_head_text() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn unstaging_lines_takes_only_the_selected_row_out_of_the_index() -> anyhow::Result<()> {
+    let repo = repo(
+        &[("a.txt", "a1\na2\na3\n")],
+        &[("a.txt", Some("a1\nx\ny\na2\na3\n"))],
+    );
+    git(repo.path(), &["add", "a.txt"]);
+    let mut app = app_on(repo.path().join("a.txt"))?;
+    run_until(&mut app, ":review staged<ret>", |app| {
+        app.editor.features.review().stream().is_some()
+    })
+    .await?;
+    run_until(&mut app, "/^y<ret>:unstage-line<ret>", |app| {
+        status(app) == "Unstaged 1 line"
+    })
+    .await?;
+    assert_eq!(index_text(&repo, "a.txt").unwrap(), "a1\nx\na2\na3\n");
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn unstaging_lines_in_an_all_review_leaves_the_unstaged_changes() -> anyhow::Result<()> {
+    let repo = staged_and_unstaged();
+    let mut app = app_on(repo.path().join("a.txt"))?;
+    start_review(&mut app).await?;
+    let index_is = |text: &'static str| {
+        let repo = &repo;
+        move |_: &Application| index_text(repo, "a.txt").unwrap() == text
+    };
+
+    run_until(
+        &mut app,
+        "/^two<ret>:unstage-line<ret>",
+        index_is("1\n3\n4\n5\n6\n7\n8\n9\n10\n"),
+    )
+    .await?;
+    run_until(&mut app, "/^2<ret>:unstage-line<ret>", index_is(TEN)).await?;
+
+    test_key_sequence(
+        &mut app,
+        Some("/^nine<ret>:unstage-line<ret>"),
+        Some(&|app| {
+            assert_eq!(
+                status(app),
+                "'unstage-line': There are no staged changes under any selection",
+                "a row of an unstaged change has nothing to unstage"
+            );
+        }),
+        false,
+    )
+    .await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn unstaging_lines_in_an_unstaged_review_finds_none() -> anyhow::Result<()> {
+    let repo = staged_and_unstaged();
+    let mut app = app_on(repo.path().join("a.txt"))?;
+    run_until(&mut app, ":review unstaged<ret>", |app| {
+        status(app) == "Reviewing unstaged changes"
+    })
+    .await?;
+    test_key_sequence(
+        &mut app,
+        Some("%:unstage-line<ret>"),
+        Some(&|app| {
+            assert_eq!(
+                status(app),
+                "'unstage-line': There are no staged changes under any selection"
+            );
+        }),
+        false,
+    )
+    .await?;
+    assert_eq!(
+        index_text(&repo, "a.txt").unwrap(),
+        "1\ntwo\n3\n4\n5\n6\n7\n8\n9\n10\n"
+    );
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn unstaging_every_line_of_a_new_file_takes_it_out_of_the_index() -> anyhow::Result<()> {
+    let repo = repo(&[("a.txt", "a\n")], &[("new.txt", Some("n1\nn2\n"))]);
+    git(repo.path(), &["add", "new.txt"]);
+    let mut app = app_on(repo.path().join("a.txt"))?;
+    run_until(&mut app, ":review staged<ret>", |app| {
+        app.editor.features.review().stream().is_some()
+    })
+    .await?;
+    run_until(&mut app, "%:unstage-line<ret>", |_| {
+        index_text(&repo, "new.txt").is_none()
+    })
+    .await
+}
+
+// WHY: `HEAD` has a renamed file at its old path. Read at the new one, it
+// would have no text, and unstaging a line would take the file out of the index.
+#[tokio::test(flavor = "multi_thread")]
+async fn unstaging_a_line_of_a_renamed_file_diffs_it_against_its_old_path() -> anyhow::Result<()> {
+    let repo = repo(&[("a.txt", TEN)], &[]);
+    git(repo.path(), &["mv", "a.txt", "b.txt"]);
+    std::fs::write(
+        repo.path().join("b.txt"),
+        "1\ntwo\n3\n4\n5\n6\n7\n8\n9\n10\n",
+    )?;
+    git(repo.path(), &["add", "b.txt"]);
+    let mut app = app_on(repo.path().join("b.txt"))?;
+    run_until(&mut app, ":review staged<ret>", |app| {
+        app.editor.features.review().stream().is_some()
+    })
+    .await?;
+    run_until(&mut app, "/^two<ret>:unstage-line<ret>", |app| {
+        status(app) == "Unstaged 1 line"
+    })
+    .await?;
+    assert_eq!(
+        index_text(&repo, "b.txt").as_deref(),
+        Some("1\n3\n4\n5\n6\n7\n8\n9\n10\n")
+    );
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn staging_a_conflicted_file_says_why_it_is_refused() -> anyhow::Result<()> {
     let repo = repo(&[("a.txt", "base\n")], &[]);
     let file = repo.path().join("a.txt");

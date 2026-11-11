@@ -106,5 +106,6 @@
 | `:stage-hunk` | Stage the hunks the selections touch in the review |
 | `:stage-line` | Stage the changed lines the selections cover in the review |
 | `:unstage-hunk` | Unstage the hunks the selections touch in the review |
+| `:unstage-line` | Unstage the changed lines the selections cover in the review |
 | `:review-restore` | Put the base's text back over the hunks the selections touch in the review, in each file's buffer |
 | `:review-context` | Show the given number of unchanged lines around each hunk of the review, or say how many it shows |

@@ -87,7 +87,7 @@ Each entry says what the feature adds, and where its code, tests, and book pages
 
 ### review-stream
 
-- Plan: `fork/review-stream.md`, done through phase 9f. Staging lines is `fork/stage-lines.md`, done through phase 1.
+- Plan: `fork/review-stream.md`, done through phase 9f. Staging lines is `fork/stage-lines.md`, done through phase 2.
   The completion spike's prototype is on the local branch `spike/review-completion`, which is never pushed.
 - Adds: `:review` shows every changed file's hunks against `HEAD` in one buffer, or with `unstaged` or `staged` against the index, with old and new line numbers and `+`/`-` signs in the gutter.
   An edit to added or unchanged lines, new and deleted lines too, goes to the file's buffer as you type, loaded in the background if need be and closed with the review once saved, and the rows follow it. A buffer the review loads in the background, for an edit or a language feature, stays out of the buffer lists until a view shows it, and joins them when the review closes and leaves it with unsaved changes. New lines and indents are the file's own. Any other edit is put back, and a staged review takes none.
@@ -100,7 +100,7 @@ Each entry says what the feature adds, and where its code, tests, and book pages
   The review has a tab of its own (`tabs`). `Enter` in it (`review_open`) switches to the code tab and opens the row's file at that line, and `:review` comes back. On a row of unchanged lines, `Enter` shows them. A goto, a picker, or `:e` in the review's view opens in the code tab too, and a split opened on a file stays in the review's tab. `:bc` in the review closes it and its tab, and refuses while a file it shows has unsaved changes. `:bc!` closes it anyway, and drops the changes of the files it loaded. It stays out of the buffer lists, and goes by `[review]` (`tabs`).
   An edit to a file's buffer shows in the review, with the cursor kept on its line. With a review open, `:review` switches to it, and `:reload` there, or `:reload-all` from either tab, lists and reads the changes again. When that read, or a stage, finds none, the review closes and names the files with unsaved changes. `:review` with a scope that has none leaves the open review.
   In the review, `goto_next_change` and the other change motions select the review's hunks across files, on whatever keys they're bound to, and `goto_next_buffer`, `goto_previous_buffer`, `:bn`, and `:bp` go between files.
-  `:stage-hunk` and `:unstage-hunk` write the hunks the selection touches to the index through the `git` binary, in a trusted workspace. `:stage-line` writes only the removed and added rows the selection covers, in any of the three reviews.
+  `:stage-hunk` and `:unstage-hunk` write the hunks the selection touches to the index through the `git` binary, in a trusted workspace. `:stage-line` and `:unstage-line` write only the removed and added rows the selection covers, in any of the three reviews.
   `:review-restore` puts the base's text back over them in the files' buffers. `:review-context` sets the lines of context.
   In the changed-file picker, `review_jump` (`Alt-r`) jumps to the selected file in the review of the list's changes.
   Rows get syntax colors from parses of each file's whole base and source.

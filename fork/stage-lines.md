@@ -3,7 +3,7 @@
 Snapshot: `main` at `62f046673`.
 Goes in `fork/stage-lines.md`. Feature slug: `stage-lines`, part of `review-stream`'s entry in `FORK.md`.
 
-Status: approved 2026-11-11. Phases 0–1 are committed.
+Status: done 2026-11-11. Phases 0–2 are committed.
 
 ## Bottom line
 
@@ -72,7 +72,7 @@ Each phase is one commit that builds and passes its tests, and marks itself done
 | --- | --- | --- | --- |
 | 0 | Done | Add the plan for staging lines in the review. | This file. |
 | 1 | Done | Stage the changed lines the selections cover in the review. | `Stream::picked_lines` in `helix-review/src/view.rs`: for each file with a selected removed or added row, every such row's line and whether the selection covers it. In `term/stage.rs`: carrying a line through a diff, `splice` with the lines that stay, and `stage_line`. The `stage-line` row in `term.rs`. Unit tests in `stage.rs`, table-driven over three texts and a selection: a partly staged replacement, an untouched hunk left alone, every row selected equals the whole hunk, the `B`/`B2` case above, a line the index already has, and a last line with no line ending. A unit test of `picked_lines` in `view.rs`: a selection over a header, a gap, and unchanged rows gives only the changed ones. Integration tests in `helix-review/tests/test/review.rs`: one added line of a two-line hunk in an `unstaged` review, a removed and an added row in an `all` review of a file with staged and unstaged changes, and the message when the selection covers no unstaged change. `book/src/keymap.md` (Review), `book/src/generated/typable-cmd.md` from `cargo xtask docgen`, and `review-stream`'s entry in `FORK.md`. |
-| 2 | Proposed | Unstage the changed lines the selections cover in the review. | `unstage_line` in `term/stage.rs`, on phase 1's pieces with `HEAD` and the index as the sides, and `HEAD`'s text read from a rename's old path. The `unstage-line` row in `term.rs`. Unit tests: a partly unstaged replacement, a removed line put back, and unstaging the last staged line of a file `HEAD` lacks removes it from the index. Integration tests: an added row in a `staged` review, a row in an `all` review, and the message in an `unstaged` review. The same book pages and `FORK.md` entry. |
+| 2 | Done | Unstage the changed lines the selections cover in the review. | `unstage_line` in `term/stage.rs`, on phase 1's pieces with `HEAD` and the index as the sides, and `HEAD`'s text read from a rename's old path. The `unstage-line` row in `term.rs`. Unit tests: a partly unstaged replacement, a removed line put back, and unstaging the last staged line of a file `HEAD` lacks removes it from the index. Integration tests: an added row in a `staged` review, a row in an `all` review, and the message in an `unstaged` review. The same book pages and `FORK.md` entry. |
 
 Phase 1 has the carry through two diffs and rule 3, which is where a wrong line would reach the index, so it goes first.
 Phase 2 swaps the sides and adds nothing of that kind.
@@ -114,3 +114,8 @@ The human approved the plan with the answer it assumed to each of these:
   The line ending is the index's own, else the source's, else a line feed.
   `staged_lines` is the pure part: a file's rows and the index's text in, the new text and the count out. Its unit test builds the rows from a diff of the base and the source, as the review does.
   Staging a line can leave the review's text the same: an added row becomes an unchanged one with the same text. The integration tests wait on the status and the index, not on the rows.
+- Phase 2: `take_lines` takes both texts of the command's diff and the side the index moves toward. A held line of the index's side stays in it, and a held line of the other side stays out, so one rule serves both commands.
+  `carry` takes the side a line comes from. An added row goes from the review's source back to the index through the index-to-source diff.
+  Removing a file from the index is in the command, not in the pure part, so its test is an integration test: every line of a staged new file.
+  A renamed file got an integration test too. With `HEAD`'s text read at the new path, unstaging one line took the file out of the index, which is what the plan guessed `:unstage-hunk` does. `:unstage-hunk` still reads the new path.
+  In an `unstaged` review, a removed row is carried from the index to `HEAD` through a diff of its own, not the command's diff reversed. Where the two pair repeated lines differently, a row there could unstage a line. No test shows it.
