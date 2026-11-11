@@ -104,6 +104,7 @@
 | `:workspace-exclude` | Mark the current workspace as never-prompt. Never prompts for trust again. |
 | `:review` | Show the changes of every changed file in one buffer, in a tab of its own, or switch to it. Scopes: all (HEAD against the files, the default), unstaged (the index against the files), staged (HEAD against the index) |
 | `:stage-hunk` | Stage the hunks the selections touch in the review |
+| `:stage-line` | Stage the changed lines the selections cover in the review |
 | `:unstage-hunk` | Unstage the hunks the selections touch in the review |
 | `:review-restore` | Put the base's text back over the hunks the selections touch in the review, in each file's buffer |
 | `:review-context` | Show the given number of unchanged lines around each hunk of the review, or say how many it shows |

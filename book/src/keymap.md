@@ -467,6 +467,7 @@ you to selectively add search terms to your selections.
 `:review` shows the changes of every changed file in one buffer, diffed against `HEAD`.
 `:review unstaged` diffs the index against the files instead, and `:review staged` diffs `HEAD` against the index, which a staged review never takes from a file's buffer. `:review all` is the default.
 `:stage-hunk` and `:unstage-hunk` write every hunk the selections touch to the index, whole, and read the review again. They run `git`, so they need a [trusted workspace](./workspace-trust.md).
+`:stage-line` stages only the removed and added rows the selections cover, and leaves the other rows of each hunk as the index has them. Staging the `+` row of a changed line without its `-` row leaves both lines in the index. A changed line the review has no row for goes with its hunk, like a line only the index has in a review against `HEAD`. A staged review has nothing to stage.
 `:review-restore` puts the base's text back over those hunks in each file's buffer, unsaved, so `u` in the review or the file undoes it. `:review-context <n>` shows `n` unchanged lines around each hunk, 3 at first.
 Each file starts with a row naming it and how it changed. Its hunks follow with 3 lines of context, and a row counts the unchanged lines left out between them.
 The gutter shows each row's old and new line numbers, then `+` for an added line or `-` for a removed one.

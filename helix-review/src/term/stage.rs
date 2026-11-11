@@ -1,14 +1,20 @@
 //! `:stage-hunk` and `:unstage-hunk` write the hunks the selection touches in
 //! the review to the index, whole, through `git`. Ported from diff review,
 //! which took the lines from a file's buffer instead of the review's rows.
+//!
+//! `:stage-line` writes only the changed rows the selection covers. Its diff
+//! is the index against the source, not the review's own, so each row's line
+//! is carried to that diff first. The rules are in `fork/stage-lines.md`.
 
+use std::collections::HashMap;
 use std::ops::Range;
 
 use crate::view::{layout, Picked};
 use anyhow::{anyhow, bail, Context as _};
 use helix_core::command_line::Args;
 use helix_core::encoding::Encoding;
-use helix_core::{Rope, RopeSlice};
+use helix_core::line_ending::{auto_detect_line_ending, get_line_ending};
+use helix_core::{LineEnding, Rope, RopeSlice};
 use helix_loader::workspace_trust::TrustQuery;
 use helix_vcs::{index, Hunk};
 use helix_view::current_ref;
@@ -26,7 +32,7 @@ pub(crate) fn stage_hunk(
     if event != PromptEvent::Validate {
         return Ok(());
     }
-    let staged = write_picked(cx, "Staged", |file, trust_full| {
+    let staged = write_picked(cx, "Staged", changes, |file, trust_full| {
         let path = file.change.path();
         let index_bytes =
             index::get_index_base(path, trust_full).map_err(|err| anyhow!("{err:#}"))?;
@@ -41,15 +47,43 @@ pub(crate) fn stage_hunk(
         }
         let staged = splice(
             &index_text,
-            file.source,
             picked
                 .iter()
-                .map(|hunk| (hunk.before.clone(), hunk.after.clone())),
+                .map(|hunk| (hunk.before.clone(), vec![slice(file.source, &hunk.after)])),
+            ending(&index_text, file.source),
         );
         // WHY: staging all of a deleted file removes it from the index.
         let remove = staged.len_bytes() == 0 && !path.exists();
         write(file, (!remove).then_some((&staged, bom)), trust_full)?;
         Ok(picked.len())
+    })?;
+    if staged == 0 {
+        bail!("There are no unstaged changes under any selection");
+    }
+    Ok(())
+}
+
+pub(crate) fn stage_line(
+    cx: &mut compositor::Context,
+    _args: Args,
+    event: PromptEvent,
+) -> anyhow::Result<()> {
+    if event != PromptEvent::Validate {
+        return Ok(());
+    }
+    let staged = write_picked(cx, "Staged", line_count, |file, trust_full| {
+        let path = file.change.path();
+        let index_bytes =
+            index::get_index_base(path, trust_full).map_err(|err| anyhow!("{err:#}"))?;
+        let (index_text, bom) = decode(file.encoding, index_bytes.as_deref())?;
+        let (staged, count) = staged_lines(file, &index_text)?;
+        if count == 0 {
+            return Ok(0);
+        }
+        // WHY: staging all of a deleted file removes it from the index.
+        let remove = staged.len_bytes() == 0 && !path.exists();
+        write(file, (!remove).then_some((&staged, bom)), trust_full)?;
+        Ok(count)
     })?;
     if staged == 0 {
         bail!("There are no unstaged changes under any selection");
@@ -66,7 +100,7 @@ pub(crate) fn unstage_hunk(
         return Ok(());
     }
     let providers = cx.editor.diff_providers.clone();
-    let unstaged = write_picked(cx, "Unstaged", |file, trust_full| {
+    let unstaged = write_picked(cx, "Unstaged", changes, |file, trust_full| {
         let path = file.change.path();
         let head_bytes = providers.get_diff_base(path, trust_full);
         let index_bytes =
@@ -91,10 +125,10 @@ pub(crate) fn unstage_hunk(
         }
         let unstaged = splice(
             &index_text,
-            &head,
             picked
                 .iter()
-                .map(|hunk| (hunk.after.clone(), hunk.before.clone())),
+                .map(|hunk| (hunk.after.clone(), vec![slice(&head, &hunk.before)])),
+            ending(&index_text, &head),
         );
         // WHY: unstaging all of a file that `HEAD` doesn't have removes it
         // from the index.
@@ -109,11 +143,12 @@ pub(crate) fn unstage_hunk(
 }
 
 /// Calls `write` for each file with hunks under the focused review's
-/// selection, then reads the review again and says what `verb` did. Returns
-/// the changes written.
+/// selection, then reads the review again and says what `verb` did to how
+/// many, as `counted` words it. Returns the changes written.
 fn write_picked(
     cx: &mut compositor::Context,
     verb: &str,
+    counted: fn(usize) -> String,
     write: impl Fn(&Picked, bool) -> anyhow::Result<usize>,
 ) -> anyhow::Result<usize> {
     let (view, doc) = current_ref!(cx.editor);
@@ -149,7 +184,7 @@ fn write_picked(
         read_changes(
             cx,
             scope,
-            Some(format!("{verb} {}", changes(written))),
+            Some(format!("{verb} {}", counted(written))),
             None,
         );
     }
@@ -189,6 +224,13 @@ fn changes(count: usize) -> String {
     }
 }
 
+fn line_count(count: usize) -> String {
+    match count {
+        1 => "1 line".to_string(),
+        _ => format!("{count} lines"),
+    }
+}
+
 /// Whether the hunk side `lines` touches one of `ranges`, first and last lines,
 /// or ends just above it. A removal has no lines, so it's under the line below.
 pub(super) fn under(lines: &Range<u32>, ranges: &[(usize, usize)]) -> bool {
@@ -220,31 +262,136 @@ fn map_to_before(hunks: &[Hunk], (start, end): (usize, usize)) -> (usize, usize)
     (map(start).0, map(end).1)
 }
 
-/// `from`, with the lines of each `(from_lines, to_lines)` pair replaced by
-/// those lines of `to`. The pairs are in order and don't overlap.
-fn splice(from: &Rope, to: &Rope, pairs: impl Iterator<Item = (Range<u32>, Range<u32>)>) -> Rope {
-    fn lines(text: &Rope, lines: Range<u32>) -> RopeSlice<'_> {
-        let start = text.line_to_char(lines.start as usize);
-        let end = text.line_to_char(lines.end as usize);
-        text.slice(start..end)
+/// The rows of one file as lines of a command's diff: each shown line of the
+/// diff's two sides, and whether the selection covers its row.
+#[derive(Default)]
+struct Rows {
+    before: HashMap<usize, bool>,
+    after: HashMap<usize, bool>,
+}
+
+/// The line of `hunks`' after side that their before side's `line` is. `None`
+/// when the after side doesn't have it.
+fn carry(hunks: &[Hunk], line: usize) -> Option<usize> {
+    let preceding = hunks.partition_point(|hunk| hunk.before.start as usize <= line);
+    let Some(hunk) = preceding.checked_sub(1).map(|i| &hunks[i]) else {
+        return Some(line);
+    };
+    (line >= hunk.before.end as usize)
+        .then(|| line - hunk.before.end as usize + hunk.after.end as usize)
+}
+
+/// `index` with the changed rows of `file` that the selection covers staged,
+/// and how many took effect.
+fn staged_lines(file: &Picked, index: &Rope) -> anyhow::Result<(Rope, usize)> {
+    // WHY: a removed row is a line of the review's base, which is `HEAD` in
+    // an `all` review, and staging removes lines of the index.
+    let to_index = hunks(file.base, index)?;
+    let rows = Rows {
+        before: file
+            .removed
+            .iter()
+            .filter_map(|&(line, covered)| Some((carry(&to_index, line)?, covered)))
+            .collect(),
+        after: file.added.iter().copied().collect(),
+    };
+    let hunks = hunks(index, file.source)?;
+    Ok(take_lines(index, file.source, &hunks, &rows))
+}
+
+/// `index` with the covered lines of `hunks`, the index against `source`,
+/// staged, and how many those are. A hunk with no covered line stays. In the
+/// others only a line shown in a row the selection doesn't cover stays as the
+/// index has it, so a line with no row goes with its hunk.
+fn take_lines(index: &Rope, source: &Rope, hunks: &[Hunk], rows: &Rows) -> (Rope, usize) {
+    let covered = |shown: &HashMap<usize, bool>, lines: &Range<u32>| {
+        lines
+            .clone()
+            .filter(|&line| shown.get(&(line as usize)) == Some(&true))
+            .count()
+    };
+    let held =
+        |shown: &HashMap<usize, bool>, line: u32| shown.get(&(line as usize)) == Some(&false);
+    let mut count = 0;
+    let mut pairs = Vec::new();
+    for hunk in hunks {
+        let taken = covered(&rows.before, &hunk.before) + covered(&rows.after, &hunk.after);
+        if taken == 0 {
+            continue;
+        }
+        count += taken;
+        // INVARIANT: the review's order, removed lines above added ones.
+        let kept = hunk
+            .before
+            .clone()
+            .filter(|&line| held(&rows.before, line))
+            .map(|line| slice(index, &(line..line + 1)));
+        let added = hunk
+            .after
+            .clone()
+            .filter(|&line| !held(&rows.after, line))
+            .map(|line| slice(source, &(line..line + 1)));
+        pairs.push((hunk.before.clone(), kept.chain(added).collect()));
     }
+    let staged = splice(index, pairs.into_iter(), ending(index, source));
+    (staged, count)
+}
+
+fn slice<'a>(text: &'a Rope, lines: &Range<u32>) -> RopeSlice<'a> {
+    let start = text.line_to_char(lines.start as usize);
+    let end = text.line_to_char(lines.end as usize);
+    text.slice(start..end)
+}
+
+/// The line ending a line with none gets when another line lands below it.
+fn ending(index: &Rope, other: &Rope) -> LineEnding {
+    auto_detect_line_ending(index)
+        .or_else(|| auto_detect_line_ending(other))
+        .unwrap_or(LineEnding::LF)
+}
+
+/// `index`, with each `(lines, text)` pair's lines replaced by its text. The
+/// pairs are in order and don't overlap.
+fn splice<'a>(
+    index: &'a Rope,
+    pairs: impl Iterator<Item = (Range<u32>, Vec<RopeSlice<'a>>)>,
+    ending: LineEnding,
+) -> Rope {
     let mut out = String::new();
+    let mut unended = false;
+    let mut push = |out: &mut String, text: RopeSlice| {
+        if text.len_chars() == 0 {
+            return;
+        }
+        // WHY: a last line with no line ending can land above another line,
+        // and would join it.
+        if unended {
+            out.push_str(ending.as_str());
+        }
+        out.extend(text.chunks());
+        unended = get_line_ending(&text).is_none();
+    };
     let mut cursor = 0;
-    for (from_lines, to_lines) in pairs {
-        out.extend(lines(from, cursor..from_lines.start).chunks());
-        out.extend(lines(to, to_lines).chunks());
-        cursor = from_lines.end;
+    for (replaced, text) in pairs {
+        push(&mut out, slice(index, &(cursor..replaced.start)));
+        for text in text {
+            push(&mut out, text);
+        }
+        cursor = replaced.end;
     }
-    out.extend(lines(from, cursor..from.len_lines() as u32).chunks());
+    push(&mut out, slice(index, &(cursor..index.len_lines() as u32)));
     Rope::from(out)
 }
 
 #[cfg(test)]
 mod test {
-    use helix_core::Rope;
-    use helix_vcs::Hunk;
+    use std::path::PathBuf;
 
-    use super::{hunks, map_to_before, splice, under};
+    use helix_core::{LineEnding, Rope};
+    use helix_vcs::{FileChange, Hunk};
+
+    use super::{carry, hunks, map_to_before, slice, splice, staged_lines, under};
+    use crate::view::Picked;
 
     fn hunk(before: std::ops::Range<u32>, after: std::ops::Range<u32>) -> Hunk {
         Hunk { before, after }
@@ -259,10 +406,10 @@ mod test {
 
         let staged = splice(
             &index,
-            &buffer,
             hunks[1..]
                 .iter()
-                .map(|hunk| (hunk.before.clone(), hunk.after.clone())),
+                .map(|hunk| (hunk.before.clone(), vec![slice(&buffer, &hunk.after)])),
+            LineEnding::LF,
         );
         assert_eq!(staged, "a\nb\nc\nD\ne\n");
     }
@@ -274,12 +421,174 @@ mod test {
         let hunks = hunks(&index, &buffer).unwrap();
         let staged = splice(
             &index,
-            &buffer,
             hunks
                 .iter()
-                .map(|hunk| (hunk.before.clone(), hunk.after.clone())),
+                .map(|hunk| (hunk.before.clone(), vec![slice(&buffer, &hunk.after)])),
+            LineEnding::LF,
         );
         assert_eq!(staged, "a\nb\nc");
+    }
+
+    /// What staging the rows of a review of `base` against `source` makes of
+    /// `index`, with the selection over the removed rows of the base lines
+    /// `removed` and the added rows of the source lines `added`.
+    fn stage(
+        [base, index, source]: [&str; 3],
+        removed: &[usize],
+        added: &[usize],
+    ) -> (String, usize) {
+        let (base, index, source) = (Rope::from(base), Rope::from(index), Rope::from(source));
+        let shown = hunks(&base, &source).unwrap();
+        let rows = |side: fn(&Hunk) -> std::ops::Range<u32>, covered: &[usize]| {
+            shown
+                .iter()
+                .flat_map(side)
+                .map(|line| (line as usize, covered.contains(&(line as usize))))
+                .collect()
+        };
+        let change = FileChange::Modified {
+            path: PathBuf::from("a.txt"),
+        };
+        let file = Picked {
+            change: &change,
+            base: &base,
+            source: &source,
+            encoding: helix_core::encoding::UTF_8,
+            lines: Vec::new(),
+            removed: rows(|hunk| hunk.before.clone(), removed),
+            added: rows(|hunk| hunk.after.clone(), added),
+        };
+        let (staged, count) = staged_lines(&file, &index).unwrap();
+        (staged.to_string(), count)
+    }
+
+    #[test]
+    fn staging_lines_takes_the_covered_rows_and_holds_back_the_other_rows() {
+        let same = |text: &'static str, source: &'static str| [text, text, source];
+        type Case<'a> = (
+            &'a str,
+            [&'a str; 3],
+            &'a [usize],
+            &'a [usize],
+            &'a str,
+            usize,
+        );
+        let cases: &[Case] = &[
+            (
+                "an added row alone leaves the line it replaces",
+                same("a\nb\nc\n", "a\nB\nc\n"),
+                &[],
+                &[1],
+                "a\nb\nB\nc\n",
+                1,
+            ),
+            (
+                "a removed row alone adds nothing",
+                same("a\nb\nc\n", "a\nB\nc\n"),
+                &[1],
+                &[],
+                "a\nc\n",
+                1,
+            ),
+            (
+                "every row of a hunk is the whole hunk",
+                same("a\nb\nc\n", "a\nB\nc\n"),
+                &[1],
+                &[1],
+                "a\nB\nc\n",
+                2,
+            ),
+            (
+                "a hunk with no covered row stays",
+                same("a\nb\nc\nd\ne\n", "A\nb\nc\nd\nE\n"),
+                &[4],
+                &[4],
+                "a\nb\nc\nd\nE\n",
+                2,
+            ),
+            (
+                "the second of two added lines",
+                same("a\n", "a\nx\ny\n"),
+                &[],
+                &[2],
+                "a\ny\n",
+                1,
+            ),
+            (
+                "a line only the index has goes with its hunk",
+                ["a\nb\nc\n", "a\nB\nc\n", "a\nB2\nc\n"],
+                &[1],
+                &[1],
+                "a\nB2\nc\n",
+                1,
+            ),
+            (
+                "a row of a staged change has nothing to do",
+                ["a\nb\nc\n", "a\nB\nc\n", "a\nB\nc\n"],
+                &[1],
+                &[1],
+                "a\nB\nc\n",
+                0,
+            ),
+            (
+                "a row beside a staged change holds back its own line",
+                ["a\nb\nc\nd\n", "a\nB\nc\nd\n", "a\nB\nc\nD\n"],
+                &[],
+                &[3],
+                "a\nB\nc\nd\nD\n",
+                1,
+            ),
+            (
+                "a removed row of an `all` review is carried past a staged line",
+                ["a\nc\nd\n", "a\nb\nc\nd\n", "a\nb\nc\n"],
+                &[2],
+                &[],
+                "a\nb\nc\n",
+                1,
+            ),
+            (
+                "a last line with no line ending gets one above an added line",
+                same("a\nb", "a\nb\nc\n"),
+                &[],
+                &[2],
+                "a\nb\nc\n",
+                1,
+            ),
+            (
+                "and takes the index's own line ending",
+                same("a\r\nb", "a\r\nb\r\nc\r\n"),
+                &[],
+                &[2],
+                "a\r\nb\r\nc\r\n",
+                1,
+            ),
+        ];
+        for &(name, texts, removed, added, staged, count) in cases {
+            assert_eq!(
+                stage(texts, removed, added),
+                (staged.to_string(), count),
+                "{name}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_line_is_carried_past_hunks_and_not_out_of_one() {
+        let hunks = [hunk(1..2, 1..3), hunk(4..5, 5..5), hunk(7..7, 7..9)];
+        let carried: Vec<_> = (0..8).map(|line| carry(&hunks, line)).collect();
+        assert_eq!(
+            carried,
+            [
+                Some(0),
+                None,
+                Some(3),
+                Some(4),
+                None,
+                Some(5),
+                Some(6),
+                Some(9)
+            ]
+        );
     }
 
     #[test]

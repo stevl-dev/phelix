@@ -38,7 +38,7 @@ mod write;
 
 pub(crate) use lsp::replacement;
 pub(super) use restore::review_restore;
-pub(super) use stage::{stage_hunk, unstage_hunk};
+pub(super) use stage::{stage_hunk, stage_line, unstage_hunk};
 
 use helix_term::commands::MappableCommand;
 use helix_term::commands::WriteOptions;
@@ -88,6 +88,17 @@ pub const FEATURE: Feature = Feature {
             aliases: &[],
             doc: "Stage the hunks the selections touch in the review",
             fun: stage_hunk,
+            completer: CommandCompleter::none(),
+            signature: Signature {
+                positionals: (0, Some(0)),
+                ..Signature::DEFAULT
+            },
+        },
+        TypableCommand {
+            name: "stage-line",
+            aliases: &[],
+            doc: "Stage the changed lines the selections cover in the review",
+            fun: stage_line,
             completer: CommandCompleter::none(),
             signature: Signature {
                 positionals: (0, Some(0)),

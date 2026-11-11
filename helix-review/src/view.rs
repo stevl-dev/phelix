@@ -487,6 +487,11 @@ pub struct Picked<'a> {
     /// Each hunk's source lines, first and last. A removal stands on the line
     /// below it.
     pub lines: Vec<(usize, usize)>,
+    /// The base line of each of the file's removed rows, and whether the
+    /// selection covers the row.
+    pub removed: Vec<(usize, bool)>,
+    /// The same for its added rows, by source line.
+    pub added: Vec<(usize, bool)>,
 }
 
 /// Where `ret` on a row opens its file.
@@ -531,13 +536,33 @@ impl Stream {
             let change = &self.files[file].change;
             match picked.last_mut() {
                 Some(last) if std::ptr::eq(last.change, change) => last.lines.push(lines),
-                _ => picked.push(Picked {
-                    change,
-                    base,
-                    source,
-                    encoding: self.files[file].encoding,
-                    lines: vec![lines],
-                }),
+                _ => {
+                    let mut new = Picked {
+                        change,
+                        base,
+                        source,
+                        encoding: self.files[file].encoding,
+                        lines: vec![lines],
+                        removed: Vec::new(),
+                        added: Vec::new(),
+                    };
+                    for (row, kind) in self.rows.iter().enumerate() {
+                        let covered = || {
+                            rows.iter()
+                                .any(|&(first, last)| first <= row && row <= last)
+                        };
+                        match *kind {
+                            Row::Removed { file: of, base } if of == file => {
+                                new.removed.push((base, covered()))
+                            }
+                            Row::Added { file: of, source } if of == file => {
+                                new.added.push((source, covered()))
+                            }
+                            _ => {}
+                        }
+                    }
+                    picked.push(new);
+                }
             }
         }
         picked
@@ -1179,6 +1204,46 @@ mod tests {
         ]);
         assert_eq!(stream.hunks(), [1..3, 10..12, 13..15]);
         assert_eq!(stream.headers().collect::<Vec<_>>(), [0, 12]);
+    }
+
+    #[test]
+    fn picked_lines_are_the_changed_rows_and_which_the_selection_covers() {
+        let base = "a\nb\nc\nd\ne\nf\ng\nh\ni\nj\nk\n";
+        let source = "A\nb\nc\nd\ne\nf\ng\nh\ni\n";
+        let stream = stream(vec![
+            modified("one.txt", base, source),
+            modified("two.txt", "x\n", "y\n"),
+            modified("three.txt", "p\n", "q\n"),
+        ]);
+        // Rows: 0 header, 1 -a, 2 +A, 3-5 context, 6 gap, 7-9 context, 10 -j,
+        // 11 -k, 12 header, 13 -x, 14 +y, 15 header, 16 -p, 17 +q.
+        let picked = stream.picked(&[(2, 10), (12, 13)]);
+        let lines: Vec<_> = picked
+            .iter()
+            .map(|file| {
+                (
+                    file.change.path().to_str().unwrap(),
+                    file.removed.clone(),
+                    file.added.clone(),
+                )
+            })
+            .collect();
+        assert_eq!(
+            lines,
+            [
+                (
+                    "one.txt",
+                    vec![(0, false), (9, true), (10, false)],
+                    vec![(0, true)]
+                ),
+                ("two.txt", vec![(0, true)], vec![(0, false)]),
+            ],
+            "a file with no row under the selection is left out"
+        );
+        assert!(
+            stream.picked(&[(3, 9), (12, 12)]).is_empty(),
+            "unchanged rows, a gap, and a header pick nothing"
+        );
     }
 
     #[test]

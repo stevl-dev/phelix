@@ -2483,6 +2483,80 @@ async fn staging_takes_the_selected_hunk_out_of_an_unstaged_review() -> anyhow::
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn staging_lines_takes_only_the_changed_rows_under_the_selection() -> anyhow::Result<()> {
+    let repo = repo(
+        &[("a.txt", "a1\na2\na3\n")],
+        &[("a.txt", Some("a1\nx\ny\na2\na3\n"))],
+    );
+    let mut app = app_on(repo.path().join("a.txt"))?;
+    run_until(&mut app, ":review unstaged<ret>", |app| {
+        app.editor.features.review().stream().is_some()
+    })
+    .await?;
+    // WHY: the selection covers the header, `a1`, and `x`, of which only `x`
+    // is a changed row.
+    run_until(&mut app, "ggxxx:stage-line<ret>", |app| {
+        status(app) == "Staged 1 line"
+    })
+    .await?;
+    assert_eq!(index_text(&repo, "a.txt").unwrap(), "a1\nx\na2\na3\n");
+
+    test_key_sequence(
+        &mut app,
+        Some("/^a2<ret>:stage-line<ret>"),
+        Some(&|app| {
+            assert_eq!(
+                status(app),
+                "'stage-line': There are no unstaged changes under any selection"
+            );
+        }),
+        false,
+    )
+    .await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn staging_lines_in_an_all_review_reaches_the_index_past_a_staged_change(
+) -> anyhow::Result<()> {
+    let repo = staged_and_unstaged();
+    let mut app = app_on(repo.path().join("a.txt"))?;
+    start_review(&mut app).await?;
+    let index_is = |text: &'static str| {
+        let repo = &repo;
+        move |_: &Application| index_text(repo, "a.txt").unwrap() == text
+    };
+
+    run_until(
+        &mut app,
+        "/^nine<ret>:stage-line<ret>",
+        index_is("1\ntwo\n3\n4\n5\n6\n7\n8\n9\nnine\n10\n"),
+    )
+    .await?;
+    // WHY: the removed row is `HEAD`'s line 9, which is the index's line 9
+    // only past the staged line 2.
+    run_until(
+        &mut app,
+        "/^9<ret>:stage-line<ret>",
+        index_is("1\ntwo\n3\n4\n5\n6\n7\n8\nnine\n10\n"),
+    )
+    .await?;
+
+    test_key_sequence(
+        &mut app,
+        Some("/^two<ret>:stage-line<ret>"),
+        Some(&|app| {
+            assert_eq!(
+                status(app),
+                "'stage-line': There are no unstaged changes under any selection",
+                "a row of a staged change has nothing to stage"
+            );
+        }),
+        false,
+    )
+    .await
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn unstaging_puts_back_the_head_text() -> anyhow::Result<()> {
     let repo = ends_changed();
     git(repo.path(), &["add", "a.txt"]);
