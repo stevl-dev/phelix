@@ -19,7 +19,14 @@ pub(crate) fn keymap(user: &HashMap<Mode, KeyTrie>) -> HashMap<Mode, KeyTrie> {
     for keys in map.values_mut() {
         replace_commands(keys);
     }
-    merge_keys(&mut map, bindings());
+    merge_keys(&mut map, bindings("Review", term::OPEN));
+    map
+}
+
+/// The file list's keymap: the user's, with the list's binding over it.
+pub(crate) fn files_keymap(user: &HashMap<Mode, KeyTrie>) -> HashMap<Mode, KeyTrie> {
+    let mut map = user.clone();
+    merge_keys(&mut map, bindings("Review files", term::GOTO_FILE));
     map
 }
 
@@ -56,10 +63,10 @@ fn replace_commands(keys: &mut KeyTrie) {
     }
 }
 
-fn bindings() -> HashMap<Mode, KeyTrie> {
+fn bindings(name: &str, enter: MappableCommand) -> HashMap<Mode, KeyTrie> {
     let keys = KeyTrie::Node(KeyTrieNode::new(
-        "Review",
-        IndexMap::from([(key!(Enter), KeyTrie::MappableCommand(term::OPEN))]),
+        name,
+        IndexMap::from([(key!(Enter), KeyTrie::MappableCommand(enter))]),
     ));
     hashmap!(
         Mode::Normal => keys.clone(),

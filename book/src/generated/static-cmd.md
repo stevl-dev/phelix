@@ -320,3 +320,4 @@
 | `review_last_hunk` | Select the last hunk of the review |  |
 | `review_undo` | Undo the review's last edit in the files it changed |  |
 | `review_redo` | Redo the review's last undone edit in the files it changed |  |
+| `review_goto_file` | Focus the review, which shows the file under the cursor in its file list |  |

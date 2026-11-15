@@ -64,8 +64,10 @@ pub fn sync(editor: &mut Editor, completing: bool) {
     if let Some(Err(message)) = taken {
         editor.set_status(message);
     }
-    save_selections(editor, doc_id);
+    // INVARIANT: before the selections are saved. It moves the review's cursor
+    // to the file under the list's.
     files::sync(editor);
+    save_selections(editor, doc_id);
     keep_shown(editor);
     fit_file_style(editor, doc_id);
     fit_gutters(editor);

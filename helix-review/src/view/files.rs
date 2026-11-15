@@ -18,10 +18,10 @@ use helix_vcs::FileChange;
 use helix_view::document::Mode;
 use helix_view::editor::Action;
 use helix_view::kind::BufferKind;
-use helix_view::{Document, DocumentId, Editor, ViewId};
+use helix_view::{align_view, Align, Document, DocumentId, Editor, ViewId};
 
 use super::sync::{settle, view_of};
-use super::{File, ReviewState, REVIEW_TAB};
+use super::{File, ReviewState, Row, REVIEW_TAB};
 
 /// The name of the list's buffer kind.
 pub const KIND_NAME: &str = "review-files";
@@ -104,6 +104,8 @@ pub struct List {
     review_view: Option<ViewId>,
     /// The file of that view's cursor.
     current: Option<usize>,
+    /// Whether the review's view moved since the focus came to the list.
+    visited: bool,
 }
 
 impl List {
@@ -334,7 +336,7 @@ pub(super) fn sync(editor: &mut Editor) {
     if hold(editor) {
         editor.set_status(PUT_BACK);
     }
-    follow_review(editor);
+    follow(editor);
     let Some(stream) = editor.features.review_mut().stream.as_mut() else {
         return;
     };
@@ -351,9 +353,12 @@ pub(super) fn sync(editor: &mut Editor) {
     }
 }
 
-/// Notes the review's view and the file its cursor is in. With the focus
-/// outside the list, puts the list's cursors on that file's row.
-fn follow_review(editor: &mut Editor) {
+/// Keeps the list and the review on one file. With the focus in the list, the
+/// review's view shows the file under the list's cursor. With the focus
+/// anywhere else, the list's cursors go to the file under the review's.
+// INVARIANT: which way it goes depends only on the focus, so the two can't
+// chase each other.
+fn follow(editor: &mut Editor) {
     let Some(stream) = editor.features.review().stream.as_ref() else {
         return;
     };
@@ -363,43 +368,87 @@ fn follow_review(editor: &mut Editor) {
         .flatten()
         .find(|view| views.contains(view))
         .or(views.first().copied());
-    let current = view.and_then(|view| {
-        let doc = editor.documents.get(&stream.doc)?;
+    let cursor_row = |doc: &Document, view: ViewId| {
         let text = doc.text().slice(..);
-        let row = text.char_to_line(doc.selection(view).primary().cursor(text));
+        text.char_to_line(doc.selection(view).primary().cursor(text))
+    };
+    let mut current = view.and_then(|view| {
+        let row = cursor_row(editor.documents.get(&stream.doc)?, view);
         // WHY: the line below the last row is the last file's too.
         let row = stream.rows.get(row).or(stream.rows.last())?;
         Some(row.file())
     });
 
     let scrolloff = editor.config().scrolloff;
-    let focused = editor.tree.get(editor.tree.focus).doc;
+    let focus = editor.tree.get(editor.tree.focus);
     let Some(stream) = editor.features.review_mut().stream.as_mut() else {
         return;
     };
     let list = &mut stream.list;
     list.review_view = view;
     list.current = current;
+    let Some(doc) = editor.documents.get(&list.doc) else {
+        return;
+    };
+
+    if focus.doc == list.doc {
+        let row = cursor_row(doc, focus.id);
+        let file = list
+            .rows
+            .get(row)
+            .or(list.rows.last())
+            .map(|row| row.file());
+        let header = file.filter(|_| file != current).and_then(|file| {
+            let header = |row: &Row| *row == Row::Header { file };
+            stream.rows.iter().position(header)
+        });
+        let (Some(header), Some(view), Some(doc)) =
+            (header, view, editor.documents.get_mut(&stream.doc))
+        else {
+            return;
+        };
+        let view = editor.tree.get_mut(view);
+        // WHY: one jump for a visit to the list, however far it goes, so
+        // `C-o` in the review goes back to where the visit started.
+        if !std::mem::replace(&mut list.visited, true) {
+            let jump = (doc.id(), doc.selection(view.id).clone());
+            view.push_jump(doc, jump);
+        }
+        let start = doc.text().line_to_char(header);
+        doc.set_selection(view.id, Selection::point(start));
+        align_view(doc, view, Align::Top);
+        current = file;
+        list.current = current;
+        return;
+    }
+
+    list.visited = false;
     let row = current.and_then(|file| {
         let row = |entry: &Entry| *entry == Entry::File { file };
         list.rows.iter().position(row)
     });
-    let (Some(row), Some(doc)) = (row, editor.documents.get_mut(&list.doc)) else {
+    let list = list.doc;
+    let (Some(row), Some(doc)) = (row, editor.documents.get_mut(&list)) else {
         return;
     };
-    if focused == list.doc {
-        return;
-    }
     for (view, _) in editor.tree.views() {
-        let text = doc.text().slice(..);
-        if view.doc != list.doc || row >= text.len_lines() {
+        if view.doc != list || row >= doc.text().len_lines() {
             continue;
         }
-        if text.char_to_line(doc.selection(view.id).primary().cursor(text)) != row {
-            doc.set_selection(view.id, Selection::point(text.line_to_char(row)));
+        if cursor_row(doc, view.id) != row {
+            doc.set_selection(view.id, Selection::point(doc.text().line_to_char(row)));
             view.ensure_cursor_in_view(doc, scrolloff);
         }
     }
+}
+
+/// The view of the tab that last had focus while it showed the review.
+pub fn review_view(editor: &Editor) -> Option<ViewId> {
+    let stream = editor.features.review().stream.as_ref()?;
+    stream.list.review_view.filter(|&view| {
+        let view = editor.tree.try_get(view);
+        view.is_some_and(|view| view.doc == stream.doc)
+    })
 }
 
 /// The review tab's views and what each shows.

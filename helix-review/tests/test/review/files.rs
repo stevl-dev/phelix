@@ -274,3 +274,78 @@ async fn the_reviews_file_has_the_tint_in_the_list() -> anyhow::Result<()> {
     .await?;
     run_until(&mut app, "gn", |app| tinted(app) == ["b.txt"]).await
 }
+
+/// The cursor's row in the review's view, and the row at the view's top.
+fn review_rows(app: &Application) -> (usize, usize) {
+    let doc = app.editor.document(stream(app).doc).unwrap();
+    let mut views = app.editor.tree.traverse().map(|(_, view)| view);
+    let view = views.find(|view| view.doc == doc.id()).unwrap();
+    let text = doc.text().slice(..);
+    let cursor = doc.selection(view.id).primary().cursor(text);
+    let top = doc.view_offset(view.id).anchor;
+    (text.char_to_line(cursor), text.char_to_line(top))
+}
+
+/// The row of `b.txt`'s header in `two_changed`'s review, below `a.txt`'s.
+fn second_header(app: &Application) -> usize {
+    stream(app).headers().nth(1).unwrap()
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn the_review_shows_the_file_under_the_lists_cursor() -> anyhow::Result<()> {
+    let repo = two_changed();
+    let mut app = review_with_list(&repo).await?;
+    let b = second_header(&app);
+    // Rows of the list: 0 the repository, 1 a.txt, 2 src/, 3 b.txt.
+    let steps = [
+        ("3j<C-w>h", 1, (3, 0), "entering the list moves nothing"),
+        (
+            "j",
+            2,
+            (b, b),
+            "a directory shows its first file, at the top",
+        ),
+        ("j", 3, (b, b), "the file's own row shows the same file"),
+        ("kk", 1, (0, 0), "back to the first file's header"),
+    ];
+    for (keys, row, review, step) in steps {
+        run_until(&mut app, keys, |app| {
+            in_list(app) && cursor(app).0 == row && review_rows(app).0 == review.0
+        })
+        .await?;
+        assert_eq!(review_rows(&app), review, "{step}");
+    }
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_visit_to_the_list_that_moves_nothing_leaves_the_reviews_cursor() -> anyhow::Result<()> {
+    let repo = two_changed();
+    let mut app = review_with_list(&repo).await?;
+    run_until(&mut app, "3j<C-w>h", in_list).await?;
+    run_until(&mut app, "<C-w>l", in_stream).await?;
+    assert_eq!(cursor(&app), (3, 0));
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn jump_backward_in_the_review_goes_back_to_before_the_visit() -> anyhow::Result<()> {
+    let repo = two_changed();
+    let mut app = review_with_list(&repo).await?;
+    let b = second_header(&app);
+    run_until(&mut app, "3j<C-w>hjj", |app| review_rows(app).0 == b).await?;
+    run_until(&mut app, "kkjj<C-w>l", in_stream).await?;
+    assert_eq!(cursor(&app).0, b);
+    run_until(&mut app, "<C-o>", |app| cursor(app).0 == 3).await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn enter_in_the_list_focuses_the_review_on_the_cursors_file() -> anyhow::Result<()> {
+    let repo = two_changed();
+    let mut app = review_with_list(&repo).await?;
+    let b = second_header(&app);
+    run_until(&mut app, "<C-w>hjj", |app| review_rows(app).0 == b).await?;
+    run_until(&mut app, "<ret>", in_stream).await?;
+    assert_eq!(cursor(&app).0, b);
+    Ok(())
+}

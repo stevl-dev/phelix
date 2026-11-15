@@ -56,7 +56,7 @@ use helix_term::ui::text_decorations::DecorationManager;
 pub const FEATURE: Feature = Feature {
     name: "review",
     commands: &[
-        OPEN, NEXT_HUNK, PREV_HUNK, FIRST_HUNK, LAST_HUNK, UNDO, REDO,
+        OPEN, NEXT_HUNK, PREV_HUNK, FIRST_HUNK, LAST_HUNK, UNDO, REDO, GOTO_FILE,
     ],
     tabs: &[REVIEW_TAB],
     config: Some(FeatureTable {
@@ -198,6 +198,12 @@ pub(crate) const REDO: MappableCommand = MappableCommand::Static {
     name: "review_redo",
     fun: redo,
     doc: "Redo the review's last undone edit in the files it changed",
+};
+
+pub(crate) const GOTO_FILE: MappableCommand = MappableCommand::Static {
+    name: "review_goto_file",
+    fun: files::goto_file,
+    doc: "Focus the review, which shows the file under the cursor in its file list",
 };
 
 /// The `helix-term` side of the review's buffer kind.
@@ -762,7 +768,7 @@ mod tests {
         use helix_term::keymap::KeyTrie;
 
         let config = load(
-            "[keys.normal]\nC-r = \"review_open\"\nC-t = \":review staged\"",
+            "[keys.normal]\nC-r = \"review_open\"\nC-t = \":review staged\"\nC-f = \"review_goto_file\"",
             None,
         )
         .unwrap();
@@ -775,6 +781,7 @@ mod tests {
         };
         assert_eq!(name("C-r"), "review_open");
         assert_eq!(name("C-t"), "review");
+        assert_eq!(name("C-f"), "review_goto_file");
     }
 
     #[test]

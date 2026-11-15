@@ -527,11 +527,19 @@ And it adds one key:
 The list is a tree. A directory has a row, and the files under it follow, two columns in. A chain of directories with nothing else in them shares one row, like `helix-term/src/`. The files come in the review's order.
 The list is a buffer in a view of the review's tab, so motions, `/`, counts, and your own keys work in it, and the window keys reach it: `Ctrl-w h` from the review, and `Ctrl-w l` back. The statusline calls it `[files]`, and like the review it stays out of the buffer lists.
 While the focus is outside the list, its cursor stays on the row of the file the review's cursor is in, and the list scrolls to show it. That row has a tint, wherever the focus is.
+While the focus is in the list, the review shows the file under the list's cursor, with its header at the top, as the cursor moves: by `j`, a search, a count, or a click. A directory's row shows the first file under it. Entering the list moves nothing.
+A visit to the list is one jump in the review's view, so `Ctrl-o` there goes back to where the review was before it.
 An edit to the list is put back.
 `gn`, `gp`, `:bn`, and `:bp` there go to the next and the previous file's row, past the directories. `:w` and `:reload` there do what they do in the review.
 Closing the list's view hides it, as `Ctrl-w q` and `:q` there do, and so does `:bc` there. The review stays. `Ctrl-w o` there closes the review's view, and the list's view shows the review instead.
 `:q` in the review quits Helix with the list open, as it does without it.
 A file opened in the list's view, with `:e` or a picker, opens in the code tab.
+
+The list adds one key:
+
+| Key     | Command            | Description                                                               |
+| -----   | -----              | -------------                                                             |
+| `Enter` | `review_goto_file` | Focus the review, which shows the file under the list's cursor            |
 
 ## Picker
 

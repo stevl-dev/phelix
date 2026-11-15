@@ -87,7 +87,7 @@ Each entry says what the feature adds, and where its code, tests, and book pages
 
 ### review-stream
 
-- Plan: `fork/review-stream.md`, done through phase 9f. Staging lines is `fork/stage-lines.md`, done through phase 2. The file list is `fork/review-sidebar.md`, done through phase 4.
+- Plan: `fork/review-stream.md`, done through phase 9f. Staging lines is `fork/stage-lines.md`, done through phase 2. The file list is `fork/review-sidebar.md`, done through phase 5.
   The completion spike's prototype is on the local branch `spike/review-completion`, which is never pushed.
 - Adds: `:review` shows every changed file's hunks against `HEAD` in one buffer, or with `unstaged` or `staged` against the index, with old and new line numbers and `+`/`-` signs in the gutter.
   An edit to added or unchanged lines, new and deleted lines too, goes to the file's buffer as you type, loaded in the background if need be and closed with the review once saved, and the rows follow it. A buffer the review loads in the background, for an edit or a language feature, stays out of the buffer lists until a view shows it, and joins them when the review closes and leaves it with unsaved changes. New lines and indents are the file's own. Any other edit is put back, and a staged review takes none.
@@ -105,6 +105,7 @@ Each entry says what the feature adds, and where its code, tests, and book pages
   In the changed-file picker, `review_jump` (`Alt-r`) jumps to the selected file in the review of the list's changes.
   `:review-sidebar` shows the review's files as a tree of directories in a side view at the left of its tab (`tabs`), and hides it. The list is a buffer of a second kind, `review-files`, that goes by `[files]`, read-only and out of the buffer lists. An edit to it is put back. `gn`, `gp`, `:bn`, and `:bp` in it step between file rows, `:w` and `:reload` there act as in the review, and `:bc` there hides it, as closing its view does. A file opened in its view opens in the code tab. With no view of the review left in the tab, the list's views close, and the tab's last view shows the review instead.
   With the focus outside the list, its cursor follows the file the review's cursor is in, and that file's row has a tint, from the fork's `ui.review.current`, or else `ui.selection`.
+  With the focus in the list, the review's view shows the file under the list's cursor as it moves, and a visit to the list is one jump there. `Enter` in the list (`review_goto_file`) focuses the review.
   Rows get syntax colors from parses of each file's whole base and source.
   Removed and added rows get tints, headers a rule, and changed words a mark, from theme scopes: `diff.{plus,minus}.view`, `diff.delta.view.text`, and the fork's `ui.review.header` and `ui.review.gap`.
   `[review]`'s `row-background` and `word-background`, a top-level table of `config.toml`, turn the tints and the marks off. `:config-reload` reads it again, and `:set` and `:toggle` don't reach it.
