@@ -4,7 +4,7 @@ Snapshot: `main` at `ae7b54931`.
 Goes in `fork/review-sidebar.md`. Feature slug: `review-sidebar`, part of `review-stream`'s entry in `FORK.md`. The core's new hooks go in the `tabs` and `feature-hooks` entries.
 Reference: Hunk's files pane ([hunk.dev](https://www.hunk.dev/)).
 
-Status: approved. Done through phase 5.
+Status: approved. Done through phase 6.
 
 ## Bottom line
 
@@ -134,7 +134,7 @@ Each phase is one commit that builds and passes its tests, and marks itself done
 | 3 | Done | List the review's files in a side view. | 2.3 and 2.4 without the config: `view/files.rs` with the tree's rows, the list's kind, the hold in `sync.rs`, the invariants, `switch_to`, and `:review-sidebar`. Hidden until the command shows it, so nothing changes for a review that doesn't run it. Unit tests in `files.rs`, table-driven: nested directories, a shared row, a file at the root, a rename, one file, and rows in `files`' order. Integration tests: the command shows and hides it, an edit to the list is put back, `:q` in the review with the list open quits, `C-w o` in the list leaves the review, `:e` in the list opens in the code tab, and a `:reload` after a new change adds its row and keeps the cursor's file. Book and `FORK.md`. |
 | 4 | Done | Mark the review's current file in the list. | 2.5's first half and the tint of 2.6. Integration tests: moving to another file in the review moves the list's cursor, with the row far enough down to need a scroll, and a cursor on a file's last row still marks that file. `book/src/themes.md` for `ui.review.current`. |
 | 5 | Done | Show the file under the list's cursor in the review. | 2.5's second half, and `review_goto_file` on `Enter`. Integration tests: `j` in the list puts the review's cursor on the next file's header, a directory row gives its first file, entering and leaving the list without moving leaves the review's cursor where it was, `C-o` in the review goes back after a visit, and `Enter` focuses the review. A unit test that the key binds by name, beside the review's. Book. |
-| 6 | | Draw each file's status and line counts in the list. | 2.6's right edge, in `term/files.rs`. Unit tests of the pure part: the counts of a file's hunks, and none for a binary file. A render test only if `term/decorations.rs`' test style reaches it. Book. Colors are for the human to check. |
+| 6 | Done | Draw each file's status and line counts in the list. | 2.6's right edge, in `term/files.rs`. Unit tests of the pure part: the counts of a file's hunks, and none for a binary file. A render test only if `term/decorations.rs`' test style reaches it. Book. Colors are for the human to check. |
 | 7 | | Read the list's width from `[review]`. | `sidebar-width`, read by the sync so `:config-reload` resizes an open list. Unit test of the table, beside the review's: the default against a literal, an override, and a refused value. `book/src/configuration.md`. |
 | 8 | | Show the review's file list when the tab is wide. | `sidebar`, `"auto"`, and the override of 2.7. This is the commit that changes what `:review` shows. Integration tests: a wide tab opens with the list and focus in the review, `sidebar = false` opens without it, a hide survives a resize, and a narrow tab opens without it. The harness's terminal is 120 columns wide, so the review's existing tests get the list. A test that fails for that reason is fixed, or sets `sidebar = false` when the list is beside its point. Book and `FORK.md`. |
 
@@ -214,3 +214,10 @@ Assumed here. Approving the plan approves them, so say which to change:
   `review_goto_file` outside the list says so, as the review's commands do outside the review.
   The list's keymap is the user's with `Enter` over it. The review's swaps, like `u` for `review_undo`, aren't in it.
   The `C-o` test moves through the list twice before it leaves, so it fails if each move records a jump.
+- Phase 6: the marks are a `Decoration` whose `render_virt_lines` draws on the row itself. `decorate_line` runs before the row's text, so a long name would cover them.
+  The counts' column is as wide as the widest counts of any file, so the letters line up, and the counts sit flush with the view's right edge. A blank comes before the letter, over a long name.
+  The blanks are drawn with a default style, so the current file's tint runs under the mark. The tint's test now asks for the tint in all 30 columns.
+  A file with no text changes has counts of zero, and shows only its letter, as a binary file does.
+  A renamed file's letter takes `diff.delta`, not `diff.delta.moved`, which the plan didn't name.
+  There is a render test: the screen-reading style of phase 4's tint test reaches the list, where `term/decorations.rs`' unit tests don't. It reads four rows off the screen, one with a name that's cut, and then an edit in the review that changes a count while the list's text stays.
+  `File::counts` and its unit test are in `view.rs`, where `File` is, and `Stream::changes` hands them to the drawing.

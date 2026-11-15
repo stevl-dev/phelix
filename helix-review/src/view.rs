@@ -449,6 +449,22 @@ impl File {
             .unwrap_or(LineEnding::LF)
     }
 
+    /// The lines its hunks add and remove. `None` for a binary file, or one
+    /// too large to diff.
+    fn counts(&self) -> Option<(usize, usize)> {
+        let Content::Text { base, source } = &self.content else {
+            return None;
+        };
+        let hunks = self.hunks.get_or_init(|| layout::hunks(base, source));
+        let counts = hunks
+            .as_ref()?
+            .iter()
+            .fold((0, 0), |(added, removed), hunk| {
+                (added + hunk.after.len(), removed + hunk.before.len())
+            });
+        Some(counts)
+    }
+
     fn indent(&self, loader: &Loader) -> Option<IndentStyle> {
         *self.indent.get_or_init(|| {
             let Content::Text { source, .. } = &self.content else {
@@ -512,6 +528,12 @@ impl Stream {
     /// The list of its files.
     pub fn list(&self) -> &files::List {
         &self.list
+    }
+
+    /// How each file changed, with the lines its hunks add and remove. A
+    /// binary file, or one too large to diff, has no counts.
+    pub fn changes(&self) -> impl Iterator<Item = (&FileChange, Option<(usize, usize)>)> + '_ {
+        self.files.iter().map(|file| (&file.change, file.counts()))
     }
 
     /// The hunks that `rows`, pairs of first and last rows, touch, by file.
@@ -1213,6 +1235,27 @@ mod tests {
         ]);
         assert_eq!(stream.hunks(), [1..3, 10..12, 13..15]);
         assert_eq!(stream.headers().collect::<Vec<_>>(), [0, 12]);
+    }
+
+    #[test]
+    fn changes_count_the_lines_of_a_files_hunks_and_none_for_a_binary_file() {
+        let stream = stream(vec![
+            modified(
+                "one.txt",
+                "a\nb\nc\nd\ne\nf\ng\nh\ni\nj\nk\n",
+                "A\nB\nb\nc\nd\ne\nf\ng\nh\ni\n",
+            ),
+            modified("same.txt", "x\n", "x\n"),
+            Section {
+                change: FileChange::Added {
+                    path: PathBuf::from("c.bin"),
+                },
+                content: Content::Binary,
+                encoding: helix_core::encoding::UTF_8,
+            },
+        ]);
+        let counts: Vec<_> = stream.changes().map(|(_, counts)| counts).collect();
+        assert_eq!(counts, [Some((2, 3)), Some((0, 0)), None]);
     }
 
     #[test]

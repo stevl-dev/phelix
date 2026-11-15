@@ -246,14 +246,19 @@ async fn a_cursor_on_a_files_last_row_marks_that_file_in_the_list() -> anyhow::R
     run_until(&mut app, "k", |app| list_row(app) == 1).await
 }
 
-/// The text of the list's rows that the screen tints.
+/// The names on the list's rows that the screen tints from edge to edge.
 fn tinted(app: &Application) -> Vec<String> {
     let buffer = app.terminal_buffer();
     let cell = |x, y| buffer.get(x, y).unwrap();
     (0..buffer.area.height)
-        .filter(|&y| cell(0, y).bg == Color::Magenta)
+        .filter(|&y| (0..30).all(|x| cell(x, y).bg == Color::Magenta))
         .map(|y| (0..30).map(|x| cell(x, y).symbol.as_str()).collect())
-        .map(|row: String| row.trim().to_string())
+        .map(|row: String| {
+            row.split_whitespace()
+                .next()
+                .unwrap_or_default()
+                .to_string()
+        })
         .collect()
 }
 
@@ -347,5 +352,54 @@ async fn enter_in_the_list_focuses_the_review_on_the_cursors_file() -> anyhow::R
     run_until(&mut app, "<C-w>hjj", |app| review_rows(app).0 == b).await?;
     run_until(&mut app, "<ret>", in_stream).await?;
     assert_eq!(cursor(&app).0, b);
+    Ok(())
+}
+
+/// The list's first 30 columns of `row` on screen.
+fn drawn_row(app: &Application, row: u16) -> String {
+    let buffer = app.terminal_buffer();
+    let y = list_views(app)[0].area.y + row;
+    (0..30)
+        .map(|x| buffer.get(x, y).unwrap().symbol.as_str())
+        .collect()
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn file_rows_end_with_their_status_and_counts_over_a_long_names_tail() -> anyhow::Result<()> {
+    let long = "long_name_of_a_file_that_is_cut.txt";
+    let repo = repo(
+        &[("a.txt", TEN), ("gone.txt", "old\n"), (long, "x\n")],
+        &[
+            ("a.txt", Some("1\n2\nthree\nmore\n4\n5\n6\n7\n8\n9\n10\n")),
+            ("gone.txt", None),
+            (long, Some("y\n")),
+            ("new.txt", Some("x\ny\nz\n")),
+        ],
+    );
+    let mut app = review_with_list(&repo).await?;
+    let before = list_text(&app);
+    // Rows: 0 the repository, then the files in path order.
+    let drawn =
+        |app: &Application| -> Vec<String> { (1..5).map(|row| drawn_row(app, row)).collect() };
+    run_until(&mut app, "", |app| drawn(app)[0].ends_with("-1")).await?;
+    assert_eq!(
+        drawn(&app),
+        [
+            "  a.txt                M +2 -1",
+            "  gone.txt             D    -1",
+            "  long_name_of_a_file_ M +1 -1",
+            "  new.txt              ?    +3",
+        ]
+    );
+
+    run_until(&mut app, "/three<ret>oxx<esc>", |app| {
+        drawn(app)[0].ends_with("M +3 -1")
+    })
+    .await?;
+    assert_eq!(
+        list_text(&app),
+        before,
+        "the counts aren't the buffer's text"
+    );
     Ok(())
 }
