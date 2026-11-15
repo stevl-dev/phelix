@@ -379,8 +379,10 @@ impl Tree {
             })
     }
 
+    /// Whether every other view of `id`'s tab is a side view.
     pub fn is_last_in_tab(&self, id: ViewId) -> bool {
-        Traverse::new(self, self.root_of(id)).nth(1).is_none()
+        Traverse::new(self, self.root_of(id))
+            .all(|(other, view)| other == id || view.side.is_some())
     }
 
     /// Opens `tab`, which isn't open yet, with `view` in it, and switches to it.
@@ -407,6 +409,48 @@ impl Tree {
         let id = self.insert(view);
         self.activate(active);
         id
+    }
+
+    /// Inserts `view` as a side view `width` columns wide at the left edge of
+    /// `tab`, which has a view. The focus stays where it was.
+    pub fn insert_side(&mut self, tab: Tab, mut view: View, width: u16) -> ViewId {
+        assert!(!self.is_tab_empty(tab), "a tab with a view to keep focus");
+        let root = self.root_of_tab(tab).expect("checked above");
+        view.side = Some(width);
+        let mut node = Node::view(view);
+        node.parent = root;
+        let node = self.nodes.insert(node);
+        self.get_mut(node).id = node;
+        self.container_mut(root).children.insert(0, node);
+        self.recalculate();
+        node
+    }
+
+    /// Makes `id` a side view `width` columns wide, or an ordinary view again.
+    pub fn set_side(&mut self, id: ViewId, width: Option<u16>) {
+        let view = self.get_mut(id);
+        if view.side != width {
+            view.side = width;
+            self.recalculate();
+        }
+    }
+
+    /// The width `id` asks for in a vertical container: a side view's own, or
+    /// the widest of a horizontal container whose children all ask for one.
+    fn side_width(&self, id: ViewId) -> Option<u16> {
+        match &self.nodes[id].content {
+            Content::View(view) => view.side,
+            Content::Container(container) => match container.layout {
+                Layout::Horizontal => {
+                    let mut widest = None;
+                    for &child in &container.children {
+                        widest = widest.max(Some(self.side_width(child)?));
+                    }
+                    widest
+                }
+                Layout::Vertical => None,
+            },
+        }
     }
 
     pub fn tab_of(&self, id: ViewId) -> Tab {
@@ -548,6 +592,13 @@ impl Tree {
         // b) node is container, calculate areas for each child and push them on the stack
 
         while let Some((key, area)) = self.stack.pop() {
+            let mut sides: Vec<Option<u16>> = match &self.nodes[key].content {
+                Content::Container(container) if container.layout == Layout::Vertical => {
+                    let width = |&child| self.side_width(child);
+                    container.children.iter().map(width).collect()
+                }
+                _ => Vec::new(),
+            };
             let node = &mut self.nodes[key];
 
             match &mut node.content {
@@ -586,31 +637,58 @@ impl Tree {
                             }
                         }
                         Layout::Vertical => {
-                            let len = container.children.len();
-                            let len_u16 = len as u16;
-
                             let inner_gap = 1u16;
-                            let total_gap = inner_gap * len_u16.saturating_sub(2);
 
-                            let used_area = area.width.saturating_sub(total_gap);
-                            let width = used_area / len_u16;
+                            let mut shared = sides.iter().filter(|side| side.is_none()).count();
+                            if shared == 0 {
+                                // WHY: with no other child to take the rest,
+                                // side views share the width as any views do.
+                                sides.fill(None);
+                                shared = sides.len();
+                            }
+                            let shared = shared as u16;
+                            // INVARIANT: the side views take half the width at
+                            // most, so the others never vanish.
+                            let fixed = sides.len() as u16 - shared;
+                            let cap = area.width / 2 / fixed.max(1);
+                            for side in sides.iter_mut().flatten() {
+                                *side = (*side).min(cap);
+                            }
+                            let mut fixed_right: u16 =
+                                sides.iter().flatten().map(|side| side + inner_gap).sum();
+
+                            let total_gap = inner_gap * shared.saturating_sub(2);
+                            let used_area = area.width.saturating_sub(fixed_right + total_gap);
+                            let width = used_area / shared;
 
                             let mut child_x = area.x;
+                            let mut shared_right = shared;
 
-                            for (i, child) in container.children.iter().enumerate() {
-                                let mut area = Rect::new(
+                            for (child, side) in container.children.iter().zip(sides) {
+                                let width = match side {
+                                    Some(side) => {
+                                        fixed_right -= side + inner_gap;
+                                        side
+                                    }
+                                    None => {
+                                        shared_right -= 1;
+                                        // the last child that shares takes the remaining width
+                                        // because we can get uneven space from rounding
+                                        if shared_right == 0 {
+                                            (container.area.x + container.area.width)
+                                                .saturating_sub(child_x + fixed_right)
+                                        } else {
+                                            width
+                                        }
+                                    }
+                                };
+                                let area = Rect::new(
                                     child_x,
                                     container.area.y,
                                     width,
                                     container.area.height,
                                 );
                                 child_x += width + inner_gap;
-
-                                // last child takes the remaining width because we can get uneven
-                                // space from rounding
-                                if i == len - 1 {
-                                    area.width = container.area.x + container.area.width - area.x;
-                                }
 
                                 self.stack.push((*child, area));
                             }
@@ -780,6 +858,14 @@ impl Tree {
     }
 
     pub fn swap_split_in_direction(&mut self, direction: Direction) -> Option<()> {
+        self.swap_nodes_in_direction(direction)?;
+        // WHY: not a swap of the two areas. A side view keeps its width where
+        // it lands.
+        self.recalculate();
+        Some(())
+    }
+
+    fn swap_nodes_in_direction(&mut self, direction: Direction) -> Option<()> {
         let focus = self.focus;
         let target = self.find_split_in_direction(focus, direction)?;
         let focus_parent = self.nodes[focus].parent;
@@ -802,9 +888,6 @@ impl Tree {
                     // swap node positions so that traversal order is kept
                     parent.children[focus_pos] = target_view.id;
                     parent.children[target_pos] = focus_view.id;
-                    // swap area so that views rendered at the correct location
-                    std::mem::swap(&mut focus_view.area, &mut target_view.area);
-
                     Some(())
                 }
                 _ => unreachable!(),
@@ -839,9 +922,6 @@ impl Tree {
                         &mut target_parent.children[target_pos],
                     );
                     std::mem::swap(&mut focus.parent, &mut target.parent);
-                    // swap area so that views rendered at the correct location
-                    std::mem::swap(&mut focus_view.area, &mut target_view.area);
-
                     Some(())
                 }
                 _ => unreachable!(),
@@ -1166,6 +1246,85 @@ mod test {
 
     fn on_screen(tree: &Tree) -> Vec<ViewId> {
         tree.traverse().map(|(id, _)| id).collect()
+    }
+
+    /// A tab `width` columns wide with one view, and a side view that asks for
+    /// 30 columns at its left.
+    fn beside_a_side_view(width: u16) -> (Tree, ViewId, ViewId) {
+        let mut tree = Tree::new(Rect::new(0, 0, width, 30));
+        let main = tree.insert(view());
+        let side = tree.insert_side(Tab::CODE, view(), 30);
+        (tree, side, main)
+    }
+
+    /// Each view's first column and width, in the order on screen.
+    fn columns(tree: &Tree) -> Vec<(u16, u16)> {
+        tree.traverse()
+            .map(|(_, view)| (view.area.x, view.area.width))
+            .collect()
+    }
+
+    #[test]
+    fn a_side_view_takes_its_width_and_the_others_share_the_rest() {
+        let (mut tree, side, main) = beside_a_side_view(120);
+        assert_eq!(vec![(0, 30), (31, 89)], columns(&tree));
+
+        tree.focus = main;
+        tree.split(view(), Layout::Vertical);
+        assert_eq!(vec![(0, 30), (31, 44), (76, 44)], columns(&tree));
+
+        tree.focus = side;
+        tree.swap_split_in_direction(Direction::Right);
+        tree.swap_split_in_direction(Direction::Right);
+        assert_eq!(
+            vec![(0, 44), (45, 44), (90, 30)],
+            columns(&tree),
+            "at the right edge"
+        );
+    }
+
+    #[test]
+    fn a_side_view_takes_half_its_container_at_most() {
+        let (tree, _, _) = beside_a_side_view(40);
+        assert_eq!(vec![(0, 20), (21, 19)], columns(&tree));
+    }
+
+    #[test]
+    fn stacked_side_views_take_the_widest_ones_width() {
+        let (mut tree, side, _) = beside_a_side_view(120);
+        tree.focus = side;
+        let mut narrow = view();
+        narrow.side = Some(20);
+        let narrow = tree.split(narrow, Layout::Horizontal);
+        assert_eq!(vec![(0, 30), (0, 30), (31, 89)], columns(&tree));
+
+        tree.set_side(narrow, None);
+        assert_eq!(
+            vec![(0, 60), (0, 60), (61, 59)],
+            columns(&tree),
+            "a stack with an ordinary view shares the width"
+        );
+    }
+
+    #[test]
+    fn a_side_view_opens_at_the_left_edge_and_leaves_the_focus() {
+        let (mut tree, a0, a1) = code_tab();
+        tree.focus = a1;
+        let side = tree.insert_side(Tab::CODE, view(), 30);
+        assert_eq!(vec![side, a0, a1], on_screen(&tree));
+        assert_eq!(a1, tree.focus);
+    }
+
+    #[test]
+    fn a_tabs_last_view_is_its_only_one_that_isnt_a_side_view() {
+        let (mut tree, side, main) = beside_a_side_view(120);
+        assert!(tree.is_last_in_tab(main));
+        assert!(!tree.is_last_in_tab(side));
+
+        tree.focus = main;
+        let second = tree.split(view(), Layout::Vertical);
+        assert!(!tree.is_last_in_tab(main));
+        assert!(!tree.is_last_in_tab(second));
     }
 
     #[test]

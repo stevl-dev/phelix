@@ -2247,6 +2247,16 @@ impl Editor {
         view_id
     }
 
+    /// Opens a side view of `doc_id`, `width` columns wide, at the left edge
+    /// of `tab`, and leaves the focus where it was.
+    pub fn open_side(&mut self, tab: Tab, doc_id: DocumentId, width: u16) -> ViewId {
+        let view = View::new(doc_id, self.config().gutters.clone());
+        let view_id = self.tree.insert_side(tab, view, width);
+        doc_mut!(self, &doc_id).ensure_view_init(view_id);
+        self._refresh();
+        view_id
+    }
+
     /// Closes every view of `tab`, and with them the tab. The code tab gets a
     /// new view instead, as it does when its last view closes.
     pub fn close_tab(&mut self, tab: Tab) {

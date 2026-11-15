@@ -4,7 +4,7 @@ Snapshot: `main` at `ae7b54931`.
 Goes in `fork/review-sidebar.md`. Feature slug: `review-sidebar`, part of `review-stream`'s entry in `FORK.md`. The core's new hooks go in the `tabs` and `feature-hooks` entries.
 Reference: Hunk's files pane ([hunk.dev](https://www.hunk.dev/)).
 
-Status: approved. Phase 0 is committed.
+Status: approved. Done through phase 1.
 
 ## Bottom line
 
@@ -129,7 +129,7 @@ Each phase is one commit that builds and passes its tests, and marks itself done
 | # | Status | Commit | Work |
 | --- | --- | --- | --- |
 | 0 | Done | Add the plan for the review's file list. | This file. |
-| 1 | | Add side views to the tree. | 2.1: `View::side`, the widths in `Tree::recalculate`, `Tree::set_side`, the left-edge insert, `Editor::open_side`, and `is_last_in_tab`. Unit tests in `tree.rs`: a side view's width beside one and two others, the cap at half, a horizontal container of side views, the left edge and the kept focus, and `is_last_in_tab` with a side view on either side of the question. The two existing width tests pass unchanged. `tabs`' entry in `FORK.md`. |
+| 1 | Done | Add side views to the tree. | 2.1: `View::side`, the widths in `Tree::recalculate`, `Tree::set_side`, the left-edge insert, `Editor::open_side`, and `is_last_in_tab`. Unit tests in `tree.rs`: a side view's width beside one and two others, the cap at half, a horizontal container of side views, the left edge and the kept focus, and `is_last_in_tab` with a side view on either side of the question. The two existing width tests pass unchanged. `tabs`' entry in `FORK.md`. |
 | 2 | | Let a tab keep buffers of several kinds. | 2.2: `TabOptions::keeps` as a list, and the "no kept kind" check in `send_out_of_kept_tabs`. The review passes its one kind. A unit or integration test, whichever the phase finds can build two kinds: a view that goes from one kept kind to another stays, and one that goes to a file is sent out. `feature-hooks`' entry in `FORK.md`. |
 | 3 | | List the review's files in a side view. | 2.3 and 2.4 without the config: `view/files.rs` with the tree's rows, the list's kind, the hold in `sync.rs`, the invariants, `switch_to`, and `:review-sidebar`. Hidden until the command shows it, so nothing changes for a review that doesn't run it. Unit tests in `files.rs`, table-driven: nested directories, a shared row, a file at the root, a rename, one file, and rows in `files`' order. Integration tests: the command shows and hides it, an edit to the list is put back, `:q` in the review with the list open quits, `C-w o` in the list leaves the review, `:e` in the list opens in the code tab, and a `:reload` after a new change adds its row and keeps the cursor's file. Book and `FORK.md`. |
 | 4 | | Mark the review's current file in the list. | 2.5's first half and the tint of 2.6. Integration tests: moving to another file in the review moves the list's cursor, with the row far enough down to need a scroll, and a cursor on a file's last row still marks that file. `book/src/themes.md` for `ui.review.current`. |
@@ -186,4 +186,8 @@ Assumed here. Approving the plan approves them, so say which to change:
 
 ## Found
 
-Nothing yet.
+- Phase 1: the left-edge insert is `Tree::insert_side`, which takes a tab that has a view, since the focus has to stay on one.
+  Several side views in one container take half of it between them: each is capped at an equal share of the half. The plan's cap only covered one.
+  A container with nothing but side views shares its width as any views do, so a tab left with only the list still fills the screen.
+  `Tree::swap_split_in_direction` now recalculates. It swapped the two views' areas, which gave a side view the other's width after `C-w L`.
+  `Editor::open_side` has no test of its own. Phase 3's tests are the first to open one through it.

@@ -134,13 +134,14 @@ Each entry says what the feature adds, and where its code, tests, and book pages
 
 ### tabs
 
-- Plan: `fork/tabs.md`, done.
+- Plan: `fork/tabs.md`, done. Side views are phase 1 of `fork/review-sidebar.md`.
 - Adds: tabs, each a layout of its own with its own splits and focus. Features open them, one of each kind: `code`, where Helix starts, and `review`.
+  A side view is a view with a width of its own, which a feature opens at the left edge of a tab. Beside other views it takes that width, half the tab's at most, and they share the rest. A tab's last view is its last one that isn't a side view, so `:q` there quits Helix with side views still open.
   `:q`, `:q!`, and `Ctrl-w q` on a tab's last view quit Helix, from any tab. A buffer close that takes a tab's last view closes that tab and goes back to `code`. The code tab never closes, and gets a new view instead, as the editor did.
   `:review` opens the review tab (`review-stream`). `:tab <name>` switches to an open tab, and `:tab` names the active one.
   A feature's buffer can stay out of the buffer lists, as the review's does: the bufferline, `Space b`, `:buffer`'s completion, `:bn` and `:bp`, and `:bca` and `:bco`. When a buffer close empties the code tab, its new view takes a listed buffer.
   A buffer with no path can go by a name of its own in place of `[scratch]`, as the review's `[review]` does, in the statusline and `%{buffer_name}`.
-- Code: `Tab` and the tabs in `helix-view/src/tree.rs`. A tab is a name, `Tab("review")`, with `Tab::CODE` the home tab. Every tab's root container is in the tree's one node map, and `root` and `focus` are the active tab's. `Tree::tabs` lists the open tabs in the order they opened, the code tab first. `Editor::open_tab`, `switch_tab`, `close_tab`, and `quit_view` in `helix-view/src/editor.rs`. A tab opened with `TabOptions { keeps: Some(kind) }` keeps that kind's buffers: `Editor::send_out_of_kept_tabs` gives the code tab what a view of it shows in place of one, and puts the buffer back.
+- Code: `Tab` and the tabs in `helix-view/src/tree.rs`. A tab is a name, `Tab("review")`, with `Tab::CODE` the home tab. Every tab's root container is in the tree's one node map, and `root` and `focus` are the active tab's. `Tree::tabs` lists the open tabs in the order they opened, the code tab first. `Editor::open_tab`, `switch_tab`, `close_tab`, and `quit_view` in `helix-view/src/editor.rs`. `View::side` in `helix-view/src/view.rs` is a side view's width. `Tree::recalculate` gives it that width, `Tree::insert_side` and `Editor::open_side` open one, `Tree::set_side` sets and clears it, and `Tree::is_last_in_tab` leaves side views out. `Tree::swap_split_in_direction` recalculates, where it used to swap the two views' areas. A tab opened with `TabOptions { keeps: Some(kind) }` keeps that kind's buffers: `Editor::send_out_of_kept_tabs` gives the code tab what a view of it shows in place of one, and puts the buffer back.
   It hooks in at:
   - `helix-view/src/editor.rs`: `focus` switches to a hidden view's tab, `close_document` gives the code tab a view, `should_close` checks every tab, and `switch` keeps a scratch buffer that a view in another tab shows.
   - `helix-term/src/commands/typed.rs`: `quit` and `force_quit` call `quit_view`. `helix-term/src/commands.rs`: so does `wclose`, and `wonly` closes the active tab's views only.

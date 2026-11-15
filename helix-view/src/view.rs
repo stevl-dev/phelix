@@ -147,6 +147,10 @@ pub struct View {
     pub id: ViewId,
     pub area: Rect,
     pub doc: DocumentId,
+    /// A width in columns, which makes this a side view: in a vertical
+    /// container it takes that width and the other views share the rest, and
+    /// its tab's last view is the last one that isn't a side view.
+    pub side: Option<u16>,
     pub jumps: JumpList,
     // documents accessed from this view from the oldest one to last viewed one
     pub docs_access_history: Vec<DocumentId>,
@@ -189,6 +193,7 @@ impl View {
         Self {
             id: ViewId::default(),
             doc,
+            side: None,
             area: Rect::default(), // will get calculated upon inserting into tree
             jumps: JumpList::new((doc, Selection::point(0))), // TODO: use actual sel
             docs_access_history: Vec::new(),
