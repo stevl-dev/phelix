@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use crate::view::{
-    self as review, Content, ReviewConfig, ReviewState, Row, Section, Stream, REVIEW_TAB,
+    self as review, Content, ReviewConfig, ReviewState, Row, Scope, Section, Stream, REVIEW_TAB,
 };
 use anyhow::{anyhow, Context as _};
 use helix_core::command_line::{Args, Signature};
@@ -285,16 +285,22 @@ fn review(cx: &mut compositor::Context, args: Args, event: PromptEvent) -> anyho
                 .ok_or_else(|| anyhow!("'{name}' is not one of all, unstaged, or staged"))?,
         ),
     };
-    let open = open_stream(cx.editor).map(|stream| (stream.doc, stream.scope));
+    let open = open_stream(cx.editor).map(|stream| (stream.doc, stream.scope.clone()));
     match (open, scope) {
-        (Some((doc, open)), scope) if scope.is_none_or(|scope| scope == open) => {
+        (Some((doc, open)), scope) if scope.is_none_or(|scope| Scope::Changes(scope) == open) => {
             review::switch_to(cx.editor, doc);
-            cx.editor
-                .set_status(format!("Reviewing {} changes", open.label()));
+            cx.editor.set_status(reviewing(&open));
         }
         (_, scope) => read_changes(cx, scope.unwrap_or(ChangeView::All), None, None),
     }
     Ok(())
+}
+
+/// What the status line says a review of `scope` shows.
+fn reviewing(scope: &Scope) -> String {
+    match scope {
+        Scope::Changes(changes) => format!("Reviewing {} changes", changes.label()),
+    }
 }
 
 fn complete_scope(_editor: &Editor, input: &str) -> Vec<Completion> {
@@ -307,8 +313,9 @@ fn complete_scope(_editor: &Editor, input: &str) -> Vec<Completion> {
 /// `:reload` in the review, and `:reload-all`: lists and reads the open
 /// review's changes again.
 fn reload(cx: &mut compositor::Context) {
-    if let Some(scope) = open_stream(cx.editor).map(|stream| stream.scope) {
-        read_changes(cx, scope, None, None);
+    match open_stream(cx.editor).map(|stream| stream.scope.clone()) {
+        Some(Scope::Changes(scope)) => read_changes(cx, scope, None, None),
+        None => {}
     }
 }
 
@@ -350,7 +357,7 @@ fn open_stream(editor: &Editor) -> Option<&Stream> {
 /// `scope`'s changes, then the header.
 fn jump(cx: &mut compositor::Context, scope: ChangeView, path: &Path) {
     if let Some(doc) = open_stream(cx.editor)
-        .filter(|stream| stream.scope == scope)
+        .filter(|stream| stream.scope == Scope::Changes(scope))
         .map(|stream| stream.doc)
     {
         review::switch_to(cx.editor, doc);
@@ -423,12 +430,13 @@ fn read_changes(
                 return;
             }
             let sections = files.into_iter().map(|file| file.section(editor)).collect();
+            let scope = Scope::Changes(scope);
+            let done = done.unwrap_or_else(|| reviewing(&scope));
             review::show(editor, root, scope, sections);
             if let Some(path) = focus {
                 review::focus_file(editor, &path);
             }
-            editor
-                .set_status(done.unwrap_or_else(|| format!("Reviewing {} changes", scope.label())));
+            editor.set_status(done);
         };
         Ok(Callback::Editor(Box::new(show)))
     });
@@ -437,7 +445,8 @@ fn read_changes(
 /// Says there are no `scope` changes, and closes the open review if it shows
 /// them. A review of other changes stays.
 fn no_changes(editor: &mut Editor, scope: ChangeView) {
-    let unsaved = if open_stream(editor).is_some_and(|stream| stream.scope == scope) {
+    let unsaved = if open_stream(editor).is_some_and(|stream| stream.scope == Scope::Changes(scope))
+    {
         review::close_empty(editor)
     } else {
         Vec::new()
@@ -458,8 +467,8 @@ struct File {
     change: FileChange,
     base: Vec<u8>,
     source: Vec<u8>,
-    /// Whether the source is the index, not the file.
-    staged: bool,
+    /// Whether the source is the file, not the index.
+    follows_file: bool,
 }
 
 impl File {
@@ -502,14 +511,14 @@ impl File {
             change,
             base,
             source,
-            staged: scope == ChangeView::Staged,
+            follows_file: scope != ChangeView::Staged,
         }
     }
 
     fn section(self, editor: &Editor) -> Section {
         let doc = editor
             .document_by_path(self.change.path())
-            .filter(|_| !self.staged);
+            .filter(|_| self.follows_file);
         let (source, encoding) = match doc {
             Some(doc) => (doc.text().clone(), doc.encoding()),
             None => decode(&self.source, None),

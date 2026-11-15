@@ -9,7 +9,6 @@ use std::path::PathBuf;
 use crate::view as review;
 use crate::view::ReviewState;
 use anyhow::bail;
-use helix_vcs::ChangeView;
 use helix_view::{doc, doc_mut, view_mut, DocumentId, Editor};
 
 use helix_term::commands::{code_actions_on_save, make_format_callback};
@@ -33,7 +32,7 @@ pub(super) fn write(
         .review()
         .stream()
         .expect("the review's buffer is open");
-    if stream.scope == ChangeView::Staged {
+    if !stream.scope.follows_files() {
         bail!("A staged review is read-only. ret opens the file.");
     }
     if path.is_some() {

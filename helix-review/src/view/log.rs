@@ -5,7 +5,6 @@
 
 use helix_core::line_ending::line_end_char_index;
 use helix_core::{Range, Selection};
-use helix_vcs::ChangeView;
 
 use super::ReviewState;
 use super::{sync, Row};
@@ -104,7 +103,7 @@ fn walk(editor: &mut Editor, count: usize, way: Way) {
         return;
     };
     let doc_id = stream.doc;
-    if stream.scope == ChangeView::Staged {
+    if !stream.scope.follows_files() {
         editor.set_status("A staged review is read-only. ret opens the file.");
         return;
     }

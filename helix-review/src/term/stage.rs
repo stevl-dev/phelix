@@ -10,7 +10,7 @@
 use std::collections::HashMap;
 use std::ops::Range;
 
-use crate::view::{layout, Picked};
+use crate::view::{layout, Picked, Scope};
 use anyhow::{anyhow, bail, Context as _};
 use helix_core::command_line::Args;
 use helix_core::encoding::Encoding;
@@ -218,7 +218,7 @@ fn write_picked(
         })?;
     }
     if written > 0 {
-        let scope = stream.scope;
+        let Scope::Changes(scope) = stream.scope;
         read_changes(
             cx,
             scope,

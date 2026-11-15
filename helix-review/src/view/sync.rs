@@ -7,8 +7,6 @@ use std::path::{Path, PathBuf};
 use helix_core::line_ending::get_line_ending;
 use helix_core::{diff::compare_ropes, history::History, Rope, Transaction};
 
-use helix_vcs::ChangeView;
-
 use super::ReviewState;
 use super::{complete, diagnostics, edit_file, files, forward, layout, log, update};
 use super::{Content, Row, Stream};
@@ -172,12 +170,12 @@ fn take_edits(editor: &mut Editor, doc_id: DocumentId) -> Option<Result<(), Stri
     if editor.documents.get(&doc_id)?.version() == stream.version {
         return None;
     }
-    let staged = stream.scope == ChangeView::Staged;
+    let read_only = !stream.scope.follows_files();
     let refuse = |editor: &mut Editor, message: &str| {
         put_back(editor, doc_id);
         Some(Err(message.to_string()))
     };
-    if staged {
+    if read_only {
         return refuse(editor, "A staged review is read-only. ret opens the file.");
     }
     // INVARIANT: the buffer's history is committed through a view of it.
@@ -460,7 +458,7 @@ pub(super) fn follow_sources(editor: &mut Editor, doc_id: DocumentId) -> bool {
     let Some(stream) = editor.features.review().stream.as_ref() else {
         return false;
     };
-    if stream.scope == ChangeView::Staged {
+    if !stream.scope.follows_files() {
         return false;
     }
     let mut files = None;

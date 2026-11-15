@@ -354,13 +354,27 @@ impl Review {
     }
 }
 
+/// What a review shows.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Scope {
+    /// The working tree's changes, the index's, or both.
+    Changes(ChangeView),
+}
+
+impl Scope {
+    /// Whether its sources are the files. Such a review follows the files'
+    /// buffers and edits them. Any other is read-only: a staged review's
+    /// sources are the index.
+    pub fn follows_files(&self) -> bool {
+        matches!(self, Scope::Changes(ChangeView::All | ChangeView::Unstaged))
+    }
+}
+
 pub struct Stream {
     pub doc: DocumentId,
     /// The directory the changes were listed from.
     pub root: PathBuf,
-    /// The changes it shows. A `Staged` stream's sources are the index, not
-    /// the files, so it never follows a file's buffer.
-    pub scope: ChangeView,
+    pub scope: Scope,
     /// Unchanged lines shown around each hunk.
     pub context: usize,
     files: Vec<File>,
@@ -792,7 +806,8 @@ fn header(change: &FileChange, note: Option<&str>) -> String {
     }
 }
 
-pub fn show(editor: &mut Editor, root: PathBuf, scope: ChangeView, sections: Vec<Section>) {
+pub fn show(editor: &mut Editor, root: PathBuf, scope: Scope, sections: Vec<Section>) {
+    let read_only = !scope.follows_files();
     let open = editor
         .features
         .review()
@@ -818,7 +833,7 @@ pub fn show(editor: &mut Editor, root: PathBuf, scope: ChangeView, sections: Vec
             stream.scope = scope;
         }
         if let Some(doc) = editor.documents.get_mut(&doc) {
-            doc.readonly = scope == ChangeView::Staged;
+            doc.readonly = read_only;
         }
         update(editor, sections.into_iter().map(File::from).collect(), None);
         return;
@@ -830,7 +845,7 @@ pub fn show(editor: &mut Editor, root: PathBuf, scope: ChangeView, sections: Vec
     let doc = editor.documents.get_mut(&doc_id).expect("just opened");
     // WHY: upstream only uses the flag for writes. Here it shows in the
     // statusline that a staged review takes no edits.
-    doc.readonly = scope == ChangeView::Staged;
+    doc.readonly = read_only;
     doc.listed = false;
     doc.name_without_path = "[review]";
     doc.kind = Some(&KIND);
@@ -881,7 +896,7 @@ pub fn unsaved(editor: &Editor) -> Vec<DocumentId> {
     let Some(stream) = editor.features.review().stream.as_ref() else {
         return Vec::new();
     };
-    if stream.scope == ChangeView::Staged {
+    if !stream.scope.follows_files() {
         return Vec::new();
     }
     stream
@@ -1048,16 +1063,16 @@ fn update(editor: &mut Editor, mut files: Vec<File>, open: Option<(usize, Range<
         return;
     };
     let loader = editor.syn_loader.load();
-    let staged = editor
+    let follows_files = editor
         .features
         .review()
         .stream
         .as_ref()
-        .is_some_and(|stream| stream.scope == ChangeView::Staged);
+        .is_some_and(|stream| stream.scope.follows_files());
     for file in &mut files {
         file.seen = editor
             .document_by_path(file.change.path())
-            .filter(|_| !staged)
+            .filter(|_| follows_files)
             .map(|doc| (doc.id(), doc.version()));
         if let Content::Text { source, .. } = &file.content {
             file.language = loader
@@ -1254,7 +1269,7 @@ mod tests {
         Stream {
             doc: DocumentId::default(),
             root: PathBuf::new(),
-            scope: ChangeView::All,
+            scope: Scope::Changes(ChangeView::All),
             context: layout::CONTEXT,
             files,
             rows: layout.rows,

@@ -5,7 +5,6 @@
 
 use helix_core::line_ending::line_end_char_index;
 use helix_core::{Range, RopeSlice, Selection};
-use helix_vcs::ChangeView;
 
 use super::ReviewState;
 use super::{load, Content, Row, Stream};
@@ -31,7 +30,7 @@ pub fn source(editor: &mut Editor, view: ViewId) -> Result<DocumentId, String> {
     let Some(stream) = editor.features.review().stream_of(stream_doc) else {
         return Err("This buffer isn't a review. Start one with :review".to_string());
     };
-    if stream.scope == ChangeView::Staged {
+    if !stream.scope.follows_files() {
         return Err("A staged review shows the index, not the files. ret opens the file.".into());
     }
     let doc = &editor.documents[&stream_doc];

@@ -11,7 +11,6 @@ use helix_core::diagnostic::{Diagnostic, DiagnosticProvider, Range};
 use helix_core::line_ending::line_end_char_index;
 use helix_core::Uri;
 use helix_lsp::{lsp, OffsetEncoding};
-use helix_vcs::ChangeView;
 
 use super::ReviewState;
 use super::{Content, Row};
@@ -78,7 +77,7 @@ pub(super) fn place(editor: &mut Editor) {
         };
         // WHY: a staged review's rows show the index, and the servers report
         // on the file.
-        if stream.scope == ChangeView::Staged {
+        if !stream.scope.follows_files() {
             continue;
         }
         let diagnostics: Vec<Diagnostic> = match editor.document_by_path(path) {

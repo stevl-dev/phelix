@@ -7,7 +7,7 @@ use anyhow::bail;
 use helix_lsp::util::generate_transaction_from_edits;
 use helix_lsp::{lsp, OffsetEncoding};
 use helix_review::view::REVIEW_TAB;
-use helix_review::view::{ReviewState, Stream};
+use helix_review::view::{ReviewState, Scope, Stream};
 use helix_term::application::Application;
 use helix_view::document::Mode;
 use helix_view::graphics::Color;
@@ -316,7 +316,10 @@ async fn a_scope_with_no_changes_leaves_the_open_review() -> anyhow::Result<()> 
     .await?;
 
     assert!(in_stream(&app));
-    assert_eq!(stream(&app).scope, helix_vcs::ChangeView::All);
+    assert_eq!(
+        stream(&app).scope,
+        Scope::Changes(helix_vcs::ChangeView::All)
+    );
     assert_eq!(stream_text(&app), before);
     Ok(())
 }

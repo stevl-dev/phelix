@@ -6,7 +6,6 @@ use crate::view::{self as review, layout};
 use anyhow::{bail, Context as _};
 use helix_core::command_line::Args;
 use helix_core::Transaction;
-use helix_vcs::ChangeView;
 use helix_view::{current_ref, Editor};
 
 use super::open_stream;
@@ -26,7 +25,7 @@ pub(crate) fn review_restore(
     let stream = open_stream(cx.editor)
         .filter(|stream| stream.doc == doc.id())
         .context("This buffer isn't a review. Start one with :review")?;
-    if stream.scope == ChangeView::Staged {
+    if !stream.scope.follows_files() {
         bail!("A staged review shows the index, not a file. :unstage-hunk takes a hunk back out");
     }
     let rows: Vec<_> = doc
