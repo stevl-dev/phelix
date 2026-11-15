@@ -100,6 +100,10 @@ pub struct List {
     stale: bool,
     /// Each view's selection when the buffer last held `text`.
     selections: HashMap<ViewId, Selection>,
+    /// The view of the tab that last had focus while it showed the review.
+    review_view: Option<ViewId>,
+    /// The file of that view's cursor.
+    current: Option<usize>,
 }
 
 impl List {
@@ -117,6 +121,11 @@ impl List {
             version: doc.version(),
             ..List::default()
         }
+    }
+
+    /// The file the review's cursor is in.
+    pub fn current(&self) -> Option<usize> {
+        self.current
     }
 
     fn file_rows(&self) -> impl Iterator<Item = usize> + '_ {
@@ -325,6 +334,7 @@ pub(super) fn sync(editor: &mut Editor) {
     if hold(editor) {
         editor.set_status(PUT_BACK);
     }
+    follow_review(editor);
     let Some(stream) = editor.features.review_mut().stream.as_mut() else {
         return;
     };
@@ -337,6 +347,57 @@ pub(super) fn sync(editor: &mut Editor) {
         if view.doc == list.doc {
             list.selections
                 .insert(view.id, doc.selection(view.id).clone());
+        }
+    }
+}
+
+/// Notes the review's view and the file its cursor is in. With the focus
+/// outside the list, puts the list's cursors on that file's row.
+fn follow_review(editor: &mut Editor) {
+    let Some(stream) = editor.features.review().stream.as_ref() else {
+        return;
+    };
+    let views = views_of(editor, stream.doc);
+    let view = [editor.tree.tab_focus(REVIEW_TAB), stream.list.review_view]
+        .into_iter()
+        .flatten()
+        .find(|view| views.contains(view))
+        .or(views.first().copied());
+    let current = view.and_then(|view| {
+        let doc = editor.documents.get(&stream.doc)?;
+        let text = doc.text().slice(..);
+        let row = text.char_to_line(doc.selection(view).primary().cursor(text));
+        // WHY: the line below the last row is the last file's too.
+        let row = stream.rows.get(row).or(stream.rows.last())?;
+        Some(row.file())
+    });
+
+    let scrolloff = editor.config().scrolloff;
+    let focused = editor.tree.get(editor.tree.focus).doc;
+    let Some(stream) = editor.features.review_mut().stream.as_mut() else {
+        return;
+    };
+    let list = &mut stream.list;
+    list.review_view = view;
+    list.current = current;
+    let row = current.and_then(|file| {
+        let row = |entry: &Entry| *entry == Entry::File { file };
+        list.rows.iter().position(row)
+    });
+    let (Some(row), Some(doc)) = (row, editor.documents.get_mut(&list.doc)) else {
+        return;
+    };
+    if focused == list.doc {
+        return;
+    }
+    for (view, _) in editor.tree.views() {
+        let text = doc.text().slice(..);
+        if view.doc != list.doc || row >= text.len_lines() {
+            continue;
+        }
+        if text.char_to_line(doc.selection(view.id).primary().cursor(text)) != row {
+            doc.set_selection(view.id, Selection::point(text.line_to_char(row)));
+            view.ensure_cursor_in_view(doc, scrolloff);
         }
     }
 }

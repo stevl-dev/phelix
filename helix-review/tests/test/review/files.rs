@@ -39,6 +39,16 @@ fn list_views(app: &Application) -> Vec<&View> {
         .collect()
 }
 
+/// The row of the list's cursor, in its one view.
+fn list_row(app: &Application) -> usize {
+    let [view] = list_views(app)[..] else {
+        panic!("one view shows the list");
+    };
+    let doc = app.editor.document(view.doc).unwrap();
+    let text = doc.text().slice(..);
+    text.char_to_line(doc.selection(view.id).primary().cursor(text))
+}
+
 fn in_list(app: &Application) -> bool {
     doc!(app.editor).id() == stream(app).list().doc
 }
@@ -102,8 +112,7 @@ async fn an_edit_to_the_list_is_put_back() -> anyhow::Result<()> {
         .await?;
         assert!(!doc!(app.editor).is_modified(), "{keys}");
         if keys.ends_with("xd") {
-            let first = before.split_inclusive('\n').next().unwrap();
-            assert_eq!(selected(&app), first, "the selection goes back too");
+            assert_eq!(selected(&app), "  a.txt\n", "the selection goes back too");
         }
     }
     Ok(())
@@ -169,7 +178,7 @@ async fn goto_buffer_in_the_list_steps_between_its_file_rows() -> anyhow::Result
     let repo = two_changed();
     let mut app = review_with_list(&repo).await?;
     // Rows: 0 the repository, 1 a.txt, 2 src/, 3 b.txt.
-    for (keys, row) in [("<C-w>hgn", 1), ("gn", 3), ("gn", 3), ("gp", 1)] {
+    for (keys, row) in [("<C-w>hgn", 3), ("gn", 3), ("gp", 1), ("gp", 1)] {
         run_until(&mut app, keys, |app| in_list(app) && cursor(app).0 == row).await?;
     }
     Ok(())
@@ -199,4 +208,69 @@ async fn a_reload_adds_a_new_changes_row_and_keeps_the_cursors_file() -> anyhow:
     assert!(in_list(&app));
     assert_eq!(cursor(&app).0, 3, "still on c.txt");
     Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn the_lists_cursor_follows_the_reviews_file_and_scrolls_to_it() -> anyhow::Result<()> {
+    // WHY: more files than the test terminal has rows, so the last one's row
+    // starts off screen.
+    let names: Vec<String> = (0..200).map(|n| format!("f{n:03}.txt")).collect();
+    let committed: Vec<_> = names.iter().map(|name| (name.as_str(), "old\n")).collect();
+    let changes: Vec<_> = names
+        .iter()
+        .map(|name| (name.as_str(), Some("new\n")))
+        .collect();
+    let repo = repo(&committed, &changes);
+    let mut app = app_on(repo.path().join("f000.txt"))?;
+    start_review(&mut app).await?;
+    run_until(&mut app, ":review-sidebar<ret>", |app| {
+        !list_views(app).is_empty() && list_row(app) == 1
+    })
+    .await?;
+
+    run_until(&mut app, "ge", |app| list_row(app) == 200).await?;
+    assert!(in_stream(&app));
+    let view = list_views(&app)[0];
+    let doc = app.editor.document(view.doc).unwrap();
+    let top = doc.text().char_to_line(doc.view_offset(view.id).anchor);
+    assert!(top > 0 && top + view.inner_height() > 200, "from row {top}");
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_cursor_on_a_files_last_row_marks_that_file_in_the_list() -> anyhow::Result<()> {
+    let repo = two_changed();
+    let mut app = review_with_list(&repo).await?;
+    // Rows: 0 the repository, 1 a.txt, 2 src/, 3 b.txt.
+    run_until(&mut app, "gn", |app| list_row(app) == 3).await?;
+    run_until(&mut app, "k", |app| list_row(app) == 1).await
+}
+
+/// The text of the list's rows that the screen tints.
+fn tinted(app: &Application) -> Vec<String> {
+    let buffer = app.terminal_buffer();
+    let cell = |x, y| buffer.get(x, y).unwrap();
+    (0..buffer.area.height)
+        .filter(|&y| cell(0, y).bg == Color::Magenta)
+        .map(|y| (0..30).map(|x| cell(x, y).symbol.as_str()).collect())
+        .map(|row: String| row.trim().to_string())
+        .collect()
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn the_reviews_file_has_the_tint_in_the_list() -> anyhow::Result<()> {
+    let repo = two_changed();
+    let mut app = app_on(repo.path().join("a.txt"))?;
+    app.editor.set_theme(toml::from_str(
+        r#"
+        "ui.selection" = { bg = "yellow" }
+        "ui.review.current" = { bg = "magenta" }
+        "#,
+    )?)?;
+    start_review(&mut app).await?;
+    run_until(&mut app, ":review-sidebar<ret>", |app| {
+        tinted(app) == ["a.txt"]
+    })
+    .await?;
+    run_until(&mut app, "gn", |app| tinted(app) == ["b.txt"]).await
 }

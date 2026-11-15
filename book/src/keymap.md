@@ -526,6 +526,7 @@ And it adds one key:
 `:review-sidebar` shows the review's files in a narrow view at its left, and hides it again. `:review-sidebar show` and `:review-sidebar hide` do one or the other. It has no key of its own, so bind one by name, like `[keys.normal.space] e = ":review-sidebar"`.
 The list is a tree. A directory has a row, and the files under it follow, two columns in. A chain of directories with nothing else in them shares one row, like `helix-term/src/`. The files come in the review's order.
 The list is a buffer in a view of the review's tab, so motions, `/`, counts, and your own keys work in it, and the window keys reach it: `Ctrl-w h` from the review, and `Ctrl-w l` back. The statusline calls it `[files]`, and like the review it stays out of the buffer lists.
+While the focus is outside the list, its cursor stays on the row of the file the review's cursor is in, and the list scrolls to show it. That row has a tint, wherever the focus is.
 An edit to the list is put back.
 `gn`, `gp`, `:bn`, and `:bp` there go to the next and the previous file's row, past the directories. `:w` and `:reload` there do what they do in the review.
 Closing the list's view hides it, as `Ctrl-w q` and `:q` there do, and so does `:bc` there. The review stays. `Ctrl-w o` there closes the review's view, and the list's view shows the review instead.

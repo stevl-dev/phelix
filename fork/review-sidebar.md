@@ -4,7 +4,7 @@ Snapshot: `main` at `ae7b54931`.
 Goes in `fork/review-sidebar.md`. Feature slug: `review-sidebar`, part of `review-stream`'s entry in `FORK.md`. The core's new hooks go in the `tabs` and `feature-hooks` entries.
 Reference: Hunk's files pane ([hunk.dev](https://www.hunk.dev/)).
 
-Status: approved. Done through phase 3.
+Status: approved. Done through phase 4.
 
 ## Bottom line
 
@@ -132,7 +132,7 @@ Each phase is one commit that builds and passes its tests, and marks itself done
 | 1 | Done | Add side views to the tree. | 2.1: `View::side`, the widths in `Tree::recalculate`, `Tree::set_side`, the left-edge insert, `Editor::open_side`, and `is_last_in_tab`. Unit tests in `tree.rs`: a side view's width beside one and two others, the cap at half, a horizontal container of side views, the left edge and the kept focus, and `is_last_in_tab` with a side view on either side of the question. The two existing width tests pass unchanged. `tabs`' entry in `FORK.md`. |
 | 2 | Done | Let a tab keep buffers of several kinds. | 2.2: `TabOptions::keeps` as a list, and the "no kept kind" check in `send_out_of_kept_tabs`. The review passes its one kind. A unit or integration test, whichever the phase finds can build two kinds: a view that goes from one kept kind to another stays, and one that goes to a file is sent out. `feature-hooks`' entry in `FORK.md`. |
 | 3 | Done | List the review's files in a side view. | 2.3 and 2.4 without the config: `view/files.rs` with the tree's rows, the list's kind, the hold in `sync.rs`, the invariants, `switch_to`, and `:review-sidebar`. Hidden until the command shows it, so nothing changes for a review that doesn't run it. Unit tests in `files.rs`, table-driven: nested directories, a shared row, a file at the root, a rename, one file, and rows in `files`' order. Integration tests: the command shows and hides it, an edit to the list is put back, `:q` in the review with the list open quits, `C-w o` in the list leaves the review, `:e` in the list opens in the code tab, and a `:reload` after a new change adds its row and keeps the cursor's file. Book and `FORK.md`. |
-| 4 | | Mark the review's current file in the list. | 2.5's first half and the tint of 2.6. Integration tests: moving to another file in the review moves the list's cursor, with the row far enough down to need a scroll, and a cursor on a file's last row still marks that file. `book/src/themes.md` for `ui.review.current`. |
+| 4 | Done | Mark the review's current file in the list. | 2.5's first half and the tint of 2.6. Integration tests: moving to another file in the review moves the list's cursor, with the row far enough down to need a scroll, and a cursor on a file's last row still marks that file. `book/src/themes.md` for `ui.review.current`. |
 | 5 | | Show the file under the list's cursor in the review. | 2.5's second half, and `review_goto_file` on `Enter`. Integration tests: `j` in the list puts the review's cursor on the next file's header, a directory row gives its first file, entering and leaving the list without moving leaves the review's cursor where it was, `C-o` in the review goes back after a visit, and `Enter` focuses the review. A unit test that the key binds by name, beside the review's. Book. |
 | 6 | | Draw each file's status and line counts in the list. | 2.6's right edge, in `term/files.rs`. Unit tests of the pure part: the counts of a file's hunks, and none for a binary file. A render test only if `term/decorations.rs`' test style reaches it. Book. Colors are for the human to check. |
 | 7 | | Read the list's width from `[review]`. | `sidebar-width`, read by the sync so `:config-reload` resizes an open list. Unit test of the table, beside the review's: the default against a literal, an override, and a refused value. `book/src/configuration.md`. |
@@ -203,3 +203,8 @@ Assumed here. Approving the plan approves them, so say which to change:
   The review's `step_file` became `step_rows`, which the list's `gn` and `gp` share.
   The tests' `repo` makes a file's directories. A test that ends with the focus in the list uses `run_until`, since the harness's closing `:q!` closes only the list's view.
   Two tests the plan didn't list: `:bc` in the list hides it, and `gn` and `gp` step between file rows.
+- Phase 4: the follow isn't on a change of the file. On every sync with the focus outside the list, a list cursor that isn't on the current file's row goes there. So a new view of the list starts on that row too, and entering the list finds its cursor there whatever moved it before.
+  The current file is the one under the cursor of the review's view, which the sync notes: the tab's focused view if it shows the review, or else the one noted last. Phase 5 uses the same view.
+  The line below the review's last row counts as the last file's.
+  The tint has a render test, which reads the drawn rows' backgrounds with `ui.review.current` set. The fallback to `ui.selection` has none, since the selection draws in that color too.
+  The scroll test's repository has 200 changed files, since the test terminal is 150 rows tall.
