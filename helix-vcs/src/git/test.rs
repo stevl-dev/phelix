@@ -6,10 +6,14 @@ use crate::git;
 use crate::{ChangeKind, FileChange};
 
 fn exec_git_cmd(args: &str, git_dir: &Path) {
+    exec_git(&args.split_whitespace().collect::<Vec<_>>(), git_dir);
+}
+
+fn exec_git(args: &[&str], git_dir: &Path) {
     let res = Command::new("git")
         .arg("-C")
         .arg(git_dir) // execute the git command in this directory
-        .args(args.split_whitespace())
+        .args(args)
         .env_remove("GIT_DIR")
         .env_remove("GIT_ASKPASS")
         .env_remove("SSH_ASKPASS")
@@ -26,11 +30,11 @@ fn exec_git_cmd(args: &str, git_dir: &Path) {
         .env("GIT_CONFIG_KEY_1", "init.defaultBranch")
         .env("GIT_CONFIG_VALUE_1", "main")
         .output()
-        .unwrap_or_else(|_| panic!("`git {args}` failed"));
+        .unwrap_or_else(|_| panic!("`git {args:?}` failed"));
     if !res.status.success() {
         println!("{}", String::from_utf8_lossy(&res.stdout));
         eprintln!("{}", String::from_utf8_lossy(&res.stderr));
-        panic!("`git {args}` failed (see output above)")
+        panic!("`git {args:?}` failed (see output above)")
     }
 }
 
@@ -235,4 +239,195 @@ fn changed_files_include_staged_and_unstaged() {
     .map(str::to_owned)
     .collect();
     assert_eq!(got, expected);
+}
+
+fn write(repo: &Path, name: &str, text: &str) {
+    std::fs::write(repo.join(name), text).unwrap();
+}
+
+/// Each file `rev` changed: how, its name, and both sides.
+fn commit_files(repo: &Path, rev: &str) -> Vec<(String, String, String, String)> {
+    let (_, files) = git::commit::read(repo, rev, true).unwrap();
+    files
+        .into_iter()
+        .map(|file| {
+            let name = |path: &Path| path.file_name().unwrap().to_string_lossy().into_owned();
+            let how = match &file.change {
+                FileChange::Renamed { from_path, .. } => {
+                    format!("renamed from {}", name(from_path))
+                }
+                change => change_label(change).to_string(),
+            };
+            (
+                how,
+                name(file.change.path()),
+                String::from_utf8(file.base).unwrap(),
+                String::from_utf8(file.source).unwrap(),
+            )
+        })
+        .collect()
+}
+
+fn file(how: &str, name: &str, base: &str, source: &str) -> (String, String, String, String) {
+    (how.into(), name.into(), base.into(), source.into())
+}
+
+#[test]
+fn a_commit_has_both_sides_of_each_file_it_changed_in_path_order() {
+    let temp_git = empty_git_repo();
+    let repo = temp_git.path();
+    let long = "one\ntwo\nthree\nfour\nfive\nsix\n";
+    write(repo, "kept.txt", "old\n");
+    write(repo, "gone.txt", "gone\n");
+    write(repo, "before.txt", long);
+    write(repo, "same.txt", "same\n");
+    create_commit(repo, true);
+
+    write(repo, "kept.txt", "new\n");
+    write(repo, "added.txt", "added\n");
+    std::fs::remove_file(repo.join("gone.txt")).unwrap();
+    std::fs::rename(repo.join("before.txt"), repo.join("zz-after.txt")).unwrap();
+    exec_git_cmd("add -A", repo);
+    exec_git(
+        &["commit", "-m", "Change four files.\n\nAnd say why.\n"],
+        repo,
+    );
+    // WHY: the commit's sides come from its trees, not from the files.
+    write(repo, "kept.txt", "newer\n");
+
+    assert_eq!(
+        commit_files(repo, "HEAD"),
+        [
+            file("added", "added.txt", "", "added\n"),
+            file("deleted", "gone.txt", "gone\n", ""),
+            file("modified", "kept.txt", "old\n", "new\n"),
+            file("renamed from before.txt", "zz-after.txt", long, long),
+        ]
+    );
+
+    let (commit, _) = git::commit::read(repo, "HEAD", true).unwrap();
+    assert_eq!(commit.id.len(), 40);
+    assert!(commit.id.starts_with(&commit.short_id));
+    assert_eq!(commit.parents.len(), 1);
+    assert_eq!(
+        (commit.author.as_str(), commit.email.as_str()),
+        ("author", "author@example.com")
+    );
+    assert_eq!(commit.date, "2000-01-01 00:00:00 +0000");
+    assert_eq!(commit.message, "Change four files.\n\nAnd say why.");
+}
+
+#[test]
+fn a_commit_is_read_by_any_name_of_it() {
+    let temp_git = empty_git_repo();
+    let repo = temp_git.path();
+    write(repo, "file.txt", "one\n");
+    create_commit(repo, true);
+    write(repo, "file.txt", "two\n");
+    create_commit(repo, true);
+    write(repo, "file.txt", "three\n");
+    create_commit(repo, true);
+
+    let second = [file("modified", "file.txt", "one\n", "two\n")];
+    assert_eq!(commit_files(repo, "HEAD~1"), second);
+    let (commit, _) = git::commit::read(repo, "HEAD~1", true).unwrap();
+    assert_eq!(commit_files(repo, &commit.short_id), second);
+
+    let err = git::commit::read(repo, "nowhere", true).err().unwrap();
+    assert_eq!(err.to_string(), "nowhere names no commit");
+}
+
+#[test]
+fn a_root_commit_adds_every_file() {
+    let temp_git = empty_git_repo();
+    let repo = temp_git.path();
+    write(repo, "file.txt", "one\n");
+    create_commit(repo, true);
+
+    assert_eq!(
+        commit_files(repo, "HEAD"),
+        [file("added", "file.txt", "", "one\n")]
+    );
+    let (commit, _) = git::commit::read(repo, "HEAD", true).unwrap();
+    assert!(commit.parents.is_empty());
+}
+
+#[test]
+fn a_merge_has_its_changes_against_its_first_parent() {
+    let temp_git = empty_git_repo();
+    let repo = temp_git.path();
+    write(repo, "ours.txt", "one\n");
+    write(repo, "theirs.txt", "one\n");
+    create_commit(repo, true);
+    exec_git_cmd("branch side", repo);
+    write(repo, "ours.txt", "two\n");
+    create_commit(repo, true);
+    exec_git_cmd("checkout -q side", repo);
+    write(repo, "theirs.txt", "two\n");
+    create_commit(repo, true);
+    exec_git_cmd("checkout -q -", repo);
+    exec_git_cmd("merge -q --no-edit side", repo);
+
+    assert_eq!(
+        commit_files(repo, "HEAD"),
+        [file("modified", "theirs.txt", "one\n", "two\n")]
+    );
+    let (commit, _) = git::commit::read(repo, "HEAD", true).unwrap();
+    assert_eq!(commit.parents.len(), 2);
+}
+
+#[test]
+fn a_file_whose_mode_alone_changed_has_two_equal_sides() {
+    let temp_git = empty_git_repo();
+    let repo = temp_git.path();
+    write(repo, "run.sh", "echo\n");
+    create_commit(repo, true);
+    exec_git_cmd("update-index --chmod=+x run.sh", repo);
+    create_commit(repo, false);
+
+    assert_eq!(
+        commit_files(repo, "HEAD"),
+        [file("modified", "run.sh", "echo\n", "echo\n")]
+    );
+}
+
+#[test]
+fn both_sides_of_a_commit_take_the_checkouts_line_endings() {
+    let temp_git = empty_git_repo();
+    let repo = temp_git.path();
+    exec_git_cmd("config core.autocrlf true", repo);
+    write(repo, "file.txt", "one\r\ntwo\r\n");
+    create_commit(repo, true);
+    write(repo, "file.txt", "one\r\nTWO\r\n");
+    create_commit(repo, true);
+
+    assert_eq!(
+        commit_files(repo, "HEAD"),
+        [file(
+            "modified",
+            "file.txt",
+            "one\r\ntwo\r\n",
+            "one\r\nTWO\r\n"
+        )]
+    );
+}
+
+#[test]
+fn a_commit_whose_parent_a_shallow_clone_lacks_says_so() {
+    let temp_git = empty_git_repo();
+    let repo = temp_git.path();
+    write(repo, "file.txt", "one\n");
+    create_commit(repo, true);
+    write(repo, "file.txt", "two\n");
+    create_commit(repo, true);
+    let clone = tempfile::tempdir().unwrap();
+    let url = format!("file://{}", repo.display());
+    exec_git(&["clone", "-q", "--depth", "1", &url, "."], clone.path());
+
+    let err = git::commit::read(clone.path(), "HEAD", true).err().unwrap();
+    let (commit, _) = git::commit::read(repo, "HEAD", true).unwrap();
+    assert_eq!(
+        err.to_string(),
+        format!("{}'s parent isn't in this clone", commit.short_id)
+    );
 }

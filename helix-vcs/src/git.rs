@@ -22,6 +22,7 @@ use crate::{ChangeKind, FileChange};
 #[cfg(test)]
 mod test;
 
+pub(crate) mod commit;
 pub(crate) mod index;
 
 #[inline]
@@ -146,6 +147,16 @@ fn open_repo(path: &Path, trust_full: bool) -> Result<ThreadSafeRepository> {
     Ok(ThreadSafeRepository::open_opts(git_dir, options)?)
 }
 
+/// Which pairs of a removed and an added file count as one renamed file.
+fn renames() -> Rewrites {
+    Rewrites {
+        copies: None,
+        percentage: Some(0.5),
+        limit: 1000,
+        ..Default::default()
+    }
+}
+
 fn absolute_path(work_dir: &Path, location: &BStr) -> Result<std::path::PathBuf> {
     Ok(work_dir.join(location.to_path()?))
 }
@@ -200,12 +211,7 @@ fn status(
         // the feature unusable to many.
         .untracked_files(UntrackedFiles::Files)
         // Turn on file rename detection, which is off by default.
-        .index_worktree_rewrites(Some(Rewrites {
-            copies: None,
-            percentage: Some(0.5),
-            limit: 1000,
-            ..Default::default()
-        }));
+        .index_worktree_rewrites(Some(renames()));
 
     // No filtering based on path. `into_iter` also yields the HEAD-to-index diff.
     let empty_patterns = vec![];

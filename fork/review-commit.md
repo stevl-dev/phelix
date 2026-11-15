@@ -3,7 +3,7 @@
 Snapshot: `main` at `ed65461ff`.
 Goes in `fork/review-commit.md`. Feature slug: `review-commit`, part of `review-stream`'s entry in `FORK.md`.
 
-Status: phase 0 is committed. No code is written.
+Status: phases 0–1 are committed.
 
 ## Bottom line
 
@@ -148,7 +148,7 @@ Each phase is one commit that builds and passes its tests, and marks itself done
 | # | Status | Commit | Work |
 | --- | --- | --- | --- |
 | 0 | Done | Add the plan for reviewing a commit. | This file. |
-| 1 | | Read a commit's changes from git. | 2.1: `git/commit.rs`, the facade, and `gix`'s `revision` feature. Unit tests in `helix-vcs/src/git/test.rs`, over repositories the tests build: one commit that modifies, adds, deletes, and renames a file, with both sides of each; a root commit; a merge against its first parent; a file whose mode alone changed; a rev that names nothing, with its message; a CRLF file under `autocrlf` whose commit changes one line. |
+| 1 | Done | Read a commit's changes from git. | 2.1: `git/commit.rs`, the facade, and `gix`'s `revision` feature. Unit tests in `helix-vcs/src/git/test.rs`, over repositories the tests build: one commit that modifies, adds, deletes, and renames a file, with both sides of each; a root commit; a merge against its first parent; a file whose mode alone changed; a rev that names nothing, with its message; a CRLF file under `autocrlf` whose commit changes one line. |
 | 2 | | Give the review a scope of its own. | 2.2. No behavior changes, so no new test. |
 | 3 | | Show a commit's changes in the review. | 2.3: `:review-commit`, the replace rule, and the refusals. Integration tests in `helix-review/tests/test/review/commit.rs`: the rows of a commit that isn't `HEAD`, with a working tree that differs from it; an edit is put back with the message; `:stage-hunk` and a goto are refused; a review with an unsaved file refuses the commit and stays; `:review all` afterwards shows the working tree's changes; `Enter` opens the file, and names one the working tree lacks; a commit with no changes leaves the open review. Book, generated docs, and `FORK.md`. |
 | 4 | | Show the commit's message above its files. | 2.4: the row kind, the layout, the gutter, and the list's mark. Unit tests in `view.rs`: the layout's text and rows for a commit with a body, with none, and for a merge. Integration tests: the cursor starts on the first row, `gn` goes to the first header, an edit to the message is put back, and the list marks no file there. Book and `FORK.md`. |
@@ -160,3 +160,9 @@ Phase 4 has the risk, and goes as early as it can: it needs a commit in the revi
 The picker is last, since `:review-commit` already reaches every commit by name.
 
 After phases 3, 4, and 6, the paths to check in `phx` are: open a commit of this repository, read its rows against `git show`, try an edit, and go back to `:review`.
+
+## What the work found
+
+- **Phase 1.** `helix_vcs::commit::read` is the reader. The date is a string the reader formats, since `helix-review` has no date library and `gix` does.
+  The tree diff lists directories too, which the reader skips. A shallow clone still names the parent it lacks, so the error for it has a test.
+  The rename settings are one function now, `renames` in `git.rs`, which the status walk and the reader share.
