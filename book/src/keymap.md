@@ -521,6 +521,17 @@ And it adds one key:
 | -----   | -----              | -------------                                                                                               |
 | `Enter` | `review_open`      | Open the row's file at that line in the code tab, to edit it. `:review` comes back. On a row of unchanged lines, show them |
 
+### The file list
+
+`:review-sidebar` shows the review's files in a narrow view at its left, and hides it again. `:review-sidebar show` and `:review-sidebar hide` do one or the other. It has no key of its own, so bind one by name, like `[keys.normal.space] e = ":review-sidebar"`.
+The list is a tree. A directory has a row, and the files under it follow, two columns in. A chain of directories with nothing else in them shares one row, like `helix-term/src/`. The files come in the review's order.
+The list is a buffer in a view of the review's tab, so motions, `/`, counts, and your own keys work in it, and the window keys reach it: `Ctrl-w h` from the review, and `Ctrl-w l` back. The statusline calls it `[files]`, and like the review it stays out of the buffer lists.
+An edit to the list is put back.
+`gn`, `gp`, `:bn`, and `:bp` there go to the next and the previous file's row, past the directories. `:w` and `:reload` there do what they do in the review.
+Closing the list's view hides it, as `Ctrl-w q` and `:q` there do, and so does `:bc` there. The review stays. `Ctrl-w o` there closes the review's view, and the list's view shows the review instead.
+`:q` in the review quits Helix with the list open, as it does without it.
+A file opened in the list's view, with `:e` or a picker, opens in the code tab.
+
 ## Picker
 
 Keys to use within picker. Override them in `[keys.picker]`. A binding of `no_op` drops that key so the [prompt](#prompt) handles it. Other prompt keys work in pickers except where a picker binding takes them.

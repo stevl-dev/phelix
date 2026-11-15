@@ -30,6 +30,7 @@ use helix_view::{
 };
 
 mod decorations;
+mod files;
 mod keymap;
 mod lsp;
 mod restore;
@@ -149,6 +150,17 @@ pub const FEATURE: Feature = Feature {
                 ..Signature::DEFAULT
             },
         },
+        TypableCommand {
+            name: "review-sidebar",
+            aliases: &[],
+            doc: "Show or hide the list of the review's files beside it, or with no argument, toggle it",
+            fun: files::review_sidebar,
+            completer: CommandCompleter::positional(&[files::complete_state]),
+            signature: Signature {
+                positionals: (0, Some(1)),
+                ..Signature::DEFAULT
+            },
+        },
     ],
 };
 
@@ -238,9 +250,10 @@ fn apply_config(
     Ok(())
 }
 
-/// Registers the review's hook and the UI part of its buffer kind.
+/// Registers the review's hook and the UI parts of its buffer kinds.
 fn register() {
     kind::register(review::KIND_NAME, &UI);
+    kind::register(review::files::KIND_NAME, &files::UI);
     register_hook!(move |event: &mut EditorWillUpdate<'_>| {
         review::sync(event.editor, event.completing);
         Ok(())

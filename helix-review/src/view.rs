@@ -33,6 +33,7 @@ use reconcile::Key;
 
 mod complete;
 mod diagnostics;
+pub mod files;
 mod forward;
 mod gutter;
 pub mod layout;
@@ -100,7 +101,9 @@ impl BufferKind for Kind {
     }
 
     fn goto_buffer(&self, editor: &mut Editor, direction: Direction, count: usize) -> bool {
-        step_file(editor, direction, count);
+        step_rows(editor, direction, count, |review, doc| {
+            Some(review.stream_of(doc)?.headers().collect())
+        });
         true
     }
 
@@ -121,17 +124,18 @@ impl BufferKind for Kind {
     }
 }
 
-/// Moves each cursor `count` file headers on.
-fn step_file(editor: &mut Editor, direction: Direction, count: usize) {
+/// Moves each cursor of the focused view `count` on through its buffer's
+/// `stops`, which are rows in order.
+fn step_rows(
+    editor: &mut Editor,
+    direction: Direction,
+    count: usize,
+    stops: fn(&Review, DocumentId) -> Option<Vec<usize>>,
+) {
     let count = count - 1;
     editor.apply_motion(move |editor| {
         let view = editor.tree.get(editor.tree.focus);
-        let Some(headers) = editor
-            .features
-            .review()
-            .stream_of(view.doc)
-            .map(|stream| stream.headers().collect::<Vec<_>>())
-        else {
+        let Some(stops) = stops(editor.features.review(), view.doc) else {
             return;
         };
         let extend = editor.mode == Mode::Select;
@@ -140,17 +144,13 @@ fn step_file(editor: &mut Editor, direction: Direction, count: usize) {
         let selection = doc.selection(view.id).clone().transform(|range| {
             let row = range.cursor_line(text);
             let beyond: Vec<_> = match direction {
-                Direction::Forward => headers.iter().filter(|&&header| header > row).collect(),
-                Direction::Backward => headers
-                    .iter()
-                    .rev()
-                    .filter(|&&header| header < row)
-                    .collect(),
+                Direction::Forward => stops.iter().filter(|&&stop| stop > row).collect(),
+                Direction::Backward => stops.iter().rev().filter(|&&stop| stop < row).collect(),
             };
-            let Some(&header) = beyond.get(count).or(beyond.last()).copied() else {
+            let Some(&stop) = beyond.get(count).or(beyond.last()).copied() else {
                 return range;
             };
-            range.put_cursor(text, text.line_to_char(header), extend)
+            range.put_cursor(text, text.line_to_char(stop), extend)
         });
         doc.append_changes_to_history(view);
         let jump = (doc.id(), doc.selection(view.id).clone());
@@ -339,6 +339,7 @@ pub struct Stream {
     reports: diagnostics::Reports,
     /// An accepted completion's other edits, until the sync forwards it.
     deferred: Option<complete::Deferred>,
+    list: files::List,
 }
 
 /// The rows of each hunk: a run of removed and added rows.
@@ -506,6 +507,11 @@ pub struct Target<'a> {
 impl Stream {
     pub fn hunks(&self) -> Vec<Range<usize>> {
         hunks(&self.rows)
+    }
+
+    /// The list of its files.
+    pub fn list(&self) -> &files::List {
+        &self.list
     }
 
     /// The hunks that `rows`, pairs of first and last rows, touch, by file.
@@ -749,6 +755,7 @@ pub fn show(editor: &mut Editor, root: PathBuf, scope: ChangeView, sections: Vec
 
     let doc_id = editor.new_file(Action::Load);
     switch_to(editor, doc_id);
+    let list = files::List::open(editor);
     let doc = editor.documents.get_mut(&doc_id).expect("just opened");
     // WHY: upstream only uses the flag for writes. Here it shows in the
     // statusline that a staged review takes no edits.
@@ -775,20 +782,24 @@ pub fn show(editor: &mut Editor, root: PathBuf, scope: ChangeView, sections: Vec
         log: log::Log::default(),
         reports: diagnostics::Reports::new(),
         deferred: None,
+        list,
     });
     update(editor, sections.into_iter().map(File::from).collect(), None);
     to_top(editor, doc_id);
 }
 
 /// Switches to the review tab, opening it on the stream `doc` if it isn't open,
-/// and shows the stream in the tab's focused view.
+/// and focuses a view of it that shows the stream. With none, the tab's
+/// focused view shows it.
 pub fn switch_to(editor: &mut Editor, doc: DocumentId) {
     if !editor.switch_tab(REVIEW_TAB) {
         let options = TabOptions {
-            keeps: &[KIND_NAME],
+            keeps: &[KIND_NAME, files::KIND_NAME],
         };
         editor.open_tab(REVIEW_TAB, doc, options);
-    } else if editor.tree.get(editor.tree.focus).doc != doc {
+    } else if let Some(&view) = files::views_of(editor, doc).first() {
+        editor.focus(view);
+    } else {
         editor.switch(doc, Action::Replace);
     }
 }
@@ -856,13 +867,9 @@ fn shut(editor: &mut Editor, force: bool) {
     // you opened on a file would keep the tab open after the review.
     editor.close_tab(REVIEW_TAB);
     let _ = editor.close_document(doc, force);
-    let loaded = editor
-        .features
-        .review_mut()
-        .stream
-        .take()
-        .map(|stream| stream.loaded);
-    sync::close_loaded(editor, loaded.unwrap_or_default(), force);
+    if let Some(stream) = editor.features.review_mut().stream.take() {
+        sync::close_owned(editor, stream, force);
+    }
 }
 
 /// Applies `transaction` to a file's buffer from the review's `view`. The next
@@ -1078,7 +1085,7 @@ fn update(editor: &mut Editor, mut files: Vec<File>, open: Option<(usize, Range<
         .as_mut()
         .expect("checked above");
     stream.ranges = Ranges::new(&layout.rows, &hunks(&layout.rows), &text);
-    stream.files = files;
+    let old = std::mem::replace(&mut stream.files, files);
     stream.rows = layout.rows;
     stream.text = text;
     stream.version = version;
@@ -1086,6 +1093,7 @@ fn update(editor: &mut Editor, mut files: Vec<File>, open: Option<(usize, Range<
     stream.relayout = false;
     sync::save_selections(editor, doc_id);
     diagnostics::place(editor);
+    files::rebuild(editor, &old);
 }
 
 #[cfg(test)]
@@ -1191,6 +1199,7 @@ mod tests {
             log: log::Log::default(),
             reports: diagnostics::Reports::new(),
             deferred: None,
+            list: files::List::default(),
         }
     }
 

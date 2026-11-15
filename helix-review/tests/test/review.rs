@@ -24,6 +24,7 @@ use termina::event::{Event, KeyEvent};
 
 use super::*;
 
+mod files;
 mod rust_analyzer;
 
 fn git(dir: &Path, args: &[&str]) {
@@ -55,7 +56,9 @@ fn repo(committed: &[(&str, &str)], changes: &[(&str, Option<&str>)]) -> TempDir
     let repo = tempfile::tempdir().unwrap();
     git(repo.path(), &["init", "--quiet"]);
     for (name, text) in committed {
-        std::fs::write(repo.path().join(name), text).unwrap();
+        let path = repo.path().join(name);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(path, text).unwrap();
     }
     git(repo.path(), &["add", "--all"]);
     git(repo.path(), &["commit", "--quiet", "--message", "base"]);

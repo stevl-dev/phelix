@@ -109,3 +109,4 @@
 | `:unstage-line` | Unstage the changed lines the selections cover in the review |
 | `:review-restore` | Put the base's text back over the hunks the selections touch in the review, in each file's buffer |
 | `:review-context` | Show the given number of unchanged lines around each hunk of the review, or say how many it shows |
+| `:review-sidebar` | Show or hide the list of the review's files beside it, or with no argument, toggle it |
