@@ -123,7 +123,7 @@ Each entry says what the feature adds, and where its code, tests, and book pages
   - `helix-review/src/term/write.rs` copies `write_all_impl`'s save chain. A cherry-pick that changes the chain updates the copy.
   - `imara-diff` in `helix-review/Cargo.toml` moves together with helix-core's and helix-vcs's.
   - `gix`'s `revision` feature in `helix-vcs/Cargo.toml`, which `:review-commit` names a commit through. Upstream builds without it.
-  - `redraw_notifier` in `helix-term/src/ui/picker.rs`, which lets an integration test open a picker with items. The commit picker's tests are the only ones that do.
+  - Upstream's `helix_event::redraw_requester`, which the picker's matcher calls, and which lets an integration test open a picker with items. The commit picker's tests are the only ones that do.
   - The core items it uses that `helix-term` and `helix-view` made public for it: `commands::push_jump`, `commands::make_format_callback`, `trim_trailing_whitespace`, `trim_final_newlines` and `insert_final_newline` in `typed.rs`, `is_binary`, `ui::document`, `ui::text_decorations`, and `Document::language_server_starting`. A cherry-pick that changes one updates the review.
 - Rulings:
   - The dropped diff review feature's plan and code stay under the local tag `archive/diff-review`. The tag is never pushed.
