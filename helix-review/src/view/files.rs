@@ -26,9 +26,6 @@ use super::{File, ReviewState, Row, REVIEW_TAB};
 /// The name of the list's buffer kind.
 pub const KIND_NAME: &str = "review-files";
 
-/// The list's width in columns.
-const WIDTH: u16 = 30;
-
 const PUT_BACK: &str = "The edit was put back";
 
 struct Kind;
@@ -495,10 +492,12 @@ pub(super) fn keep_views(editor: &mut Editor) {
             editor.close(view);
         }
     }
+    // WHY: set each frame, so a reload of the config resizes an open list.
+    let width = editor.features.review().config().sidebar_width.get();
     for (id, doc) in tab_views(editor) {
         let side = editor.tree.get(id).side;
         if doc == list {
-            editor.tree.set_side(id, Some(WIDTH));
+            editor.tree.set_side(id, Some(width));
             // WHY: every refresh gives the view the configured gutters back.
             editor.tree.get_mut(id).gutters.layout.clear();
         } else if side.is_some() {
@@ -533,7 +532,8 @@ pub fn set_shown(editor: &mut Editor, show: bool) -> bool {
         return false;
     }
     if views.is_empty() {
-        editor.open_side(REVIEW_TAB, list, WIDTH);
+        let width = editor.features.review().config().sidebar_width.get();
+        editor.open_side(REVIEW_TAB, list, width);
     }
     true
 }

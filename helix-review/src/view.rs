@@ -6,6 +6,7 @@
 //! module lays out the rows, owns the buffer's text, and forwards its edits.
 
 use std::collections::HashMap;
+use std::num::NonZeroU16;
 use std::ops::Range;
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
@@ -241,7 +242,8 @@ pub struct Review {
     config: ReviewConfig,
 }
 
-/// Which of the theme's diff styles the review draws, from `[review]`.
+/// `[review]`: which of the theme's diff styles the review draws, and its
+/// file list.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(default, rename_all = "kebab-case", deny_unknown_fields)]
 pub struct ReviewConfig {
@@ -249,12 +251,15 @@ pub struct ReviewConfig {
     pub row_background: bool,
     /// Mark changed words. Defaults to `true`.
     pub word_background: bool,
+    /// The file list's width in columns. Defaults to 30.
+    pub sidebar_width: NonZeroU16,
 }
 
 impl ReviewConfig {
     const DEFAULT: ReviewConfig = ReviewConfig {
         row_background: true,
         word_background: true,
+        sidebar_width: NonZeroU16::new(30).unwrap(),
     };
 }
 

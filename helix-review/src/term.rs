@@ -711,6 +711,8 @@ fn not_a_review(editor: &mut Editor) {
 
 #[cfg(test)]
 mod tests {
+    use std::num::NonZeroU16;
+
     use crate::view::{ReviewConfig, ReviewState};
     use helix_view::features::Features;
 
@@ -735,6 +737,7 @@ mod tests {
         let both = |row_background, word_background| ReviewConfig {
             row_background,
             word_background,
+            sidebar_width: NonZeroU16::new(30).unwrap(),
         };
         assert_eq!(review(load("", None).unwrap()), both(true, true));
         let global = "[review]\nrow-background = false";
@@ -745,6 +748,18 @@ mod tests {
             both(false, false),
             "the workspace's table merges over the global one"
         );
+    }
+
+    #[test]
+    fn review_table_reads_the_file_lists_width_and_refuses_none() {
+        let width =
+            |table: &str| load(table, None).map(|config| review(config).sidebar_width.get());
+        assert_eq!(width(""), Ok(30));
+        assert_eq!(width("[review]\nsidebar-width = 42"), Ok(42));
+        for refused in ["0", "-3", "\"wide\""] {
+            let error = width(&format!("[review]\nsidebar-width = {refused}")).unwrap_err();
+            assert!(error.contains("sidebar-width"), "{refused}: {error}");
+        }
     }
 
     #[test]

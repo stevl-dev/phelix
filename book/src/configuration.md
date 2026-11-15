@@ -43,11 +43,12 @@ Its settings will be merged with the configuration directory and the built-in co
 
 ## `[review]` Section
 
-Which of the theme's diff styles the [review](./keymap.md#review) draws. The colors come from the theme's `diff` [scopes](./themes.md#syntax-highlighting).
+Which of the theme's diff styles the [review](./keymap.md#review) draws, and its [file list](./keymap.md#the-file-list). The colors come from the theme's `diff` [scopes](./themes.md#syntax-highlighting).
 
 | Key | Description | Default |
 |--|--|---------|
 | `row-background` | Tint added and removed rows with `diff.plus.view` and `diff.minus.view`. When `false`, removed rows keep their syntax colors, and only the gutter's `-` marks them | `true` |
 | `word-background` | Mark changed words with `diff.delta.view.text` | `true` |
+| `sidebar-width` | The file list's width in columns, at least 1. The list takes half the tab's width at most | `30` |
 
 `:config-reload` reads the table again after you change it. It's a table of its own, beside `[editor]`, so `:set` and `:toggle` don't reach it.

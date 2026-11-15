@@ -87,7 +87,7 @@ Each entry says what the feature adds, and where its code, tests, and book pages
 
 ### review-stream
 
-- Plan: `fork/review-stream.md`, done through phase 9f. Staging lines is `fork/stage-lines.md`, done through phase 2. The file list is `fork/review-sidebar.md`, done through phase 6.
+- Plan: `fork/review-stream.md`, done through phase 9f. Staging lines is `fork/stage-lines.md`, done through phase 2. The file list is `fork/review-sidebar.md`, done through phase 7.
   The completion spike's prototype is on the local branch `spike/review-completion`, which is never pushed.
 - Adds: `:review` shows every changed file's hunks against `HEAD` in one buffer, or with `unstaged` or `staged` against the index, with old and new line numbers and `+`/`-` signs in the gutter.
   An edit to added or unchanged lines, new and deleted lines too, goes to the file's buffer as you type, loaded in the background if need be and closed with the review once saved, and the rows follow it. A buffer the review loads in the background, for an edit or a language feature, stays out of the buffer lists until a view shows it, and joins them when the review closes and leaves it with unsaved changes. New lines and indents are the file's own. Any other edit is put back, and a staged review takes none.
@@ -109,7 +109,7 @@ Each entry says what the feature adds, and where its code, tests, and book pages
   A file's row ends with its status letter and the lines its hunks add and remove, drawn at the view's right edge each frame from the review's state, not typed into the buffer.
   Rows get syntax colors from parses of each file's whole base and source.
   Removed and added rows get tints, headers a rule, and changed words a mark, from theme scopes: `diff.{plus,minus}.view`, `diff.delta.view.text`, and the fork's `ui.review.header` and `ui.review.gap`.
-  `[review]`'s `row-background` and `word-background`, a top-level table of `config.toml`, turn the tints and the marks off. `:config-reload` reads it again, and `:set` and `:toggle` don't reach it.
+  `[review]`'s `row-background` and `word-background`, a top-level table of `config.toml`, turn the tints and the marks off, and its `sidebar-width` sets the file list's width. `:config-reload` reads it again, and `:set` and `:toggle` don't reach it.
 - Code: the `helix-review` crate. `src/view.rs` and `view/{layout,reconcile,forward,gutter,diagnostics,source,log,sync,syntax,words,complete}.rs` hold the stream and its sync, beside `helix-view`. `src/term.rs` and `term/{lsp,stage,restore,write,keymap,decorations}.rs` hold its commands, keys and drawing, beside `helix-term`. The file list is `view/files.rs`, with its rows, its buffer, and the rules for its views, and `term/files.rs`, with `:review-sidebar`, `review_goto_file`, and the UI part of its kind, which draws it. `helix-vcs/src/git/index.rs`, with the `helix-vcs/src/index.rs` facade, writes the index.
   It hooks in at:
   - `phx/src/lib.rs`: `FEATURES` lists `helix_review::FEATURE`. So do the review's integration tests, in their `builder`. The `Feature` holds the review's commands, its tab, its `[review]` table, its `review_jump` picker action on `Alt-r`, and its `register`, which runs `review::sync` on `EditorWillUpdate` and registers the UI part of its buffer kind (`feature-hooks`).

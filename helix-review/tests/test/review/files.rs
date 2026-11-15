@@ -403,3 +403,29 @@ async fn file_rows_end_with_their_status_and_counts_over_a_long_names_tail() -> 
     );
     Ok(())
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn the_list_is_as_wide_as_the_review_table_says_while_its_open() -> anyhow::Result<()> {
+    let repo = two_changed();
+    let mut config = test_config();
+    let table = toml::from_str("sidebar-width = 40")?;
+    config.features.insert("review", toml::Value::Table(table));
+    let mut app = builder()
+        .with_config(config)
+        .with_file(repo.path().join("a.txt"), None)
+        .build()?;
+    start_review(&mut app).await?;
+    let width = |app: &Application| list_views(app).first().map(|view| view.area.width);
+    run_until(&mut app, ":review-sidebar<ret>", |app| {
+        width(app) == Some(40)
+    })
+    .await?;
+
+    // As `:config-reload` does, after a change to the file.
+    let mut narrower = app.editor.features.review().config();
+    narrower.sidebar_width = 24.try_into()?;
+    app.editor.features.review_mut().set_config(narrower);
+    run_until(&mut app, "", |app| width(app) == Some(24)).await?;
+    assert_eq!(view!(app.editor).area.x, 25, "the review takes the rest");
+    Ok(())
+}
