@@ -359,3 +359,66 @@ async fn the_rows_of_a_commits_message_belong_to_no_file() -> anyhow::Result<()>
     assert_eq!(cursor(&app), (2, 0), "a reload keeps the cursor on its row");
     Ok(())
 }
+
+/// Whether the screen shows `text`.
+fn on_screen(app: &Application, text: &str) -> bool {
+    let buffer = app.terminal_buffer();
+    let symbols = buffer.content().iter().map(|cell| cell.symbol.as_str());
+    symbols.collect::<String>().contains(text)
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn the_commit_picker_lists_head_first_and_opens_the_commit_picked() -> anyhow::Result<()> {
+    let repo = history();
+    let mut app = app_on(repo.path().join("a.txt"))?;
+    // WHY: the walk adds the commits from another thread, and `Enter` in a
+    // picker with none picks nothing.
+    run_until(&mut app, ":review-log<ret>", |app| {
+        on_screen(app, "Change the second line.") && on_screen(app, "base")
+    })
+    .await?;
+    run_until(&mut app, "<ret>", |app| {
+        status(app).ends_with(": Change the second line.")
+    })
+    .await?;
+
+    assert!(in_stream(&app));
+    assert!(stream_text(&app).starts_with(&message(&app, "Change the second line.")));
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn the_commit_picker_filters_by_subject() -> anyhow::Result<()> {
+    let repo = history();
+    let mut app = app_on(repo.path().join("a.txt"))?;
+    run_until(&mut app, ":review-log<ret>", |app| {
+        on_screen(app, "Change the second line.")
+    })
+    .await?;
+    // WHY: the filter runs off the main thread too. `Enter` before it has
+    // run picks the first commit of them all.
+    run_until(&mut app, "seventh", |app| {
+        !on_screen(app, "Change the second line.")
+    })
+    .await?;
+    run_until(&mut app, "<ret>", |app| {
+        status(app).ends_with(": Change the seventh line.")
+    })
+    .await?;
+
+    assert_eq!(stream_text(&app), seventh_line(&app, &repo));
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn the_commit_picker_says_when_the_repository_has_no_commit() -> anyhow::Result<()> {
+    let repo = tempfile::tempdir()?;
+    git(repo.path(), &["init", "--quiet"]);
+    std::fs::write(repo.path().join("a.txt"), TEN)?;
+    let mut app = app_on(repo.path().join("a.txt"))?;
+
+    run_until(&mut app, ":review-log<ret>", |app| {
+        status(app) == "the repository has no commit yet"
+    })
+    .await
+}

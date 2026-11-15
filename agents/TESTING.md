@@ -66,6 +66,8 @@ The harness sets no features. A test that needs a feature's commands, tabs, or c
   `AppBuilder` builds the app with a file, a config, or input text.
 - Only `Application::editor` is public. Assert what the editor holds: `documents()`, the selection, registers, `get_status()`.
   A picker's own state isn't reachable, so assert what its actions do.
+- A picker's items and its matches come from other threads. Before a key that picks one, run the loop until the screen shows it, read through `Application::terminal_buffer`.
+  `the_commit_picker_filters_by_subject` in `helix-review/tests/test/review/commit.rs` shows it.
 - Each sequence runs until the editor goes idle, `idle-timeout` (250 ms) after the last key.
   Background work, like a file walk or a git status walk, can still be running then. Run `run_event_loop_until_idle` until it has finished.
 - Reaching idle clears the editor's idle timer.

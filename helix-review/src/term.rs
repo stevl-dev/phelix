@@ -30,6 +30,7 @@ use helix_view::{
     align_view, current, current_ref, doc, view, Align, Document, DocumentId, Editor, Theme, View,
 };
 
+mod commits;
 mod decorations;
 mod files;
 mod keymap;
@@ -93,6 +94,17 @@ pub const FEATURE: Feature = Feature {
             completer: CommandCompleter::none(),
             signature: Signature {
                 positionals: (0, Some(1)),
+                ..Signature::DEFAULT
+            },
+        },
+        TypableCommand {
+            name: "review-log",
+            aliases: &[],
+            doc: "Pick a commit to show in the review, from the commits HEAD reaches, newest first",
+            fun: commits::review_log,
+            completer: CommandCompleter::none(),
+            signature: Signature {
+                positionals: (0, Some(0)),
                 ..Signature::DEFAULT
             },
         },

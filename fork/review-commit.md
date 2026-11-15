@@ -3,7 +3,7 @@
 Snapshot: `main` at `ed65461ff`.
 Goes in `fork/review-commit.md`. Feature slug: `review-commit`, part of `review-stream`'s entry in `FORK.md`.
 
-Status: phases 0–5 are committed.
+Status: done. Phases 0–6 are committed.
 
 ## Bottom line
 
@@ -153,7 +153,7 @@ Each phase is one commit that builds and passes its tests, and marks itself done
 | 3 | Done | Show a commit's changes in the review. | 2.3: `:review-commit`, the replace rule, and the refusals. Integration tests in `helix-review/tests/test/review/commit.rs`: the rows of a commit that isn't `HEAD`, with a working tree that differs from it; an edit is put back with the message; `:stage-hunk` and a goto are refused; a review with an unsaved file refuses the commit and stays; `:review all` afterwards shows the working tree's changes; `Enter` opens the file, and names one the working tree lacks; a commit with no changes leaves the open review. Book, generated docs, and `FORK.md`. |
 | 4 | Done | Show the commit's message above its files. | 2.4: the row kind, the layout, the gutter, and the list's mark. Unit tests in `view.rs`: the layout's text and rows for a commit with a body, with none, and for a merge. Integration tests: the cursor starts on the first row, `gn` goes to the first header, an edit to the message is put back, and the list marks no file there. Book and `FORK.md`. |
 | 5 | Done | List a repository's commits. | 2.5. Unit tests in `git/test.rs`: the order over a history with a merge, each commit once; a walk that `f` stops; a repository with no commit. |
-| 6 | | Pick a commit to review from a list. | 2.6: `:review-log`. Integration tests: `Enter` on the first row shows `HEAD`'s commit, and a filter on a subject opens that commit. Book, generated docs, and `FORK.md`. |
+| 6 | Done | Pick a commit to review from a list. | 2.6: `:review-log`. Integration tests: `Enter` on the first row shows `HEAD`'s commit, and a filter on a subject opens that commit. Book, generated docs, and `FORK.md`. |
 
 Phase 1 comes first because everything reads through it.
 Phase 4 has the risk, and goes as early as it can: it needs a commit in the review to show.
@@ -180,3 +180,6 @@ After phases 3, 4, and 6, the paths to check in `phx` are: open a commit of this
 - **Phase 5.** `helix_vcs::commit::walk` is the walk. The shortest hash that names each commit alone, for the commit and its parents, took 1.1 s over this repository's 7,845 commits, and the walk itself 0.09 s.
   So a walk's hashes all have the length of `HEAD`'s short hash. One could name two commits in a large repository, and the picker opens a commit by its full hash.
   The tests' git helper takes the committer's date, since a walk by date over commits of one date has no order to test.
+- **Phase 6.** The picker is `helix-review/src/term/commits.rs`. The walk's error reaches the editor through its jobs, not the global status channel, so a test of one app reads it. The picker's injector crosses to that job over a channel, since the picker is made where the compositor is.
+  No integration test had opened a picker with items: the matcher asks for a redraw from a thread pool with no runtime, which panics under the integration feature. `redraw_notifier` in `helix-term/src/ui/picker.rs` fixes that, in a commit of its own before this phase, which the plan didn't have.
+  The picker's tests wait for the screen to show a row before the key that picks it, since the commits and the filter's matches come from other threads.
