@@ -4,7 +4,7 @@ Snapshot: `main` at `ae7b54931`.
 Goes in `fork/review-sidebar.md`. Feature slug: `review-sidebar`, part of `review-stream`'s entry in `FORK.md`. The core's new hooks go in the `tabs` and `feature-hooks` entries.
 Reference: Hunk's files pane ([hunk.dev](https://www.hunk.dev/)).
 
-Status: approved. Done through phase 7.
+Status: done.
 
 ## Bottom line
 
@@ -136,7 +136,7 @@ Each phase is one commit that builds and passes its tests, and marks itself done
 | 5 | Done | Show the file under the list's cursor in the review. | 2.5's second half, and `review_goto_file` on `Enter`. Integration tests: `j` in the list puts the review's cursor on the next file's header, a directory row gives its first file, entering and leaving the list without moving leaves the review's cursor where it was, `C-o` in the review goes back after a visit, and `Enter` focuses the review. A unit test that the key binds by name, beside the review's. Book. |
 | 6 | Done | Draw each file's status and line counts in the list. | 2.6's right edge, in `term/files.rs`. Unit tests of the pure part: the counts of a file's hunks, and none for a binary file. A render test only if `term/decorations.rs`' test style reaches it. Book. Colors are for the human to check. |
 | 7 | Done | Read the list's width from `[review]`. | `sidebar-width`, read by the sync so `:config-reload` resizes an open list. Unit test of the table, beside the review's: the default against a literal, an override, and a refused value. `book/src/configuration.md`. |
-| 8 | | Show the review's file list when the tab is wide. | `sidebar`, `"auto"`, and the override of 2.7. This is the commit that changes what `:review` shows. Integration tests: a wide tab opens with the list and focus in the review, `sidebar = false` opens without it, a hide survives a resize, and a narrow tab opens without it. The harness's terminal is 120 columns wide, so the review's existing tests get the list. A test that fails for that reason is fixed, or sets `sidebar = false` when the list is beside its point. Book and `FORK.md`. |
+| 8 | Done | Show the review's file list when the tab is wide. | `sidebar`, `"auto"`, and the override of 2.7. This is the commit that changes what `:review` shows. Integration tests: a wide tab opens with the list and focus in the review, `sidebar = false` opens without it, a hide survives a resize, and a narrow tab opens without it. The harness's terminal is 120 columns wide, so the review's existing tests get the list. A test that fails for that reason is fixed, or sets `sidebar = false` when the list is beside its point. Book and `FORK.md`. |
 
 Phases 1 and 2 are the core's, and nothing else can start without them.
 Phase 3 has the rules for a list that is a real view, which is the risk, so it comes straight after.
@@ -223,3 +223,12 @@ Assumed here. Approving the plan approves them, so say which to change:
   `File::counts` and its unit test are in `view.rs`, where `File` is, and `Stream::changes` hands them to the drawing.
 - Phase 7: `sidebar-width` is a `NonZeroU16`, so the table refuses 0 with the other values it can't read. The tree's cap at half the tab still holds for a width that's too large.
   An integration test the plan didn't list: a list opened with a configured width, then resized by a change to the review's config while it's open. It sets the config on the editor, since the harness has no config file for `:config-reload` to read.
+- Phase 8: the sync shows and hides the list. Each frame it takes what was last done by hand, or else the config and the tab's width. `:review-sidebar` only records what was done by hand.
+  A close by hand is found, not hooked: the sync notes whether it left the list shown, so a list that's gone since was closed by a key.
+  `C-w o` in the list counts as a hide by hand. Without that, `"auto"` opened the list again beside the review it had just left alone.
+  A list the sync closes because no view shows the review isn't by hand. It comes back with the review.
+  `sidebar = true` shows the list in a narrow tab too, at half the tab's width at most.
+  A frame took the terminal's new size after `EditorWillUpdate`, so after a resize the list changed one event late. The frame now resizes first, in a commit of its own before this one. The resize test reads the screen of the frame drawn at the new size, and failed before that commit.
+  The tests resize the terminal through `Application::resize_terminal`, a new test-only accessor. A resize in a test needs a key after it, since an idle editor draws no frame.
+  Of the review's existing tests, one needed `sidebar = false`: the split test counts views and steps to the review with `C-w w`. The rest pass with the list open.
+  The list's own tests no longer run the command to open it, since it would hide the list.

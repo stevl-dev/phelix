@@ -713,7 +713,7 @@ fn not_a_review(editor: &mut Editor) {
 mod tests {
     use std::num::NonZeroU16;
 
-    use crate::view::{ReviewConfig, ReviewState};
+    use crate::view::{ReviewConfig, ReviewState, Sidebar};
     use helix_view::features::Features;
 
     use helix_term::config::{Config, ConfigLoadError};
@@ -737,6 +737,7 @@ mod tests {
         let both = |row_background, word_background| ReviewConfig {
             row_background,
             word_background,
+            sidebar: Sidebar::Auto,
             sidebar_width: NonZeroU16::new(30).unwrap(),
         };
         assert_eq!(review(load("", None).unwrap()), both(true, true));
@@ -759,6 +760,23 @@ mod tests {
         for refused in ["0", "-3", "\"wide\""] {
             let error = width(&format!("[review]\nsidebar-width = {refused}")).unwrap_err();
             assert!(error.contains("sidebar-width"), "{refused}: {error}");
+        }
+    }
+
+    #[test]
+    fn review_table_reads_when_the_file_list_shows() {
+        let sidebar = |table: &str| load(table, None).map(|config| review(config).sidebar);
+        assert_eq!(sidebar(""), Ok(Sidebar::Auto));
+        for (value, read) in [
+            ("true", Sidebar::Shown),
+            ("false", Sidebar::Hidden),
+            ("\"auto\"", Sidebar::Auto),
+        ] {
+            assert_eq!(sidebar(&format!("[review]\nsidebar = {value}")), Ok(read));
+        }
+        for refused in ["\"always\"", "1"] {
+            let error = sidebar(&format!("[review]\nsidebar = {refused}")).unwrap_err();
+            assert!(error.contains("true, false, or \"auto\""), "{error}");
         }
     }
 

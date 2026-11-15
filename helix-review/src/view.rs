@@ -20,7 +20,8 @@ use helix_core::{Assoc, ChangeSet, Language, Transaction};
 use helix_core::{Rope, RopeSlice, Selection};
 use helix_lsp::{lsp, OffsetEncoding};
 use helix_vcs::{ChangeView, FileChange, Hunk};
-use serde::Deserialize;
+use serde::de::Unexpected;
+use serde::{Deserialize, Deserializer};
 
 use helix_view::document::Mode;
 use helix_view::editor::{Action, GutterType, TabOptions};
@@ -251,6 +252,8 @@ pub struct ReviewConfig {
     pub row_background: bool,
     /// Mark changed words. Defaults to `true`.
     pub word_background: bool,
+    /// When the file list shows. Defaults to `"auto"`.
+    pub sidebar: Sidebar,
     /// The file list's width in columns. Defaults to 30.
     pub sidebar_width: NonZeroU16,
 }
@@ -259,8 +262,49 @@ impl ReviewConfig {
     const DEFAULT: ReviewConfig = ReviewConfig {
         row_background: true,
         word_background: true,
+        sidebar: Sidebar::Auto,
         sidebar_width: NonZeroU16::new(30).unwrap(),
     };
+}
+
+/// When the review shows its file list: `true`, `false`, or `"auto"`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Sidebar {
+    Shown,
+    Hidden,
+    /// While the review's tab is wide enough for both.
+    Auto,
+}
+
+impl<'de> Deserialize<'de> for Sidebar {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        struct Visitor;
+
+        impl serde::de::Visitor<'_> for Visitor {
+            type Value = Sidebar;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+                formatter.write_str("true, false, or \"auto\"")
+            }
+
+            fn visit_bool<E>(self, shown: bool) -> Result<Sidebar, E> {
+                Ok(if shown {
+                    Sidebar::Shown
+                } else {
+                    Sidebar::Hidden
+                })
+            }
+
+            fn visit_str<E: serde::de::Error>(self, value: &str) -> Result<Sidebar, E> {
+                match value {
+                    "auto" => Ok(Sidebar::Auto),
+                    other => Err(E::invalid_value(Unexpected::Str(other), &self)),
+                }
+            }
+        }
+
+        deserializer.deserialize_any(Visitor)
+    }
 }
 
 impl Default for ReviewConfig {

@@ -49,6 +49,9 @@ Which of the theme's diff styles the [review](./keymap.md#review) draws, and its
 |--|--|---------|
 | `row-background` | Tint added and removed rows with `diff.plus.view` and `diff.minus.view`. When `false`, removed rows keep their syntax colors, and only the gutter's `-` marks them | `true` |
 | `word-background` | Mark changed words with `diff.delta.view.text` | `true` |
+| `sidebar` | `true` shows the file list, `false` hides it, and `"auto"` shows it while the review's tab is at least 120 columns wide | `"auto"` |
 | `sidebar-width` | The file list's width in columns, at least 1. The list takes half the tab's width at most | `30` |
+
+`"auto"` follows the terminal: the list closes when the tab gets narrower than 120 columns, and comes back when it's wide again. `:review-sidebar`, or closing the list's view, goes before `sidebar` until the review closes.
 
 `:config-reload` reads the table again after you change it. It's a table of its own, beside `[editor]`, so `:set` and `:toggle` don't reach it.

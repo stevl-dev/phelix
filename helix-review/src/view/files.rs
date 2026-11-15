@@ -21,10 +21,13 @@ use helix_view::kind::BufferKind;
 use helix_view::{align_view, Align, Document, DocumentId, Editor, ViewId};
 
 use super::sync::{settle, view_of};
-use super::{File, ReviewState, Row, REVIEW_TAB};
+use super::{File, ReviewState, Row, Sidebar, REVIEW_TAB};
 
 /// The name of the list's buffer kind.
 pub const KIND_NAME: &str = "review-files";
+
+/// The width of the review's tab from which `sidebar = "auto"` shows the list.
+const AUTO_WIDTH: u16 = 120;
 
 const PUT_BACK: &str = "The edit was put back";
 
@@ -103,6 +106,11 @@ pub struct List {
     current: Option<usize>,
     /// Whether the review's view moved since the focus came to the list.
     visited: bool,
+    /// Whether a view showed the list when the sync last looked.
+    shown: bool,
+    /// What `:review-sidebar` or a closed view last made of the list. It
+    /// goes before the config for as long as the review is open.
+    by_hand: Option<bool>,
 }
 
 impl List {
@@ -471,15 +479,25 @@ pub(super) fn views_of(editor: &Editor, doc: DocumentId) -> Vec<ViewId> {
     views
 }
 
-/// Keeps the list's views what they have to be: side views with no gutter,
-/// and only beside the review. Runs before the stream's sync.
+/// Shows and hides the list as the config or the last change by hand has it,
+/// and keeps its views what they have to be: side views with no gutter, and
+/// only beside the review. Runs before the stream's sync.
 pub(super) fn keep_views(editor: &mut Editor) {
+    let config = editor.features.review().config();
+    let wide = editor.tree.area().width >= AUTO_WIDTH;
     let Some(stream) = editor.features.review().stream.as_ref() else {
         return;
     };
     let (review, list) = (stream.doc, stream.list.doc);
+    let mut lists = views_of(editor, list);
+    let mut by_hand = stream.list.by_hand;
+    // WHY: the sync notes what it left shown, so a list that's gone since was
+    // closed by a key, like `C-w q` in it or `C-w o` in the review.
+    if stream.list.shown && lists.is_empty() {
+        by_hand = Some(false);
+    }
+
     if views_of(editor, review).is_empty() {
-        let mut lists = views_of(editor, list);
         // WHY: a list alone would hold the tab open with nothing beside it.
         // The tab's last view shows the review instead, so `C-w o` in the
         // list leaves the review. A hidden tab has no focus to switch in.
@@ -487,13 +505,27 @@ pub(super) fn keep_views(editor: &mut Editor) {
         if alone && editor.tree.tab() == REVIEW_TAB && !lists.is_empty() {
             editor.focus(lists.remove(0));
             editor.switch(review, Action::Replace);
+            by_hand = Some(false);
         }
         for view in lists {
             editor.close(view);
         }
+    } else {
+        let show = by_hand.unwrap_or(match config.sidebar {
+            Sidebar::Shown => true,
+            Sidebar::Hidden => false,
+            Sidebar::Auto => wide,
+        });
+        if show && lists.is_empty() {
+            editor.open_side(REVIEW_TAB, list, config.sidebar_width.get());
+        }
+        for view in lists.into_iter().filter(|_| !show) {
+            editor.close(view);
+        }
     }
+
     // WHY: set each frame, so a reload of the config resizes an open list.
-    let width = editor.features.review().config().sidebar_width.get();
+    let width = config.sidebar_width.get();
     for (id, doc) in tab_views(editor) {
         let side = editor.tree.get(id).side;
         if doc == list {
@@ -505,6 +537,11 @@ pub(super) fn keep_views(editor: &mut Editor) {
             editor.tree.get_mut(id).gutters = editor.config().gutters.clone();
         }
     }
+    let shown = !views_of(editor, list).is_empty();
+    if let Some(stream) = editor.features.review_mut().stream.as_mut() {
+        stream.list.by_hand = by_hand;
+        stream.list.shown = shown;
+    }
 }
 
 /// Whether a view of the review's tab shows the list.
@@ -514,26 +551,27 @@ pub fn shown(editor: &Editor) -> bool {
 }
 
 /// Shows the list in a side view of the review's tab, or closes the views
-/// that show it. `false` when there's no view of the review to show it
-/// beside.
+/// that show it, by hand: it stays so until the review closes, whatever the
+/// config says. `false` when there's no view of the review to show it beside.
 pub fn set_shown(editor: &mut Editor, show: bool) -> bool {
+    let config = editor.features.review().config();
     let Some(stream) = editor.features.review().stream.as_ref() else {
         return false;
     };
     let (review, list) = (stream.doc, stream.list.doc);
     let views = views_of(editor, list);
-    if !show {
-        for view in views {
-            editor.close(view);
-        }
-        return true;
-    }
-    if views_of(editor, review).is_empty() {
+    if show && views_of(editor, review).is_empty() {
         return false;
     }
-    if views.is_empty() {
-        let width = editor.features.review().config().sidebar_width.get();
-        editor.open_side(REVIEW_TAB, list, width);
+    if show && views.is_empty() {
+        editor.open_side(REVIEW_TAB, list, config.sidebar_width.get());
+    }
+    for view in views.into_iter().filter(|_| !show) {
+        editor.close(view);
+    }
+    if let Some(stream) = editor.features.review_mut().stream.as_mut() {
+        stream.list.by_hand = Some(show);
+        stream.list.shown = show;
     }
     true
 }

@@ -287,6 +287,13 @@ impl Application {
         self.terminal.backend().buffer()
     }
 
+    /// Resizes the test terminal. The next frame finds the new size, as it
+    /// does after a resize it got no event for.
+    #[cfg(feature = "integration")]
+    pub fn resize_terminal(&mut self, width: u16, height: u16) {
+        self.terminal.backend_mut().resize(width, height);
+    }
+
     async fn render(&mut self) {
         if self.compositor.full_redraw {
             self.terminal.clear().expect("Cannot clear the terminal");

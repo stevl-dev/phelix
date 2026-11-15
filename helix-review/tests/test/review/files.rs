@@ -53,15 +53,29 @@ fn in_list(app: &Application) -> bool {
     doc!(app.editor).id() == stream(app).list().doc
 }
 
-/// A review of `repo` with the list open and the focus in the review.
+/// A review of `repo` in the test terminal's 120 columns, where the list
+/// shows by default.
 async fn review_with_list(repo: &TempDir) -> anyhow::Result<Application> {
     let mut app = app_on(repo.path().join("a.txt"))?;
     start_review(&mut app).await?;
-    run_until(&mut app, ":review-sidebar<ret>", |app| {
-        !list_views(app).is_empty()
-    })
-    .await?;
+    run_until(&mut app, "", |app| !list_views(app).is_empty()).await?;
     Ok(app)
+}
+
+/// Makes the terminal `width` columns wide, and draws one frame at that
+/// width.
+async fn resize(app: &mut Application, width: u16) -> anyhow::Result<()> {
+    app.resize_terminal(width, 150);
+    // WHY: a key, since the editor finds the new size when it draws, and an
+    // idle editor draws nothing.
+    run_until(app, "<esc>", |app| app.editor.tree.area().width == width).await
+}
+
+/// Whether the screen shows the list's statusline.
+fn list_drawn(app: &Application) -> bool {
+    let buffer = app.terminal_buffer();
+    let symbols = buffer.content().iter().map(|cell| cell.symbol.as_str());
+    symbols.collect::<String>().contains("[files]")
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -223,7 +237,7 @@ async fn the_lists_cursor_follows_the_reviews_file_and_scrolls_to_it() -> anyhow
     let repo = repo(&committed, &changes);
     let mut app = app_on(repo.path().join("f000.txt"))?;
     start_review(&mut app).await?;
-    run_until(&mut app, ":review-sidebar<ret>", |app| {
+    run_until(&mut app, "", |app| {
         !list_views(app).is_empty() && list_row(app) == 1
     })
     .await?;
@@ -273,10 +287,7 @@ async fn the_reviews_file_has_the_tint_in_the_list() -> anyhow::Result<()> {
         "#,
     )?)?;
     start_review(&mut app).await?;
-    run_until(&mut app, ":review-sidebar<ret>", |app| {
-        tinted(app) == ["a.txt"]
-    })
-    .await?;
+    run_until(&mut app, "", |app| tinted(app) == ["a.txt"]).await?;
     run_until(&mut app, "gn", |app| tinted(app) == ["b.txt"]).await
 }
 
@@ -407,19 +418,10 @@ async fn file_rows_end_with_their_status_and_counts_over_a_long_names_tail() -> 
 #[tokio::test(flavor = "multi_thread")]
 async fn the_list_is_as_wide_as_the_review_table_says_while_its_open() -> anyhow::Result<()> {
     let repo = two_changed();
-    let mut config = test_config();
-    let table = toml::from_str("sidebar-width = 40")?;
-    config.features.insert("review", toml::Value::Table(table));
-    let mut app = builder()
-        .with_config(config)
-        .with_file(repo.path().join("a.txt"), None)
-        .build()?;
+    let mut app = app_with_review(repo.path().join("a.txt"), "sidebar-width = 40")?;
     start_review(&mut app).await?;
     let width = |app: &Application| list_views(app).first().map(|view| view.area.width);
-    run_until(&mut app, ":review-sidebar<ret>", |app| {
-        width(app) == Some(40)
-    })
-    .await?;
+    run_until(&mut app, "", |app| width(app) == Some(40)).await?;
 
     // As `:config-reload` does, after a change to the file.
     let mut narrower = app.editor.features.review().config();
@@ -427,5 +429,70 @@ async fn the_list_is_as_wide_as_the_review_table_says_while_its_open() -> anyhow
     app.editor.features.review_mut().set_config(narrower);
     run_until(&mut app, "", |app| width(app) == Some(24)).await?;
     assert_eq!(view!(app.editor).area.x, 25, "the review takes the rest");
+    Ok(())
+}
+
+/// Whether a review opens with the list, with `table` as `[review]` in a
+/// terminal `width` columns wide.
+async fn opens_with_list(table: &str, width: u16) -> anyhow::Result<bool> {
+    let repo = two_changed();
+    let mut app = app_with_review(repo.path().join("a.txt"), table)?;
+    resize(&mut app, width).await?;
+    start_review(&mut app).await?;
+    run_until(&mut app, "", |_| true).await?;
+    assert!(in_stream(&app), "the focus is in the review");
+    Ok(!list_views(&app).is_empty())
+}
+
+#[test]
+fn a_review_opens_with_the_list_as_the_sidebar_key_and_the_tabs_width_say() -> anyhow::Result<()> {
+    let cases = [
+        ("", 120, true),
+        ("", 119, false),
+        ("sidebar = \"auto\"", 119, false),
+        ("sidebar = false", 120, false),
+        ("sidebar = true", 119, true),
+    ];
+    for (table, width, shown) in cases {
+        // WHY: an `Application` registers its event hooks for the tokio
+        // runtime it runs in, so each case needs a runtime of its own.
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()?;
+        let opened = runtime.block_on(opens_with_list(table, width))?;
+        assert_eq!(opened, shown, "[review] {table} at {width} columns");
+    }
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn auto_closes_the_list_in_a_narrow_tab_and_brings_it_back() -> anyhow::Result<()> {
+    let repo = two_changed();
+    let mut app = review_with_list(&repo).await?;
+    for (width, shown) in [(119, false), (120, true), (90, false), (200, true)] {
+        resize(&mut app, width).await?;
+        assert_eq!(!list_views(&app).is_empty(), shown, "{width} columns");
+        assert_eq!(list_drawn(&app), shown, "in the frame that's {width} wide");
+        assert!(in_stream(&app), "{width} columns");
+    }
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_change_by_hand_goes_before_the_config_through_a_resize() -> anyhow::Result<()> {
+    let repo = two_changed();
+    let mut app = review_with_list(&repo).await?;
+    let steps = [
+        (":review-sidebar hide<ret>", false, "hidden by the command"),
+        (":review-sidebar show<ret>", true, "shown by the command"),
+        ("<C-w>h<C-w>q", false, "hidden by closing its view"),
+    ];
+    for (keys, shown, step) in steps {
+        run_until(&mut app, keys, |app| list_views(app).is_empty() != shown).await?;
+        for width in [119, 120] {
+            resize(&mut app, width).await?;
+            assert_eq!(!list_views(&app).is_empty(), shown, "{step}, at {width}");
+        }
+    }
     Ok(())
 }

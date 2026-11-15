@@ -523,7 +523,9 @@ And it adds one key:
 
 ### The file list
 
-`:review-sidebar` shows the review's files in a narrow view at its left, and hides it again. `:review-sidebar show` and `:review-sidebar hide` do one or the other. It has no key of its own, so bind one by name, like `[keys.normal.space] e = ":review-sidebar"`.
+The review lists its files in a narrow view at its left while its tab is at least 120 columns wide. The list closes when the terminal gets narrower and comes back when it's wide again. [`[review]`](./configuration.md#review-section)'s `sidebar` shows it always or never instead, and `sidebar-width` sets its width.
+`:review-sidebar` hides the list, or shows it, at any width. `:review-sidebar show` and `:review-sidebar hide` do one or the other. It has no key of its own, so bind one by name, like `[keys.normal.space] e = ":review-sidebar"`.
+What the command leaves, or closing the list's view, holds until the review closes, whatever the config and the width say. The next review asks the config again.
 The list is a tree. A directory has a row, and the files under it follow, two columns in. A chain of directories with nothing else in them shares one row, like `helix-term/src/`. The files come in the review's order.
 A file's row ends, at the view's right edge, with how the file changed and the lines its hunks add and remove, like `M +12 -3`: `M` modified, `A` added, `?` untracked, `D` deleted, `R` renamed, `U` in conflict. A binary file, or one too large to diff, shows only the letter. They're drawn over the end of a name that's too long, and they aren't the buffer's text, so a search and a yank see only names. An edit in the review changes the counts as it changes the rows.
 The letter and the counts take the theme's `diff.plus`, `diff.delta`, and `diff.minus`, a conflict's letter `error`, and a directory's row `ui.text.directory`.
@@ -533,7 +535,7 @@ While the focus is in the list, the review shows the file under the list's curso
 A visit to the list is one jump in the review's view, so `Ctrl-o` there goes back to where the review was before it.
 An edit to the list is put back.
 `gn`, `gp`, `:bn`, and `:bp` there go to the next and the previous file's row, past the directories. `:w` and `:reload` there do what they do in the review.
-Closing the list's view hides it, as `Ctrl-w q` and `:q` there do, and so does `:bc` there. The review stays. `Ctrl-w o` there closes the review's view, and the list's view shows the review instead.
+Closing the list's view hides it, as `Ctrl-w q` and `:q` there do, and so do `:bc` there and `Ctrl-w o` in the review. The review stays. `Ctrl-w o` in the list closes the review's view, so the list's view shows the review instead, and the list stays hidden.
 `:q` in the review quits Helix with the list open, as it does without it.
 A file opened in the list's view, with `:e` or a picker, opens in the code tab.
 

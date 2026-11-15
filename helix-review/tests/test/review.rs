@@ -82,6 +82,14 @@ fn app_on(file: PathBuf) -> anyhow::Result<Application> {
     builder().with_file(file, None).build()
 }
 
+/// An app on `file` with `table` as its `[review]`.
+fn app_with_review(file: PathBuf, table: &str) -> anyhow::Result<Application> {
+    let mut config = test_config();
+    let table = toml::Value::Table(toml::from_str(table)?);
+    config.features.insert("review", table);
+    builder().with_config(config).with_file(file, None).build()
+}
+
 async fn run_until(
     app: &mut Application,
     keys: &str,
@@ -1928,7 +1936,9 @@ async fn a_split_opened_on_a_file_in_the_review_tab_stays_there_until_the_review
 ) -> anyhow::Result<()> {
     let repo = seventh_changed();
     let (file, other) = (repo.path().join("a.txt"), repo.path().join("other.txt"));
-    let mut app = app_on(file.clone())?;
+    // WHY: without the file list, a view of its own that the test's count of
+    // views and its `C-w w` would have to step around.
+    let mut app = app_with_review(file.clone(), "sidebar = false")?;
     start_review(&mut app).await?;
     std::fs::write(&other, "other\n")?;
 
@@ -2134,14 +2144,7 @@ fn diff_backgrounds(app: &Application) -> Vec<Color> {
 /// The diff backgrounds the review draws with `review` as its `[review]`.
 async fn backgrounds_with(review: &str) -> anyhow::Result<Vec<Color>> {
     let repo = repo(&[("a.txt", "one two\n")], &[("a.txt", Some("one three\n"))]);
-    let mut config = test_config();
-    config
-        .features
-        .insert("review", toml::Value::Table(toml::from_str(review)?));
-    let mut app = builder()
-        .with_config(config)
-        .with_file(repo.path().join("a.txt"), None)
-        .build()?;
+    let mut app = app_with_review(repo.path().join("a.txt"), review)?;
     app.editor.set_theme(toml::from_str(
         r#"
         "ui.selection" = { bg = "yellow" }
