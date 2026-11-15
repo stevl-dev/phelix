@@ -3,7 +3,7 @@
 Snapshot: `main` at `ed65461ff`.
 Goes in `fork/review-commit.md`. Feature slug: `review-commit`, part of `review-stream`'s entry in `FORK.md`.
 
-Status: phases 0–4 are committed.
+Status: phases 0–5 are committed.
 
 ## Bottom line
 
@@ -152,7 +152,7 @@ Each phase is one commit that builds and passes its tests, and marks itself done
 | 2 | Done | Give the review a scope of its own. | 2.2. No behavior changes, so no new test. |
 | 3 | Done | Show a commit's changes in the review. | 2.3: `:review-commit`, the replace rule, and the refusals. Integration tests in `helix-review/tests/test/review/commit.rs`: the rows of a commit that isn't `HEAD`, with a working tree that differs from it; an edit is put back with the message; `:stage-hunk` and a goto are refused; a review with an unsaved file refuses the commit and stays; `:review all` afterwards shows the working tree's changes; `Enter` opens the file, and names one the working tree lacks; a commit with no changes leaves the open review. Book, generated docs, and `FORK.md`. |
 | 4 | Done | Show the commit's message above its files. | 2.4: the row kind, the layout, the gutter, and the list's mark. Unit tests in `view.rs`: the layout's text and rows for a commit with a body, with none, and for a merge. Integration tests: the cursor starts on the first row, `gn` goes to the first header, an edit to the message is put back, and the list marks no file there. Book and `FORK.md`. |
-| 5 | | List a repository's commits. | 2.5. Unit tests in `git/test.rs`: the order over a history with a merge, each commit once; a walk that `f` stops; a repository with no commit. |
+| 5 | Done | List a repository's commits. | 2.5. Unit tests in `git/test.rs`: the order over a history with a merge, each commit once; a walk that `f` stops; a repository with no commit. |
 | 6 | | Pick a commit to review from a list. | 2.6: `:review-log`. Integration tests: `Enter` on the first row shows `HEAD`'s commit, and a filter on a subject opens that commit. Book, generated docs, and `FORK.md`. |
 
 Phase 1 comes first because everything reads through it.
@@ -177,3 +177,6 @@ After phases 3, 4, and 6, the paths to check in `phx` are: open a commit of this
   The risk didn't show: the rows that match a kind already fell through for one they don't know.
   With the cursor in the message the list marks no file, so going into the list from there shows the file under the list's cursor in the review, as a move in the list does.
   A key clears the status line, so a test reads an edit's refusal before the next key.
+- **Phase 5.** `helix_vcs::commit::walk` is the walk. The shortest hash that names each commit alone, for the commit and its parents, took 1.1 s over this repository's 7,845 commits, and the walk itself 0.09 s.
+  So a walk's hashes all have the length of `HEAD`'s short hash. One could name two commits in a large repository, and the picker opens a commit by its full hash.
+  The tests' git helper takes the committer's date, since a walk by date over commits of one date has no order to test.

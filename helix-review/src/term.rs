@@ -313,8 +313,7 @@ fn reviewing(scope: &Scope) -> String {
     match scope {
         Scope::Changes(changes) => format!("Reviewing {} changes", changes.label()),
         Scope::Commit(commit) => {
-            let subject = commit.message.lines().next().unwrap_or_default();
-            format!("Reviewing {}: {subject}", commit.short_id)
+            format!("Reviewing {}: {}", commit.short_id, commit.subject())
         }
     }
 }

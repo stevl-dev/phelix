@@ -1,5 +1,6 @@
-//! A commit and the files it changed, for the review. Builds without the
-//! `git` feature get an error, like the diff providers.
+//! A commit and the files it changed, and the commits `HEAD` reaches, for the
+//! review. Builds without the `git` feature get an error, like the diff
+//! providers.
 
 use crate::FileChange;
 
@@ -18,6 +19,13 @@ pub struct Commit {
     pub message: String,
 }
 
+impl Commit {
+    /// The message's first line.
+    pub fn subject(&self) -> &str {
+        self.message.lines().next().unwrap_or_default()
+    }
+}
+
 /// A file a commit changed. A merge's are against its first parent, and a
 /// root commit's are all added.
 pub struct CommitFile {
@@ -31,7 +39,7 @@ pub struct CommitFile {
 }
 
 #[cfg(feature = "git")]
-pub use crate::git::commit::read;
+pub use crate::git::commit::{read, walk};
 
 #[cfg(not(feature = "git"))]
 pub fn read(
@@ -39,5 +47,14 @@ pub fn read(
     _rev: &str,
     _trust_full: bool,
 ) -> anyhow::Result<(Commit, Vec<CommitFile>)> {
+    anyhow::bail!("No diff support compiled in")
+}
+
+#[cfg(not(feature = "git"))]
+pub fn walk(
+    _dir: &std::path::Path,
+    _trust_full: bool,
+    _f: impl FnMut(Commit) -> bool,
+) -> anyhow::Result<()> {
     anyhow::bail!("No diff support compiled in")
 }

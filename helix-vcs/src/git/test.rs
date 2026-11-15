@@ -10,6 +10,11 @@ fn exec_git_cmd(args: &str, git_dir: &Path) {
 }
 
 fn exec_git(args: &[&str], git_dir: &Path) {
+    exec_git_on(args, git_dir, "2000-01-02");
+}
+
+/// Runs git with `day` as the committer's date.
+fn exec_git_on(args: &[&str], git_dir: &Path, day: &str) {
     let res = Command::new("git")
         .arg("-C")
         .arg(git_dir) // execute the git command in this directory
@@ -21,7 +26,7 @@ fn exec_git(args: &[&str], git_dir: &Path) {
         .env("GIT_AUTHOR_DATE", "2000-01-01 00:00:00 +0000")
         .env("GIT_AUTHOR_EMAIL", "author@example.com")
         .env("GIT_AUTHOR_NAME", "author")
-        .env("GIT_COMMITTER_DATE", "2000-01-02 00:00:00 +0000")
+        .env("GIT_COMMITTER_DATE", format!("{day} 00:00:00 +0000"))
         .env("GIT_COMMITTER_EMAIL", "committer@example.com")
         .env("GIT_COMMITTER_NAME", "committer")
         .env("GIT_CONFIG_COUNT", "2")
@@ -430,4 +435,63 @@ fn a_commit_whose_parent_a_shallow_clone_lacks_says_so() {
         err.to_string(),
         format!("{}'s parent isn't in this clone", commit.short_id)
     );
+}
+
+/// A history with a merge, one commit a day: `base`, `ours` on the branch
+/// that merges, `theirs` on the one merged, and `merge`.
+fn merged_history() -> TempDir {
+    let temp_git = empty_git_repo();
+    let repo = temp_git.path();
+    let commit = |name: &str, day: &str| {
+        write(repo, &format!("{name}.txt"), name);
+        exec_git_cmd("add -A", repo);
+        exec_git_on(&["commit", "-q", "-m", name], repo, day);
+    };
+    commit("base", "2000-01-02");
+    exec_git_cmd("branch side", repo);
+    commit("ours", "2000-01-03");
+    exec_git_cmd("checkout -q side", repo);
+    commit("theirs", "2000-01-04");
+    exec_git_cmd("checkout -q -", repo);
+    exec_git_on(
+        &["merge", "-q", "--no-ff", "-m", "merge", "side"],
+        repo,
+        "2000-01-05",
+    );
+    temp_git
+}
+
+#[test]
+fn a_walk_hands_over_each_commit_head_reaches_once_newest_first() {
+    let temp_git = merged_history();
+    let mut subjects = Vec::new();
+    git::commit::walk(temp_git.path(), true, |commit| {
+        subjects.push(commit.subject().to_string());
+        true
+    })
+    .unwrap();
+    // WHY: `theirs` is the merge's second parent and newer than `ours`. A walk
+    // in the graph's order has `ours` first.
+    assert_eq!(subjects, ["merge", "theirs", "ours", "base"]);
+}
+
+#[test]
+fn a_walk_stops_when_its_callback_says_so() {
+    let temp_git = merged_history();
+    let mut subjects = Vec::new();
+    git::commit::walk(temp_git.path(), true, |commit| {
+        subjects.push(commit.subject().to_string());
+        subjects.len() < 2
+    })
+    .unwrap();
+    assert_eq!(subjects, ["merge", "theirs"]);
+}
+
+#[test]
+fn a_walk_of_a_repository_with_no_commit_says_so() {
+    let temp_git = empty_git_repo();
+    let err = git::commit::walk(temp_git.path(), true, |_| true)
+        .err()
+        .unwrap();
+    assert_eq!(err.to_string(), "the repository has no commit yet");
 }

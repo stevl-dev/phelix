@@ -1,4 +1,5 @@
-//! Reads a commit and the files it changed, for the review stream.
+//! Reads a commit and the files it changed, and lists the commits `HEAD`
+//! reaches, for the review stream.
 
 use std::io::Read;
 use std::path::Path;
@@ -8,6 +9,8 @@ use gix::bstr::{BStr, ByteSlice};
 use gix::filter::plumbing::driver::apply::Delay;
 use gix::object::tree::diff::ChangeDetached;
 use gix::objs::tree::EntryMode;
+use gix::revision::walk::Sorting;
+use gix::traverse::commit::simple::CommitTimeOrder;
 use gix::{ObjectId, Repository};
 
 use super::{absolute_path, open_repo, renames};
@@ -124,18 +127,54 @@ pub fn read(dir: &Path, rev: &str, trust_full: bool) -> Result<(Commit, Vec<Comm
     // sorts. The review's file list walks the files as a tree.
     files.sort_by(|a, b| a.change.path().cmp(b.change.path()));
 
+    Ok((describe(&commit, None)?, files))
+}
+
+/// Hands `f` every commit `HEAD` reaches in the repository that holds `dir`,
+/// newest first by commit date, until `f` returns `false`.
+pub fn walk(dir: &Path, trust_full: bool, mut f: impl FnMut(Commit) -> bool) -> Result<()> {
+    let mut repo = open_repo(dir, trust_full)
+        .context("failed to open git repo")?
+        .to_thread_local();
+    // WHY: a walk by date reads each commit twice, to sort it and to hand it
+    // over.
+    repo.object_cache_size_if_unset(4 * 1024 * 1024);
+    let head = repo
+        .head_id()
+        .ok()
+        .context("the repository has no commit yet")?;
+    // WHY: a hash as short as `HEAD`'s, not the shortest that names each
+    // commit alone. Finding that one for every commit and its parents took
+    // twelve times as long as the walk.
+    let hex_len = head.shorten_or_id().hex_len();
+    let walk = repo
+        .rev_walk([head.detach()])
+        .sorting(Sorting::ByCommitTime(CommitTimeOrder::NewestFirst))
+        .all()?;
+    for info in walk {
+        if !f(describe(&info?.object()?, Some(hex_len))?) {
+            break;
+        }
+    }
+    Ok(())
+}
+
+/// What the review shows of `commit`, with short hashes of `hex_len` digits,
+/// or else the shortest that name one commit.
+fn describe(commit: &gix::Commit, hex_len: Option<usize>) -> Result<Commit> {
+    let short = |id: gix::Id| match hex_len {
+        Some(hex_len) => id.to_hex_with_len(hex_len).to_string(),
+        None => id.shorten_or_id().to_string(),
+    };
     let author = commit.author()?;
     let date = author
         .time()
         .map(|time| time.format_or_unix(gix::date::time::format::ISO8601))
         .unwrap_or_default();
-    let commit = Commit {
+    Ok(Commit {
         id: commit.id().to_string(),
-        short_id,
-        parents: parents
-            .iter()
-            .map(|parent| parent.shorten_or_id().to_string())
-            .collect(),
+        short_id: short(commit.id()),
+        parents: commit.parent_ids().map(short).collect(),
         author: author.name.to_str_lossy().trim().to_string(),
         email: author.email.to_str_lossy().trim().to_string(),
         date,
@@ -144,8 +183,7 @@ pub fn read(dir: &Path, rev: &str, trust_full: bool) -> Result<(Commit, Vec<Comm
             .to_str_lossy()
             .trim_end()
             .to_string(),
-    };
-    Ok((commit, files))
+    })
 }
 
 /// Reads the text of a tree's entries.
