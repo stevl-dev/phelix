@@ -2,7 +2,7 @@
 //! touches in the review, in each file's buffer, as one step of the review's
 //! undo log. The review follows the buffer like any other edit.
 
-use crate::view::{self as review, layout};
+use crate::view::{self as review, layout, Scope};
 use anyhow::{bail, Context as _};
 use helix_core::command_line::Args;
 use helix_core::Transaction;
@@ -25,8 +25,14 @@ pub(crate) fn review_restore(
     let stream = open_stream(cx.editor)
         .filter(|stream| stream.doc == doc.id())
         .context("This buffer isn't a review. Start one with :review")?;
-    if !stream.scope.follows_files() {
-        bail!("A staged review shows the index, not a file. :unstage-hunk takes a hunk back out");
+    match &stream.scope {
+        Scope::Commit(_) => bail!(stream.scope.not_the_files()),
+        scope if !scope.follows_files() => {
+            bail!(
+                "A staged review shows the index, not a file. :unstage-hunk takes a hunk back out"
+            )
+        }
+        _ => {}
     }
     let rows: Vec<_> = doc
         .selection(view.id)

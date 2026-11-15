@@ -3,6 +3,7 @@
 
 use crate::FileChange;
 
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Commit {
     /// The full hash.
     pub id: String,

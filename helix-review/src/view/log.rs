@@ -104,7 +104,8 @@ fn walk(editor: &mut Editor, count: usize, way: Way) {
     };
     let doc_id = stream.doc;
     if !stream.scope.follows_files() {
-        editor.set_status("A staged review is read-only. ret opens the file.");
+        let message = stream.scope.read_only();
+        editor.set_status(message);
         return;
     }
     // WHY: upstream's `undo` commits first, so `u` on a key bound in insert

@@ -33,7 +33,7 @@ pub(super) fn write(
         .stream()
         .expect("the review's buffer is open");
     if !stream.scope.follows_files() {
-        bail!("A staged review is read-only. ret opens the file.");
+        bail!(stream.scope.read_only());
     }
     if path.is_some() {
         bail!("The review writes each file to its own path");

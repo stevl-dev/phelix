@@ -9,7 +9,7 @@ use std::collections::HashMap;
 use std::num::NonZeroU16;
 use std::ops::Range;
 use std::path::{Path, PathBuf};
-use std::sync::OnceLock;
+use std::sync::{Arc, OnceLock};
 
 use helix_core::encoding::Encoding;
 use helix_core::indent::{auto_detect_indent_style, IndentStyle};
@@ -19,6 +19,7 @@ use helix_core::syntax::Loader;
 use helix_core::{Assoc, ChangeSet, Language, Transaction};
 use helix_core::{Rope, RopeSlice, Selection};
 use helix_lsp::{lsp, OffsetEncoding};
+use helix_vcs::commit::Commit;
 use helix_vcs::{ChangeView, FileChange, Hunk};
 use serde::de::Unexpected;
 use serde::{Deserialize, Deserializer};
@@ -359,14 +360,35 @@ impl Review {
 pub enum Scope {
     /// The working tree's changes, the index's, or both.
     Changes(ChangeView),
+    /// A commit's changes against its first parent.
+    Commit(Arc<Commit>),
 }
 
 impl Scope {
     /// Whether its sources are the files. Such a review follows the files'
     /// buffers and edits them. Any other is read-only: a staged review's
-    /// sources are the index.
+    /// sources are the index, and a commit's the commit.
     pub fn follows_files(&self) -> bool {
         matches!(self, Scope::Changes(ChangeView::All | ChangeView::Unstaged))
+    }
+
+    /// What a review that doesn't follow the files says to an edit.
+    pub fn read_only(&self) -> &'static str {
+        match self {
+            Scope::Commit(_) => "A commit's review is read-only. ret opens the file.",
+            Scope::Changes(_) => "A staged review is read-only. ret opens the file.",
+        }
+    }
+
+    /// What such a review says to a command that asks about a file or
+    /// changes one.
+    pub fn not_the_files(&self) -> &'static str {
+        match self {
+            Scope::Commit(_) => "A commit's review shows the commit, not the files.",
+            Scope::Changes(_) => {
+                "A staged review shows the index, not the files. ret opens the file."
+            }
+        }
     }
 }
 
@@ -819,14 +841,19 @@ pub fn show(editor: &mut Editor, root: PathBuf, scope: Scope, sections: Vec<Sect
         // WHY: a read of the changes it already shows leaves you in your tab,
         // for `:reload-all` from the code tab. The changed-file picker's
         // `review_jump` switches before it reads them.
-        if editor
-            .features
-            .review()
-            .stream
-            .as_ref()
-            .is_some_and(|stream| stream.scope != scope)
-        {
+        let shown = editor.features.review().stream.as_ref();
+        let changed = shown.is_some_and(|stream| stream.scope != scope);
+        // WHY: a commit's files aren't the working tree's, even at the same
+        // paths, so no row of one stands for a row of the other.
+        let replaced = changed
+            && shown.is_some_and(|stream| {
+                matches!(stream.scope, Scope::Commit(_)) || matches!(scope, Scope::Commit(_))
+            });
+        if changed {
             switch_to(editor, doc);
+        }
+        if replaced {
+            start_over(editor);
         }
         if let Some(stream) = editor.features.review_mut().stream.as_mut() {
             stream.root = root;
@@ -836,6 +863,9 @@ pub fn show(editor: &mut Editor, root: PathBuf, scope: Scope, sections: Vec<Sect
             doc.readonly = read_only;
         }
         update(editor, sections.into_iter().map(File::from).collect(), None);
+        if replaced {
+            to_top(editor, doc);
+        }
         return;
     }
 
@@ -932,7 +962,7 @@ pub fn close_empty(editor: &mut Editor) -> Vec<String> {
     unsaved
 }
 
-fn unsaved_names(editor: &Editor) -> Vec<(DocumentId, String)> {
+pub fn unsaved_names(editor: &Editor) -> Vec<(DocumentId, String)> {
     unsaved(editor)
         .into_iter()
         .map(|doc| (doc, editor.documents[&doc].display_name().into_owned()))
@@ -977,6 +1007,20 @@ pub fn edit_file(editor: &mut Editor, doc: DocumentId, view: ViewId, transaction
             stream.pending.push((doc, view));
         }
     }
+}
+
+/// Empties the stream for the rows of another scope, and lets go of the files
+/// as a close does: the buffers it loaded close, and its undo log empties.
+fn start_over(editor: &mut Editor) {
+    update(editor, Vec::new(), None);
+    let Some(stream) = editor.features.review_mut().stream.as_mut() else {
+        return;
+    };
+    stream.pending.clear();
+    stream.log = log::Log::default();
+    stream.deferred = None;
+    let loaded = std::mem::take(&mut stream.loaded);
+    sync::close_loaded(editor, loaded, false);
 }
 
 fn to_top(editor: &mut Editor, doc: DocumentId) {

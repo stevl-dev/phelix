@@ -103,6 +103,7 @@
 | `:workspace-untrust` | Revoke the current workspace's trust grant or exclusion. |
 | `:workspace-exclude` | Mark the current workspace as never-prompt. Never prompts for trust again. |
 | `:review` | Show the changes of every changed file in one buffer, in a tab of its own, or switch to it. Scopes: all (HEAD against the files, the default), unstaged (the index against the files), staged (HEAD against the index) |
+| `:review-commit` | Show the changes of a commit in the review, read-only, against its first parent. Takes any name of the commit, HEAD by default |
 | `:stage-hunk` | Stage the hunks the selections touch in the review |
 | `:stage-line` | Stage the changed lines the selections cover in the review |
 | `:unstage-hunk` | Unstage the hunks the selections touch in the review |

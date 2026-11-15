@@ -4,6 +4,7 @@
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use crate::view::{
     self as review, Content, ReviewConfig, ReviewState, Row, Scope, Section, Stream, REVIEW_TAB,
@@ -79,6 +80,17 @@ pub const FEATURE: Feature = Feature {
             doc: "Show the changes of every changed file in one buffer, in a tab of its own, or switch to it. Scopes: all (HEAD against the files, the default), unstaged (the index against the files), staged (HEAD against the index)",
             fun: review,
             completer: CommandCompleter::positional(&[complete_scope]),
+            signature: Signature {
+                positionals: (0, Some(1)),
+                ..Signature::DEFAULT
+            },
+        },
+        TypableCommand {
+            name: "review-commit",
+            aliases: &[],
+            doc: "Show the changes of a commit in the review, read-only, against its first parent. Takes any name of the commit, HEAD by default",
+            fun: review_commit,
+            completer: CommandCompleter::none(),
             signature: Signature {
                 positionals: (0, Some(1)),
                 ..Signature::DEFAULT
@@ -300,6 +312,10 @@ fn review(cx: &mut compositor::Context, args: Args, event: PromptEvent) -> anyho
 fn reviewing(scope: &Scope) -> String {
     match scope {
         Scope::Changes(changes) => format!("Reviewing {} changes", changes.label()),
+        Scope::Commit(commit) => {
+            let subject = commit.message.lines().next().unwrap_or_default();
+            format!("Reviewing {}: {subject}", commit.short_id)
+        }
     }
 }
 
@@ -315,6 +331,7 @@ fn complete_scope(_editor: &Editor, input: &str) -> Vec<Completion> {
 fn reload(cx: &mut compositor::Context) {
     match open_stream(cx.editor).map(|stream| stream.scope.clone()) {
         Some(Scope::Changes(scope)) => read_changes(cx, scope, None, None),
+        Some(Scope::Commit(commit)) => read_commit(cx, commit.id.clone()),
         None => {}
     }
 }
@@ -368,6 +385,92 @@ fn jump(cx: &mut compositor::Context, scope: ChangeView, path: &Path) {
     read_changes(cx, scope, None, Some(path.to_path_buf()));
 }
 
+/// A directory of the repository the open review shows, or else of the one
+/// that holds the current file, or the working directory for a buffer with no
+/// path. And whether its workspace is trusted to run git's programs.
+fn repository(editor: &Editor) -> (PathBuf, bool) {
+    let root = match open_stream(editor) {
+        Some(stream) => stream.root.clone(),
+        None => doc!(editor)
+            .path()
+            .and_then(Path::parent)
+            .filter(|dir| dir.is_dir())
+            .map(Path::to_path_buf)
+            .unwrap_or_else(helix_stdx::env::current_working_dir),
+    };
+    let trust_full = editor
+        .workspace_trust
+        .query(&helix_loader::find_workspace_in(&root).0, TrustQuery::Git)
+        .is_trusted();
+    (root, trust_full)
+}
+
+fn review_commit(
+    cx: &mut compositor::Context,
+    args: Args,
+    event: PromptEvent,
+) -> anyhow::Result<()> {
+    if event != PromptEvent::Validate {
+        return Ok(());
+    }
+    read_commit(cx, args.first().unwrap_or("HEAD").to_string());
+    Ok(())
+}
+
+/// Reads the commit `rev` names in `repository`'s repository and shows its
+/// changes in the stream, in place of the changes the stream showed.
+fn read_commit(cx: &mut compositor::Context, rev: String) {
+    let (root, trust_full) = repository(cx.editor);
+    cx.jobs.callback(async move {
+        let dir = root.clone();
+        let read =
+            tokio::task::spawn_blocking(move || helix_vcs::commit::read(&dir, &rev, trust_full))
+                .await?;
+        let show = move |editor: &mut Editor| {
+            let (commit, files) = match read {
+                Ok(read) => read,
+                Err(err) => {
+                    editor.set_error(format!("{err:#}"));
+                    return;
+                }
+            };
+            if files.is_empty() {
+                editor.set_status(format!("{} changes no files", commit.short_id));
+                return;
+            }
+            let scope = Scope::Commit(Arc::new(commit));
+            // WHY: the files' buffers the open review loaded close with its
+            // rows, and their changes would go with them.
+            let unsaved = review::unsaved_names(editor);
+            if !unsaved.is_empty() {
+                let names: Vec<_> = unsaved.into_iter().map(|(_, name)| name).collect();
+                let plural = if names.len() == 1 { "" } else { "s" };
+                editor.set_error(format!(
+                    "{} unsaved buffer{plural} remaining: {names:?}",
+                    names.len()
+                ));
+                return;
+            }
+            let sections = files
+                .into_iter()
+                .map(|file| {
+                    let file = File {
+                        change: file.change,
+                        base: file.base,
+                        source: file.source,
+                        follows_file: false,
+                    };
+                    file.section(editor)
+                })
+                .collect();
+            let done = reviewing(&scope);
+            review::show(editor, root, scope, sections);
+            editor.set_status(done);
+        };
+        Ok(Callback::Editor(Box::new(show)))
+    });
+}
+
 /// Lists the `scope` changes of the repository the open review shows, or else
 /// the one that holds the current file, or the working directory for a buffer
 /// with no path. Shows them in the stream, then `done` in the status line, and
@@ -378,20 +481,7 @@ fn read_changes(
     done: Option<String>,
     focus: Option<PathBuf>,
 ) {
-    let root = match open_stream(cx.editor) {
-        Some(stream) => stream.root.clone(),
-        None => doc!(cx.editor)
-            .path()
-            .and_then(Path::parent)
-            .filter(|dir| dir.is_dir())
-            .map(Path::to_path_buf)
-            .unwrap_or_else(helix_stdx::env::current_working_dir),
-    };
-    let trust_full = cx
-        .editor
-        .workspace_trust
-        .query(&helix_loader::find_workspace_in(&root).0, TrustQuery::Git)
-        .is_trusted();
+    let (root, trust_full) = repository(cx.editor);
     let providers = cx.editor.diff_providers.clone();
 
     let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
@@ -568,10 +658,18 @@ fn open(cx: &mut Context) {
         return;
     };
     let path = target.change.path().to_path_buf();
-    if let FileChange::Deleted { .. } = target.change {
-        let path = helix_stdx::path::get_relative_path(&path);
+    let shown = helix_stdx::path::get_relative_path(&path);
+    // WHY: a commit's file is the working tree's only by its path. Opening a
+    // path with no file would start a new one.
+    if let Scope::Commit(_) = stream.scope {
+        if !path.is_file() {
+            cx.editor
+                .set_error(format!("{} isn't in the working tree", shown.display()));
+            return;
+        }
+    } else if let FileChange::Deleted { .. } = target.change {
         cx.editor
-            .set_error(format!("{} is deleted", path.display()));
+            .set_error(format!("{} is deleted", shown.display()));
         return;
     }
     let line = target.line;

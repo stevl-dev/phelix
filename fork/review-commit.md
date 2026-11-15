@@ -3,7 +3,7 @@
 Snapshot: `main` at `ed65461ff`.
 Goes in `fork/review-commit.md`. Feature slug: `review-commit`, part of `review-stream`'s entry in `FORK.md`.
 
-Status: phases 0–2 are committed.
+Status: phases 0–3 are committed.
 
 ## Bottom line
 
@@ -150,7 +150,7 @@ Each phase is one commit that builds and passes its tests, and marks itself done
 | 0 | Done | Add the plan for reviewing a commit. | This file. |
 | 1 | Done | Read a commit's changes from git. | 2.1: `git/commit.rs`, the facade, and `gix`'s `revision` feature. Unit tests in `helix-vcs/src/git/test.rs`, over repositories the tests build: one commit that modifies, adds, deletes, and renames a file, with both sides of each; a root commit; a merge against its first parent; a file whose mode alone changed; a rev that names nothing, with its message; a CRLF file under `autocrlf` whose commit changes one line. |
 | 2 | Done | Give the review a scope of its own. | 2.2. No behavior changes, so no new test. |
-| 3 | | Show a commit's changes in the review. | 2.3: `:review-commit`, the replace rule, and the refusals. Integration tests in `helix-review/tests/test/review/commit.rs`: the rows of a commit that isn't `HEAD`, with a working tree that differs from it; an edit is put back with the message; `:stage-hunk` and a goto are refused; a review with an unsaved file refuses the commit and stays; `:review all` afterwards shows the working tree's changes; `Enter` opens the file, and names one the working tree lacks; a commit with no changes leaves the open review. Book, generated docs, and `FORK.md`. |
+| 3 | Done | Show a commit's changes in the review. | 2.3: `:review-commit`, the replace rule, and the refusals. Integration tests in `helix-review/tests/test/review/commit.rs`: the rows of a commit that isn't `HEAD`, with a working tree that differs from it; an edit is put back with the message; `:stage-hunk` and a goto are refused; a review with an unsaved file refuses the commit and stays; `:review all` afterwards shows the working tree's changes; `Enter` opens the file, and names one the working tree lacks; a commit with no changes leaves the open review. Book, generated docs, and `FORK.md`. |
 | 4 | | Show the commit's message above its files. | 2.4: the row kind, the layout, the gutter, and the list's mark. Unit tests in `view.rs`: the layout's text and rows for a commit with a body, with none, and for a merge. Integration tests: the cursor starts on the first row, `gn` goes to the first header, an edit to the message is put back, and the list marks no file there. Book and `FORK.md`. |
 | 5 | | List a repository's commits. | 2.5. Unit tests in `git/test.rs`: the order over a history with a merge, each commit once; a walk that `f` stops; a repository with no commit. |
 | 6 | | Pick a commit to review from a list. | 2.6: `:review-log`. Integration tests: `Enter` on the first row shows `HEAD`'s commit, and a filter on a subject opens that commit. Book, generated docs, and `FORK.md`. |
@@ -168,3 +168,7 @@ After phases 3, 4, and 6, the paths to check in `phx` are: open a commit of this
   The rename settings are one function now, `renames` in `git.rs`, which the status walk and the reader share.
 - **Phase 2.** `Scope` is in `helix-review/src/view.rs`, with one kind so far, and `Scope::follows_files` is the question the ten places ask.
   The scope isn't `Copy`, since a commit's will hold the commit. `reviewing` in `term.rs` is the status line's words for a scope, in one place for phase 3 to add to.
+- **Phase 3.** `read_commit` in `term.rs` reads the commit and `show` replaces the rows. A replace empties the stream first, with an `update` of no files, so no row of the old review stands for a row of the new one at the same path.
+  The refusal over unsaved files is checked when the read comes back, not when the command runs, since that is when the rows would go.
+  `Enter` asks whether the working tree has the file, for a deleted file too, which a later commit may have brought back.
+  The harness's `test_key_sequence` quits the app when it ends, so a test's setup keys go through `run_until`.

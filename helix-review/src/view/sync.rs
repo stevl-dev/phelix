@@ -129,7 +129,12 @@ fn keep_shown(editor: &mut Editor) {
 // them, and then the buffer is listed so you can find it.
 pub(super) fn close_owned(editor: &mut Editor, stream: Stream, force: bool) {
     let _ = editor.close_document(stream.list().doc, true);
-    for doc_id in stream.loaded {
+    close_loaded(editor, stream.loaded, force);
+}
+
+/// Closes the files' buffers a review `loaded`.
+pub(super) fn close_loaded(editor: &mut Editor, loaded: Vec<DocumentId>, force: bool) {
+    for doc_id in loaded {
         if editor.close_document(doc_id, force).is_err() {
             if let Some(doc) = editor.documents.get_mut(&doc_id) {
                 doc.listed = true;
@@ -170,13 +175,13 @@ fn take_edits(editor: &mut Editor, doc_id: DocumentId) -> Option<Result<(), Stri
     if editor.documents.get(&doc_id)?.version() == stream.version {
         return None;
     }
-    let read_only = !stream.scope.follows_files();
+    let read_only = (!stream.scope.follows_files()).then(|| stream.scope.read_only());
     let refuse = |editor: &mut Editor, message: &str| {
         put_back(editor, doc_id);
         Some(Err(message.to_string()))
     };
-    if read_only {
-        return refuse(editor, "A staged review is read-only. ret opens the file.");
+    if let Some(message) = read_only {
+        return refuse(editor, message);
     }
     // INVARIANT: the buffer's history is committed through a view of it.
     let Some(view) = view_of(editor, doc_id) else {

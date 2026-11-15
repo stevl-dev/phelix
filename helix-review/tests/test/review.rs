@@ -24,6 +24,7 @@ use termina::event::{Event, KeyEvent};
 
 use super::*;
 
+mod commit;
 mod files;
 mod rust_analyzer;
 

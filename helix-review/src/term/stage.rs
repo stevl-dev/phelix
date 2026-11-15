@@ -193,6 +193,9 @@ fn write_picked(
     let stream = open_stream(cx.editor)
         .filter(|stream| stream.doc == doc.id())
         .context("This buffer isn't a review. Start one with :review")?;
+    let Scope::Changes(scope) = stream.scope else {
+        bail!(stream.scope.not_the_files());
+    };
     let trust_full = cx
         .editor
         .workspace_trust
@@ -218,7 +221,6 @@ fn write_picked(
         })?;
     }
     if written > 0 {
-        let Scope::Changes(scope) = stream.scope;
         read_changes(
             cx,
             scope,

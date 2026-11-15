@@ -31,7 +31,7 @@ pub fn source(editor: &mut Editor, view: ViewId) -> Result<DocumentId, String> {
         return Err("This buffer isn't a review. Start one with :review".to_string());
     };
     if !stream.scope.follows_files() {
-        return Err("A staged review shows the index, not the files. ret opens the file.".into());
+        return Err(stream.scope.not_the_files().into());
     }
     let doc = &editor.documents[&stream_doc];
     // WHY: a call from a job, as a completion request's, can run before the
