@@ -1451,6 +1451,24 @@ impl EditorView {
     }
 }
 
+/// The views' part of `area`, and whether the bufferline takes a row.
+fn editor_area(editor: &Editor, area: Rect) -> (Rect, bool) {
+    // check if bufferline should be rendered
+    use helix_view::editor::BufferLine;
+    let use_bufferline = match editor.config().bufferline {
+        BufferLine::Always => true,
+        BufferLine::Multiple if editor.documents.len() > 1 => true,
+        _ => false,
+    };
+
+    // -1 for commandline and -1 for bufferline
+    let mut editor_area = area.clip_bottom(1);
+    if use_bufferline {
+        editor_area = editor_area.clip_top(1);
+    }
+    (editor_area, use_bufferline)
+}
+
 impl Component for EditorView {
     fn handle_event(
         &mut self,
@@ -1628,6 +1646,10 @@ impl Component for EditorView {
     }
 
     fn render(&mut self, area: Rect, surface: &mut Surface, cx: &mut Context) {
+        // WHY: the resize comes first, so a hook lays the frame out at the
+        // size it's drawn at. It runs again below, since a hook can change
+        // what the bufferline counts.
+        cx.editor.resize(editor_area(cx.editor, area).0);
         helix_event::dispatch(EditorWillUpdate {
             editor: cx.editor,
             completing: self.completion.is_some(),
@@ -1636,19 +1658,7 @@ impl Component for EditorView {
         surface.set_style(area, cx.editor.theme.get("ui.background"));
         let config = cx.editor.config();
 
-        // check if bufferline should be rendered
-        use helix_view::editor::BufferLine;
-        let use_bufferline = match config.bufferline {
-            BufferLine::Always => true,
-            BufferLine::Multiple if cx.editor.documents.len() > 1 => true,
-            _ => false,
-        };
-
-        // -1 for commandline and -1 for bufferline
-        let mut editor_area = area.clip_bottom(1);
-        if use_bufferline {
-            editor_area = editor_area.clip_top(1);
-        }
+        let (editor_area, use_bufferline) = editor_area(cx.editor, area);
 
         // if the terminal size suddenly changed, we need to trigger a resize
         cx.editor.resize(editor_area);
