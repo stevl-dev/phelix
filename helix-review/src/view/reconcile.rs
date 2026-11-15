@@ -4,11 +4,13 @@
 //! line while rows come and go around it.
 
 use std::collections::HashMap;
+use std::hash::Hash;
 
 use helix_core::{line_ending::get_line_ending, Rope, Transaction};
 
-/// What a row stands for within its file. Rows match by this, never by text:
-/// a removed `}` next to a kept `}` has the same text.
+/// What a row stands for within its file, or within the commit's message.
+/// Rows match by this, never by text: a removed `}` next to a kept `}` has
+/// the same text.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(super) enum Key {
     Header,
@@ -18,15 +20,17 @@ pub(super) enum Key {
     /// A context or added row, by its source line. A context row that turns
     /// into an added row keeps its key.
     Source(usize),
+    /// A line of the commit's message.
+    Message(usize),
 }
 
 // INVARIANT: `old_keys` are in the new stream's terms: its file indices and
 // line numbers. An old row with no key goes away.
-pub(super) fn transaction(
+pub(super) fn transaction<K: Copy + Eq + Hash>(
     old: &Rope,
-    old_keys: &[Option<(usize, Key)>],
+    old_keys: &[Option<K>],
     new: &Rope,
-    new_keys: &[(usize, Key)],
+    new_keys: &[K],
 ) -> Transaction {
     let wanted: HashMap<_, _> = new_keys
         .iter()

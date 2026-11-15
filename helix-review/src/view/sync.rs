@@ -87,7 +87,8 @@ fn fit_file_style(editor: &mut Editor, doc_id: DocumentId) {
     }
     let text = doc.text().slice(..);
     let row = text.char_to_line(doc.selection(view.id).primary().cursor(text));
-    let Some(file) = stream.rows.get(row).map(|row| &stream.files[row.file()]) else {
+    let file = stream.rows.get(row).and_then(|row| row.file());
+    let Some(file) = file.map(|file| &stream.files[file]) else {
         return;
     };
     // WHY: an open buffer's indent has its editorconfig and language in it.

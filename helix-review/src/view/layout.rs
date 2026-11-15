@@ -199,6 +199,7 @@ mod tests {
         rows.iter()
             .map(|row| match *row {
                 Row::Header { .. } => "header".into(),
+                Row::Message { line } => format!("message {line}"),
                 Row::Gap { start, end, .. } => format!("~{start}..{end}"),
                 Row::Removed { base, .. } => format!("-{base}"),
                 Row::Context { base, source, .. } => format!("{base}:{source}"),

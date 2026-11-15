@@ -381,7 +381,7 @@ fn follow(editor: &mut Editor) {
         let row = cursor_row(editor.documents.get(&stream.doc)?, view);
         // WHY: the line below the last row is the last file's too.
         let row = stream.rows.get(row).or(stream.rows.last())?;
-        Some(row.file())
+        row.file()
     });
 
     let scrolloff = editor.config().scrolloff;

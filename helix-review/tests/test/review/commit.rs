@@ -45,17 +45,32 @@ async fn review_commit(app: &mut Application, rev: &str, subject: &str) -> anyho
     .await
 }
 
+/// The rows of the message of the commit the review shows, above its files.
+fn message(app: &Application, subject: &str) -> String {
+    let Scope::Commit(commit) = &stream(app).scope else {
+        panic!("the review shows {:?}", stream(app).scope);
+    };
+    format!(
+        "commit {}\n\
+         Author: author <author@example.com>\n\
+         Date:   {}\n\
+         \n    {subject}\n\n",
+        commit.id, commit.date
+    )
+}
+
 /// The second commit's rows.
-fn seventh_line(repo: &TempDir) -> String {
+fn seventh_line(app: &Application, repo: &TempDir) -> String {
     let path = |name| shown(repo.path().join(name));
     format!(
-        "{}  modified\n\
+        "{}{}  modified\n\
          ⋯ 3 unchanged lines\n\
          4\n5\n6\n7\nseven\n8\n9\n10\n\
          {}  new file\n\
          fresh\n\
          {}  deleted\n\
          old\n",
+        message(app, "Change the seventh line."),
         path("a.txt"),
         path("new.txt"),
         path("old.txt"),
@@ -85,13 +100,18 @@ async fn a_commits_review_shows_its_changes_and_not_the_working_trees() -> anyho
     review_commit(&mut app, "HEAD~1", "Change the seventh line.").await?;
 
     assert!(in_stream(&app));
-    assert_eq!(stream_text(&app), seventh_line(&repo));
+    assert_eq!(stream_text(&app), seventh_line(&app, &repo));
     assert_eq!(cursor(&app), (0, 0));
     assert!(doc!(app.editor).readonly);
     let Scope::Commit(commit) = &stream(&app).scope else {
         panic!("the review shows {:?}", stream(&app).scope);
     };
-    assert_eq!(commit.message, "Change the seventh line.");
+    let head = Command::new("git")
+        .arg("-C")
+        .arg(repo.path())
+        .args(["rev-parse", "HEAD~1"])
+        .output()?;
+    assert_eq!(commit.id, String::from_utf8(head.stdout)?.trim());
 
     // WHY: `:reload` reads the scope it shows again. A read of the working
     // tree's changes there would replace the commit.
@@ -99,8 +119,8 @@ async fn a_commits_review_shows_its_changes_and_not_the_working_trees() -> anyho
         status(app).ends_with(": Change the seventh line.")
     })
     .await?;
-    assert_eq!(stream_text(&app), seventh_line(&repo));
-    assert_eq!(cursor(&app).0, 6, "a reload keeps the cursor's row");
+    assert_eq!(stream_text(&app), seventh_line(&app, &repo));
+    assert_eq!(cursor(&app).0, 12, "a reload keeps the cursor's row");
     Ok(())
 }
 
@@ -119,7 +139,7 @@ async fn a_commits_review_takes_no_edit_and_asks_no_file() -> anyhow::Result<()>
             (
                 Some("/^seven<ret>ix"),
                 Some(&|app| {
-                    assert_eq!(stream_text(app), seventh_line(&repo));
+                    assert_eq!(stream_text(app), seventh_line(app, &repo));
                     assert_eq!(app.editor.mode, Mode::Normal);
                     assert_eq!(status(app), read_only);
                     assert_eq!(buffer_text(app, &file).as_deref(), Some(THREE));
@@ -196,7 +216,7 @@ async fn a_commit_and_the_working_trees_changes_replace_each_other() -> anyhow::
     assert!(app.editor.document_by_path(&b).is_some());
 
     review_commit(&mut app, "HEAD~1", "Change the seventh line.").await?;
-    assert_eq!(stream_text(&app), seventh_line(&repo));
+    assert_eq!(stream_text(&app), seventh_line(&app, &repo));
     assert_eq!(cursor(&app), (0, 0));
     assert!(app.editor.document_by_path(&b).is_none());
 
@@ -298,5 +318,44 @@ async fn a_commit_with_no_changes_or_no_name_leaves_the_open_review() -> anyhow:
     })
     .await?;
     assert_eq!(stream_text(&app), rows);
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn the_rows_of_a_commits_message_belong_to_no_file() -> anyhow::Result<()> {
+    let repo = history();
+    let mut app = app_on(repo.path().join("a.txt"))?;
+    app.editor.set_theme(toml::from_str(
+        r#"
+        "ui.selection" = { bg = "yellow" }
+        "ui.review.current" = { bg = "magenta" }
+        "#,
+    )?)?;
+    review_commit(&mut app, "HEAD~1", "Change the seventh line.").await?;
+    let rows = seventh_line(&app, &repo);
+
+    // Rows: 0 to 5 the message, 6 a.txt's header.
+    run_until(&mut app, "gn", |app| files::tinted(app) == ["a.txt"]).await?;
+    assert_eq!(cursor(&app), (6, 0));
+    run_until(&mut app, "gp", |app| cursor(app) == (6, 0)).await?;
+    run_until(&mut app, "4k", |app| files::tinted(app).is_empty()).await?;
+    assert_eq!(cursor(&app), (2, 0));
+
+    run_until(&mut app, "<ret>", in_stream).await?;
+    assert_eq!(app.editor.tree.tab(), REVIEW_TAB);
+    assert_eq!(cursor(&app), (2, 0));
+
+    run_until(&mut app, "ix", |app| {
+        status(app) == "A commit's review is read-only. ret opens the file."
+    })
+    .await?;
+    assert_eq!(stream_text(&app), rows);
+
+    run_until(&mut app, ":reload<ret>", |app| {
+        status(app).ends_with(": Change the seventh line.")
+    })
+    .await?;
+    assert_eq!(stream_text(&app), rows);
+    assert_eq!(cursor(&app), (2, 0), "a reload keeps the cursor on its row");
     Ok(())
 }

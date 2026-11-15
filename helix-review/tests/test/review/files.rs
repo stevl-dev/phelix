@@ -261,7 +261,7 @@ async fn a_cursor_on_a_files_last_row_marks_that_file_in_the_list() -> anyhow::R
 }
 
 /// The names on the list's rows that the screen tints from edge to edge.
-fn tinted(app: &Application) -> Vec<String> {
+pub(super) fn tinted(app: &Application) -> Vec<String> {
     let buffer = app.terminal_buffer();
     let cell = |x, y| buffer.get(x, y).unwrap();
     (0..buffer.area.height)

@@ -183,28 +183,32 @@ pub enum Row {
     },
     /// A line of the source that the base doesn't have.
     Added { file: usize, source: usize },
+    /// A line of the commit's message, above the first file.
+    Message { line: usize },
 }
 
 impl Row {
-    pub fn file(self) -> usize {
+    /// Its file. None for a row of the commit's message.
+    pub fn file(self) -> Option<usize> {
         match self {
             Row::Header { file }
             | Row::Gap { file, .. }
             | Row::Removed { file, .. }
             | Row::Context { file, .. }
-            | Row::Added { file, .. } => file,
+            | Row::Added { file, .. } => Some(file),
+            Row::Message { .. } => None,
         }
     }
 
-    fn key(self) -> (usize, Key) {
-        match self {
-            Row::Header { file } => (file, Key::Header),
-            Row::Gap { file, start, .. } => (file, Key::Gap(start)),
-            Row::Removed { file, base } => (file, Key::Removed(base)),
-            Row::Context { file, source, .. } | Row::Added { file, source } => {
-                (file, Key::Source(source))
-            }
-        }
+    fn key(self) -> (Option<usize>, Key) {
+        let key = match self {
+            Row::Header { .. } => Key::Header,
+            Row::Gap { start, .. } => Key::Gap(start),
+            Row::Removed { base, .. } => Key::Removed(base),
+            Row::Context { source, .. } | Row::Added { source, .. } => Key::Source(source),
+            Row::Message { line } => Key::Message(line),
+        };
+        (self.file(), key)
     }
 
     pub fn lines(self) -> (Option<usize>, Option<usize>) {
@@ -212,7 +216,7 @@ impl Row {
             Row::Removed { base, .. } => (Some(base), None),
             Row::Context { base, source, .. } => (Some(base), Some(source)),
             Row::Added { source, .. } => (None, Some(source)),
-            Row::Header { .. } | Row::Gap { .. } => (None, None),
+            Row::Header { .. } | Row::Gap { .. } | Row::Message { .. } => (None, None),
         }
     }
 }
@@ -462,7 +466,7 @@ impl Ranges {
                 Row::Removed { .. } => &mut ranges.removed,
                 Row::Header { .. } => &mut ranges.headers,
                 Row::Gap { .. } => &mut ranges.gaps,
-                Row::Context { .. } | Row::Added { .. } => continue,
+                Row::Context { .. } | Row::Added { .. } | Row::Message { .. } => continue,
             };
             let line = text.line(row);
             let ending = get_line_ending(&line).map_or(0, |ending| ending.len_chars());
@@ -631,7 +635,9 @@ impl Stream {
             {
                 continue;
             }
-            let file = self.rows[hunk.start].file();
+            let Some(file) = self.rows[hunk.start].file() else {
+                continue;
+            };
             let Content::Text { base, source } = &self.files[file].content else {
                 continue;
             };
@@ -701,12 +707,12 @@ impl Stream {
     pub fn target(&self, row: usize) -> Option<Target<'_>> {
         let (line, same_line) = match *self.rows.get(row)? {
             Row::Context { source, .. } | Row::Added { source, .. } => (source, true),
-            Row::Gap { .. } => return None,
+            Row::Gap { .. } | Row::Message { .. } => return None,
             Row::Removed { .. } => (self.line_below(row), false),
             Row::Header { file } => {
                 let change = self.rows[row + 1..]
                     .iter()
-                    .take_while(|next| next.file() == file)
+                    .take_while(|next| next.file() == Some(file))
                     .position(|next| matches!(next, Row::Removed { .. } | Row::Added { .. }));
                 let line =
                     match change.map(|offset| (row + 1 + offset, self.rows[row + 1 + offset])) {
@@ -718,7 +724,7 @@ impl Stream {
             }
         };
         Some(Target {
-            change: &self.files[self.rows[row].file()].change,
+            change: &self.files[self.rows[row].file()?].change,
             line,
             same_line,
         })
@@ -749,9 +755,35 @@ struct Layout {
     widths: [usize; 2],
 }
 
-fn layout(files: &[File], context: usize) -> Layout {
+/// The rows above the first file of a commit's review, as `git show` heads
+/// its output: the hash, who wrote it and when, then the message.
+fn message(scope: &Scope) -> Vec<String> {
+    let Scope::Commit(commit) = scope else {
+        return Vec::new();
+    };
+    let mut lines = vec![format!("commit {}", commit.id)];
+    if commit.parents.len() > 1 {
+        lines.push(format!("Merge: {}", commit.parents.join(" ")));
+    }
+    lines.push(format!("Author: {} <{}>", commit.author, commit.email));
+    lines.push(format!("Date:   {}", commit.date));
+    lines.push(String::new());
+    lines.extend(commit.message.lines().map(|line| match line.trim_end() {
+        "" => String::new(),
+        line => format!("    {line}"),
+    }));
+    lines.push(String::new());
+    lines
+}
+
+fn layout(message: &[String], files: &[File], context: usize) -> Layout {
     let mut rows = Vec::new();
     let mut text = String::new();
+    for (line, shown) in message.iter().enumerate() {
+        text.push_str(shown);
+        text.push('\n');
+        rows.push(Row::Message { line });
+    }
     for (index, file) in files.iter().enumerate() {
         let (body, note) = match &file.content {
             Content::Binary => (Vec::new(), Some("binary")),
@@ -852,15 +884,17 @@ pub fn show(editor: &mut Editor, root: PathBuf, scope: Scope, sections: Vec<Sect
         if changed {
             switch_to(editor, doc);
         }
-        if replaced {
-            start_over(editor);
-        }
         if let Some(stream) = editor.features.review_mut().stream.as_mut() {
             stream.root = root;
             stream.scope = scope;
         }
         if let Some(doc) = editor.documents.get_mut(&doc) {
             doc.readonly = read_only;
+        }
+        // INVARIANT: after the scope is set, so the emptied stream holds no
+        // row of the message it showed.
+        if replaced {
+            start_over(editor);
         }
         update(editor, sections.into_iter().map(File::from).collect(), None);
         if replaced {
@@ -1183,20 +1217,23 @@ fn update(editor: &mut Editor, mut files: Vec<File>, open: Option<(usize, Range<
         files[file].opened.push(lines);
     }
 
-    let layout = layout(&files, stream.context);
+    let layout = layout(&message(&stream.scope), &files, stream.context);
     let old_keys: Vec<_> = stream
         .rows
         .iter()
         .map(|row| {
             let (file, key) = row.key();
+            let Some(file) = file else {
+                return Some((None, key));
+            };
             let (new, base, source) = maps[file].as_ref()?;
             let key = match key {
-                Key::Header => Key::Header,
+                Key::Header | Key::Message(_) => key,
                 Key::Gap(line) => Key::Gap(layout::map_line(source.as_deref(), line)?),
                 Key::Removed(line) => Key::Removed(layout::map_line(base.as_deref(), line)?),
                 Key::Source(line) => Key::Source(layout::map_line(source.as_deref(), line)?),
             };
-            Some((*new, key))
+            Some((Some(*new), key))
         })
         .collect();
     let new_keys: Vec<_> = layout.rows.iter().map(|row| row.key()).collect();
@@ -1246,8 +1283,68 @@ mod tests {
     }
 
     #[test]
+    fn a_commits_message_is_laid_out_above_its_files() {
+        let commit = |parents: &[&str], message: &str| {
+            Scope::Commit(Arc::new(Commit {
+                id: "0123456789abcdef".into(),
+                short_id: "0123456".into(),
+                parents: parents.iter().map(|parent| parent.to_string()).collect(),
+                author: "Ada".into(),
+                email: "ada@example.com".into(),
+                date: "2000-01-01 00:00:00 +0000".into(),
+                message: message.into(),
+            }))
+        };
+        let head = "commit 0123456789abcdef\n";
+        let by = "Author: Ada <ada@example.com>\nDate:   2000-01-01 00:00:00 +0000\n\n";
+        let cases = [
+            (
+                "a subject alone",
+                commit(&["aaaaaaa"], "Fix it."),
+                format!("{head}{by}    Fix it.\n\n"),
+            ),
+            (
+                "a body keeps its empty lines empty",
+                commit(&["aaaaaaa"], "Fix it.\n\nIt broke.\n  Twice."),
+                format!("{head}{by}    Fix it.\n\n    It broke.\n      Twice.\n\n"),
+            ),
+            (
+                "a merge names its parents",
+                commit(&["aaaaaaa", "bbbbbbb"], "Merge it."),
+                format!("{head}Merge: aaaaaaa bbbbbbb\n{by}    Merge it.\n\n"),
+            ),
+            (
+                "the working tree's changes have none",
+                Scope::Changes(ChangeView::All),
+                String::new(),
+            ),
+        ];
+        for (case, scope, expected) in cases {
+            let shown = layout(
+                &message(&scope),
+                &files(vec![modified("a.txt", "old\n", "new\n")]),
+                layout::CONTEXT,
+            );
+            assert_eq!(
+                shown.text,
+                format!("{expected}a.txt  modified\nold\nnew\n"),
+                "{case}"
+            );
+            let lines = expected.lines().count();
+            let mut rows: Vec<Row> = (0..lines).map(|line| Row::Message { line }).collect();
+            rows.extend([
+                Row::Header { file: 0 },
+                Row::Removed { file: 0, base: 0 },
+                Row::Added { file: 0, source: 0 },
+            ]);
+            assert_eq!(shown.rows, rows, "{case}");
+        }
+    }
+
+    #[test]
     fn layout_text_has_one_line_per_row() {
         let layout = layout(
+            &[],
             &files(vec![
                 modified(
                     "a.txt",
@@ -1288,12 +1385,14 @@ mod tests {
             })
             .collect();
         let shown = layout(
+            &[],
             &files(vec![modified("a.txt", &base, &source)]),
             layout::CONTEXT,
         );
         assert_eq!(shown.widths, [4, 3]);
 
         let shown = layout(
+            &[],
             &files(vec![modified("a.txt", "", "new\n")]),
             layout::CONTEXT,
         );
@@ -1309,7 +1408,7 @@ mod tests {
     }
 
     pub(super) fn stream_of(files: Vec<File>) -> Stream {
-        let layout = layout(&files, layout::CONTEXT);
+        let layout = layout(&[], &files, layout::CONTEXT);
         Stream {
             doc: DocumentId::default(),
             root: PathBuf::new(),
@@ -1409,6 +1508,7 @@ mod tests {
     #[test]
     fn ranges_cover_rows_without_their_line_endings_and_the_changed_words() {
         let shown = layout(
+            &[],
             &files(vec![modified(
                 "a.txt",
                 "x = 1\r\nkeep\n",

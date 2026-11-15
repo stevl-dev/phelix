@@ -266,7 +266,7 @@ fn rows(stream: &Stream, runs: &[Run], spans: &[Range<usize>], after: &Rope) -> 
                 file,
                 source: by(source),
             },
-            Row::Header { .. } | Row::Removed { .. } => row,
+            Row::Header { .. } | Row::Removed { .. } | Row::Message { .. } => row,
         }
     };
     let mut rows = Vec::with_capacity(stream.rows.len());

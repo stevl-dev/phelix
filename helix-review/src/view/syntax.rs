@@ -126,7 +126,7 @@ fn layers(
             Row::Context { file, source, .. } | Row::Added { file, source } => {
                 (file, false, source)
             }
-            Row::Header { .. } | Row::Gap { .. } => {
+            Row::Header { .. } | Row::Gap { .. } | Row::Message { .. } => {
                 row += 1;
                 continue;
             }
