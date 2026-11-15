@@ -1354,22 +1354,22 @@ pub struct Editor {
     pub workspace_trust: WorkspaceTrust,
     pub features: crate::features::Features,
     /// The tabs opened with `TabOptions::keeps`, and the views that showed a
-    /// buffer of the kind at the last check.
+    /// buffer of one of its kinds at the last check.
     kept_tabs: Vec<KeptTab>,
 }
 
 /// How a feature's tab treats what opens in it.
 #[derive(Debug, Default, Clone, Copy)]
 pub struct TabOptions {
-    /// A buffer kind's name. A view of the tab that showed a buffer of the
-    /// kind and now shows another gives that one to the code tab, and gets
-    /// its buffer back.
-    pub keeps: Option<&'static str>,
+    /// Buffer kinds' names. A view of the tab that showed a buffer of one of
+    /// the kinds and now shows a buffer of none gives that one to the code
+    /// tab, and gets its buffer back.
+    pub keeps: &'static [&'static str],
 }
 
 struct KeptTab {
     tab: Tab,
-    kind: &'static str,
+    kinds: &'static [&'static str],
     views: Vec<(ViewId, DocumentId)>,
 }
 
@@ -2220,11 +2220,11 @@ impl Editor {
 
     /// Opens `tab` with one view of `doc_id`, and switches to it.
     pub fn open_tab(&mut self, tab: Tab, doc_id: DocumentId, options: TabOptions) -> ViewId {
-        if let Some(kind) = options.keeps {
+        if !options.keeps.is_empty() {
             self.kept_tabs.retain(|kept| kept.tab != tab);
             self.kept_tabs.push(KeptTab {
                 tab,
-                kind,
+                kinds: options.keeps,
                 views: Vec::new(),
             });
         }
@@ -2272,22 +2272,31 @@ impl Editor {
     }
 
     /// In each tab opened with `TabOptions::keeps`, gives the code tab what a
-    /// view shows in place of a buffer of the kind, as a jump there with the
-    /// view's selection, and puts the buffer back in the view. The check
+    /// view shows in place of a buffer of the tab's kinds, as a jump there with
+    /// the view's selection, and puts the buffer back in the view. The check
     /// reads what views show, not which command ran, so it catches a goto
     /// whose answer comes after the key, a picker, and `:e` alike. A split
-    /// opened on a file never showed the kind's buffer, so it stays.
+    /// opened on a file never showed a buffer of the kinds, so it stays, and
+    /// so does a view that goes from one of the kinds to another.
     pub fn send_out_of_kept_tabs(&mut self) {
         let open: Vec<_> = self.tree.tabs().collect();
         self.kept_tabs.retain(|kept| open.contains(&kept.tab));
         for index in 0..self.kept_tabs.len() {
+            let KeptTab { tab, kinds, .. } = self.kept_tabs[index];
+            let keeps = |editor: &Editor, doc: DocumentId| {
+                let kind = editor.documents[&doc].kind;
+                kind.is_some_and(|kind| kinds.contains(&kind.name()))
+            };
             let moved: Vec<_> = self.kept_tabs[index]
                 .views
                 .iter()
                 .copied()
                 .filter(|&(view, kept)| {
                     self.documents.contains_key(&kept)
-                        && self.tree.try_get(view).is_some_and(|view| view.doc != kept)
+                        && self
+                            .tree
+                            .try_get(view)
+                            .is_some_and(|view| !keeps(self, view.doc))
                 })
                 .collect();
             for (view, kept) in moved {
@@ -2300,16 +2309,10 @@ impl Editor {
                 doc.set_selection(view.id, selection);
                 align_view(doc, view, Align::Center);
             }
-            let KeptTab { tab, kind, .. } = self.kept_tabs[index];
             self.kept_tabs[index].views = self
                 .tree
                 .views()
-                .filter(|(view, _)| {
-                    self.tree.tab_of(view.id) == tab
-                        && self.documents[&view.doc]
-                            .kind
-                            .is_some_and(|shown| shown.name() == kind)
-                })
+                .filter(|(view, _)| self.tree.tab_of(view.id) == tab && keeps(self, view.doc))
                 .map(|(view, _)| (view.id, view.doc))
                 .collect();
         }

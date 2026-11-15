@@ -785,7 +785,7 @@ pub fn show(editor: &mut Editor, root: PathBuf, scope: ChangeView, sections: Vec
 pub fn switch_to(editor: &mut Editor, doc: DocumentId) {
     if !editor.switch_tab(REVIEW_TAB) {
         let options = TabOptions {
-            keeps: Some(KIND_NAME),
+            keeps: &[KIND_NAME],
         };
         editor.open_tab(REVIEW_TAB, doc, options);
     } else if editor.tree.get(editor.tree.focus).doc != doc {

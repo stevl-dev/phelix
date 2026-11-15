@@ -9,7 +9,9 @@ use helix_term::feature::Feature;
 use helix_view::{
     doc,
     editor::{Action, TabOptions},
+    kind::BufferKind,
     tree::Tab,
+    Document, DocumentId, Editor, ViewId,
 };
 
 use super::*;
@@ -177,5 +179,62 @@ async fn tab_refuses_a_tab_that_isnt_open_or_doesnt_exist() -> anyhow::Result<()
         )
         .await?;
     }
+    Ok(())
+}
+
+/// A buffer kind that answers as the core does, by its name.
+struct Kind(&'static str);
+
+impl BufferKind for Kind {
+    fn name(&self) -> &'static str {
+        self.0
+    }
+
+    fn source(&self, _editor: &mut Editor, _view: ViewId) -> Result<DocumentId, String> {
+        Err("No source".to_string())
+    }
+
+    fn source_open<'e>(&self, _editor: &'e Editor, _view: ViewId) -> Option<&'e Document> {
+        None
+    }
+}
+
+static FIRST: Kind = Kind("first");
+static SECOND: Kind = Kind("second");
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_tab_keeps_a_view_that_goes_between_its_kinds_and_sends_a_file_out() -> anyhow::Result<()>
+{
+    let file = tempfile::NamedTempFile::new()?;
+    let mut app = builder().build()?;
+    let editor = &mut app.editor;
+    let mut scratch = |kind: &'static Kind| {
+        let doc = editor.new_file(Action::Load);
+        editor.document_mut(doc).unwrap().kind = Some(kind);
+        doc
+    };
+    let (first, second) = (scratch(&FIRST), scratch(&SECOND));
+    let options = TabOptions {
+        keeps: &["first", "second"],
+    };
+    let view = editor.open_tab(OTHER, first, options);
+    editor.send_out_of_kept_tabs();
+
+    editor.switch(second, Action::Replace);
+    editor.send_out_of_kept_tabs();
+    assert_eq!(
+        (OTHER, second),
+        (editor.tree.tab(), editor.tree.get(view).doc),
+        "a buffer of another of its kinds stays"
+    );
+
+    editor.open(file.path(), Action::Replace)?;
+    editor.send_out_of_kept_tabs();
+    assert_eq!(Tab::CODE, editor.tree.tab());
+    assert_eq!(
+        Some(path::normalize(file.path()).as_path()),
+        doc!(editor).path()
+    );
+    assert_eq!(second, editor.tree.get(view).doc);
     Ok(())
 }
