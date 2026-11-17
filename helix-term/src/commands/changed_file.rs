@@ -10,6 +10,7 @@ use tui::text::Span;
 
 use crate::job;
 use crate::ui::overlay::{overlaid, Overlay};
+use crate::ui::picker::AfterAction;
 use crate::ui::{Picker, PickerColumn};
 
 use super::Context;
@@ -189,31 +190,38 @@ pub(super) fn changed_file_picker(cx: &mut Context) {
         shown: HashSet::new(),
         injector: Some(picker.injector()),
     }));
-    let lists_for_cycle = Arc::clone(&lists);
     let lists_for_actions = Arc::clone(&lists);
     let lists_for_scan = Arc::clone(&lists);
     let finish_scan = FinishScan(lists);
-    let picker = picker.with_on_cycle_changes(move |picker| {
-        let mut lists = lists_for_cycle.lock().unwrap();
-        lists.mode = lists.mode.cycle();
-        let items = visible_changes(lists.mode, &lists.unstaged, &lists.staged);
-        lists.shown = items
-            .iter()
-            .map(|change| change.path().to_path_buf())
-            .collect();
-        let injector = picker.replace_items(items);
-        if lists.injector.is_some() {
-            lists.injector = Some(injector);
+    let picker = picker.with_on_action(move |picker, cx, name| {
+        let mut lists = lists_for_actions.lock().unwrap();
+        if name == CYCLE_CHANGES {
+            lists.mode = lists.mode.cycle();
+            let items = visible_changes(lists.mode, &lists.unstaged, &lists.staged);
+            lists.shown = items
+                .iter()
+                .map(|change| change.path().to_path_buf())
+                .collect();
+            let injector = picker.replace_items(items);
+            if lists.injector.is_some() {
+                lists.injector = Some(injector);
+            }
+            picker.set_status_label(lists.mode.label());
+            return AfterAction::Stay;
         }
-        picker.set_status_label(lists.mode.label());
-    });
-    let picker = picker.with_on_action(move |cx, name, change: &FileChange| {
-        let scope = lists_for_actions.lock().unwrap().mode;
+        let scope = lists.mode;
+        // WHY: the scan's thread records each change under this lock, so it
+        // isn't held while an action runs.
+        drop(lists);
+        let Some(change) = picker.selection() else {
+            return AfterAction::Stay;
+        };
         if let Some(action) =
             crate::feature::changed_file_actions().find(|action| action.name == name)
         {
             (action.run)(cx, scope, change);
         }
+        AfterAction::Close
     });
 
     let trust_full = cx

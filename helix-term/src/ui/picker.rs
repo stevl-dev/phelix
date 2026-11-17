@@ -241,8 +241,15 @@ impl<T, D> Column<T, D> {
 type DynQueryCallback<T, D> =
     fn(&str, &mut Editor, Arc<D>, &Injector<T, D>) -> BoxFuture<'static, anyhow::Result<()>>;
 
-type CycleChangesCallback<T, D> = Box<dyn Fn(&mut Picker<T, D>)>;
-type ActionCallback<T> = Box<dyn Fn(&mut Context, &'static str, &T)>;
+type ActionCallback<T, D> =
+    Box<dyn Fn(&mut Picker<T, D>, &mut Context, &'static str) -> AfterAction>;
+
+/// What the picker does after one of its actions.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AfterAction {
+    Close,
+    Stay,
+}
 
 pub struct Picker<T: 'static + Send + Sync, D: 'static> {
     columns: Arc<[Column<T, D>]>,
@@ -267,12 +274,9 @@ pub struct Picker<T: 'static + Send + Sync, D: 'static> {
     default_action: Action,
     /// Drawn on the prompt line, before the match count. Empty for most pickers.
     status_label: Option<Cow<'static, str>>,
-    /// Handles [`PickerCommand::CycleChanges`]. Absent on pickers that do not
-    /// have a change list, which then pass the key to the prompt.
-    on_cycle_changes: Option<CycleChangesCallback<T, D>>,
     /// Runs [`PickerCommand::Action`] by its name. Absent on pickers with no
     /// actions.
-    on_action: Option<ActionCallback<T>>,
+    on_action: Option<ActionCallback<T, D>>,
     /// The name of its own key table, `[keys.picker.<name>]`, if it has one.
     keys: Option<&'static str>,
 
@@ -411,7 +415,6 @@ impl<T: 'static + Send + Sync, D: 'static + Send + Sync> Picker<T, D> {
             callback_fn: Box::new(callback_fn),
             default_action: Action::Replace,
             status_label: None,
-            on_cycle_changes: None,
             on_action: None,
             keys: None,
             completion_height: 0,
@@ -560,11 +563,6 @@ impl<T: 'static + Send + Sync, D: 'static + Send + Sync> Picker<T, D> {
         self.status_label = Some(Cow::Borrowed(label));
     }
 
-    pub fn with_on_cycle_changes(mut self, cycle: impl Fn(&mut Self) + 'static) -> Self {
-        self.on_cycle_changes = Some(Box::new(cycle));
-        self
-    }
-
     /// Gives it the key table `[keys.picker.<name>]`, which goes before the
     /// table every picker reads.
     pub fn with_keys(mut self, name: &'static str) -> Self {
@@ -572,9 +570,11 @@ impl<T: 'static + Send + Sync, D: 'static + Send + Sync> Picker<T, D> {
         self
     }
 
+    /// Runs the picker's actions, by name. The callback reads the selection
+    /// from the picker, and may change its items.
     pub fn with_on_action(
         mut self,
-        action: impl Fn(&mut Context, &'static str, &T) + 'static,
+        action: impl Fn(&mut Self, &mut Context, &'static str) -> AfterAction + 'static,
     ) -> Self {
         self.on_action = Some(Box::new(action));
         self
@@ -1234,18 +1234,13 @@ impl<I: 'static + Send + Sync, D: 'static + Send + Sync> Component for Picker<I,
             Some(PickerCommand::TogglePreview) => {
                 self.toggle_preview();
             }
-            Some(PickerCommand::Action(crate::commands::changed_file::CYCLE_CHANGES))
-                if self.on_cycle_changes.is_some() =>
-            {
-                if let Some(cycle) = self.on_cycle_changes.take() {
-                    cycle(self);
-                    self.on_cycle_changes = Some(cycle);
-                }
-            }
             Some(PickerCommand::Action(name)) => {
-                if let (Some(action), Some(item)) = (&self.on_action, self.selection()) {
-                    action(ctx, name, item);
-                    return close_fn(self);
+                if let Some(action) = self.on_action.take() {
+                    let after = action(self, ctx, name);
+                    self.on_action = Some(action);
+                    if after == AfterAction::Close {
+                        return close_fn(self);
+                    }
                 }
             }
             // `no_op` and unbound keys edit the query.
