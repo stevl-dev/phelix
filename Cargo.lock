@@ -1659,6 +1659,7 @@ dependencies = [
  "helix-lsp",
  "helix-stdx",
  "helix-term",
+ "helix-tui",
  "helix-vcs",
  "helix-view",
  "imara-diff",

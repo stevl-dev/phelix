@@ -410,6 +410,54 @@ async fn the_commit_picker_filters_by_subject() -> anyhow::Result<()> {
     Ok(())
 }
 
+/// The text colors of the screen's row that shows `text`, left to right, once
+/// for each run of a color, leaving out the terminal's own.
+fn colors(app: &Application, text: &str) -> Vec<Color> {
+    let buffer = app.terminal_buffer();
+    let row = buffer
+        .content()
+        .chunks(buffer.area.width as usize)
+        .find(|row| {
+            let symbols = row.iter().map(|cell| cell.symbol.as_str());
+            symbols.collect::<String>().contains(text)
+        })
+        .unwrap_or_else(|| panic!("the screen shows no {text:?}"));
+    let mut colors: Vec<Color> = row
+        .iter()
+        .filter(|cell| cell.symbol.as_str() != " " && cell.fg != Color::Reset)
+        .map(|cell| cell.fg)
+        .collect();
+    colors.dedup();
+    colors
+}
+
+/// A theme that sets the hash's scope and the scope it falls back to, and
+/// leaves the date to its fallback.
+const COMMIT_THEME: &str = r#"
+    "ui.selection" = { bg = "black" }
+    "ui.review.commit.hash" = { fg = "red" }
+    "constant.numeric" = { fg = "yellow" }
+    "comment" = { fg = "green" }
+    "ui.review.commit.author" = { fg = "blue" }
+"#;
+
+#[tokio::test(flavor = "multi_thread")]
+async fn the_commit_picker_colors_the_hash_date_and_author() -> anyhow::Result<()> {
+    let repo = history();
+    let mut app = app_on(repo.path().join("a.txt"))?;
+    app.editor.set_theme(toml::from_str(COMMIT_THEME)?)?;
+    run_until(&mut app, ":review-log<ret>", |app| {
+        on_screen(app, "Change the second line.")
+    })
+    .await?;
+
+    assert_eq!(
+        colors(&app, "Change the second line."),
+        [Color::Red, Color::Green, Color::Blue]
+    );
+    Ok(())
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn the_commit_picker_says_when_the_repository_has_no_commit() -> anyhow::Result<()> {
     let repo = tempfile::tempdir()?;

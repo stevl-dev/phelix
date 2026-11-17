@@ -21,6 +21,7 @@ helix-loader = { path = "../helix-loader" }
 helix-lsp = { path = "../helix-lsp" }
 helix-stdx = { path = "../helix-stdx" }
 helix-term = { path = "../helix-term", default-features = false }
+helix-tui = { path = "../helix-tui", default-features = false }
 helix-vcs = { path = "../helix-vcs" }
 helix-view = { path = "../helix-view" }
 

@@ -347,6 +347,9 @@ These scopes are used for theming the editor interface:
 | `ui.review.header`                | A file's header row in the [review](./keymap.md#review). Falls back to `markup.heading`         |
 | `ui.review.gap`                   | A row of unchanged lines left out of the review. Falls back to `comment`                       |
 | `ui.review.current`               | The row, in the review's [file list](./keymap.md#the-file-list), of the file the review's cursor is in. Falls back to `ui.selection` |
+| `ui.review.commit.hash`           | A commit's hash in `:review-log`'s picker. Falls back to `constant.numeric`                    |
+| `ui.review.commit.date`           | A commit's date in `:review-log`'s picker. Falls back to `comment`                             |
+| `ui.review.commit.author`         | A commit's author in `:review-log`'s picker. Falls back to `string`                            |
 | `ui.help`                         | Description box for commands                                                                   |
 | `ui.text`                         | Default text style, command prompts, popup text, etc.                                          |
 | `ui.text.focus`                   | The currently selected line in the picker                                                      |
