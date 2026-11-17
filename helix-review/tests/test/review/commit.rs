@@ -459,6 +459,19 @@ async fn the_commit_picker_colors_the_hash_date_and_author() -> anyhow::Result<(
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn a_commits_message_colors_its_hash_author_and_date() -> anyhow::Result<()> {
+    let repo = history();
+    let mut app = app_on(repo.path().join("a.txt"))?;
+    app.editor.set_theme(toml::from_str(COMMIT_THEME)?)?;
+    review_commit(&mut app, "HEAD~1", "Change the seventh line.").await?;
+
+    assert_eq!(colors(&app, "commit "), [Color::Red]);
+    assert_eq!(colors(&app, "Author: "), [Color::Blue]);
+    assert_eq!(colors(&app, "Date: "), [Color::Green]);
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn the_commit_picker_says_when_the_repository_has_no_commit() -> anyhow::Result<()> {
     let repo = tempfile::tempdir()?;
     git(repo.path(), &["init", "--quiet"]);

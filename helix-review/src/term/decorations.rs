@@ -8,6 +8,8 @@
 //! - `diff.delta.view.text` marks changed words. It has no fallback.
 //! - `ui.review.header` falls back to `markup.heading`, and `ui.review.gap` to
 //!   `comment`. The rule after a header takes its color from `ui.window`.
+//! - A commit's hash, author, and date in its message take the scopes they
+//!   take in the commit picker, in `commits.rs`.
 //!
 //! `[review]`'s `row-background` and `word-background` turn the row
 //! styles and the word marks off. Removed rows then keep their syntax colors.
@@ -15,6 +17,7 @@
 //! Syntax colors come first, from parses of each file's two sides, so these
 //! styles patch over them.
 
+use super::commits::{AUTHOR, DATE, HASH};
 use crate::view::{self as review, ReviewState, Row};
 use helix_core::syntax::{Highlight, OverlayHighlights};
 use helix_core::unicode::width::UnicodeWidthStr;
@@ -74,6 +77,9 @@ pub fn render<'a>(
         &ranges.headers,
     );
     overlay(either("ui.review.gap", "comment"), &ranges.gaps);
+    overlay(either(HASH.0, HASH.1), &ranges.hashes);
+    overlay(either(AUTHOR.0, AUTHOR.1), &ranges.authors);
+    overlay(either(DATE.0, DATE.1), &ranges.dates);
     if config.word_background {
         overlay(
             theme.find_highlight_exact("diff.delta.view.text"),

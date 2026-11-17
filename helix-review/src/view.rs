@@ -453,25 +453,35 @@ pub struct Ranges {
     pub removed: Vec<Range<usize>>,
     pub headers: Vec<Range<usize>>,
     pub gaps: Vec<Range<usize>>,
+    /// The hashes, authors, and dates of a commit's message.
+    pub hashes: Vec<Range<usize>>,
+    pub authors: Vec<Range<usize>>,
+    pub dates: Vec<Range<usize>>,
     /// The words that changed, on both sides of a hunk with removed and added
     /// rows.
     pub words: Vec<Range<usize>>,
 }
 
 impl Ranges {
-    fn new(rows: &[Row], hunks: &[Range<usize>], text: &Rope) -> Ranges {
+    fn new(rows: &[Row], message: &[MessageLine], hunks: &[Range<usize>], text: &Rope) -> Ranges {
         let mut ranges = Ranges::default();
         for (row, kind) in rows.iter().enumerate() {
-            let list = match kind {
-                Row::Removed { .. } => &mut ranges.removed,
-                Row::Header { .. } => &mut ranges.headers,
-                Row::Gap { .. } => &mut ranges.gaps,
-                Row::Context { .. } | Row::Added { .. } | Row::Message { .. } => continue,
+            let (list, column) = match kind {
+                Row::Removed { .. } => (&mut ranges.removed, 0),
+                Row::Header { .. } => (&mut ranges.headers, 0),
+                Row::Gap { .. } => (&mut ranges.gaps, 0),
+                Row::Message { line } => match message[*line].field {
+                    Some((Field::Hash, column)) => (&mut ranges.hashes, column),
+                    Some((Field::Author, column)) => (&mut ranges.authors, column),
+                    Some((Field::Date, column)) => (&mut ranges.dates, column),
+                    None => continue,
+                },
+                Row::Context { .. } | Row::Added { .. } => continue,
             };
             let line = text.line(row);
             let ending = get_line_ending(&line).map_or(0, |ending| ending.len_chars());
             let start = text.line_to_char(row);
-            list.push(start..start + line.len_chars() - ending);
+            list.push(start + column..start + line.len_chars() - ending);
         }
         let text = text.slice(..);
         for hunk in hunks {
@@ -495,6 +505,9 @@ impl Ranges {
             &mut self.removed,
             &mut self.headers,
             &mut self.gaps,
+            &mut self.hashes,
+            &mut self.authors,
+            &mut self.dates,
             &mut self.words,
         ] {
             changes.update_positions(list.iter_mut().flat_map(|range| {
@@ -755,32 +768,54 @@ struct Layout {
     widths: [usize; 2],
 }
 
+/// A row of a commit's message, and the field it names, if any, with the
+/// column it starts at. The field runs to the row's end.
+struct MessageLine {
+    text: String,
+    field: Option<(Field, usize)>,
+}
+
+#[derive(Clone, Copy)]
+enum Field {
+    Hash,
+    Author,
+    Date,
+}
+
 /// The rows above the first file of a commit's review, as `git show` heads
 /// its output: the hash, who wrote it and when, then the message.
-fn message(scope: &Scope) -> Vec<String> {
+fn message(scope: &Scope) -> Vec<MessageLine> {
     let Scope::Commit(commit) = scope else {
         return Vec::new();
     };
-    let mut lines = vec![format!("commit {}", commit.id)];
+    let named = |label: &str, field, value: &str| MessageLine {
+        text: format!("{label}{value}"),
+        field: Some((field, label.chars().count())),
+    };
+    let plain = |text| MessageLine { text, field: None };
+    let mut lines = vec![named("commit ", Field::Hash, &commit.id)];
     if commit.parents.len() > 1 {
-        lines.push(format!("Merge: {}", commit.parents.join(" ")));
+        lines.push(named("Merge: ", Field::Hash, &commit.parents.join(" ")));
     }
-    lines.push(format!("Author: {} <{}>", commit.author, commit.email));
-    lines.push(format!("Date:   {}", commit.date));
-    lines.push(String::new());
-    lines.extend(commit.message.lines().map(|line| match line.trim_end() {
-        "" => String::new(),
-        line => format!("    {line}"),
+    let author = format!("{} <{}>", commit.author, commit.email);
+    lines.push(named("Author: ", Field::Author, &author));
+    lines.push(named("Date:   ", Field::Date, &commit.date));
+    lines.push(plain(String::new()));
+    lines.extend(commit.message.lines().map(|line| {
+        plain(match line.trim_end() {
+            "" => String::new(),
+            line => format!("    {line}"),
+        })
     }));
-    lines.push(String::new());
+    lines.push(plain(String::new()));
     lines
 }
 
-fn layout(message: &[String], files: &[File], context: usize) -> Layout {
+fn layout(message: &[MessageLine], files: &[File], context: usize) -> Layout {
     let mut rows = Vec::new();
     let mut text = String::new();
     for (line, shown) in message.iter().enumerate() {
-        text.push_str(shown);
+        text.push_str(&shown.text);
         text.push('\n');
         rows.push(Row::Message { line });
     }
@@ -1217,7 +1252,8 @@ fn update(editor: &mut Editor, mut files: Vec<File>, open: Option<(usize, Range<
         files[file].opened.push(lines);
     }
 
-    let layout = layout(&message(&stream.scope), &files, stream.context);
+    let message = message(&stream.scope);
+    let layout = layout(&message, &files, stream.context);
     let old_keys: Vec<_> = stream
         .rows
         .iter()
@@ -1251,7 +1287,7 @@ fn update(editor: &mut Editor, mut files: Vec<File>, open: Option<(usize, Range<
         .stream
         .as_mut()
         .expect("checked above");
-    stream.ranges = Ranges::new(&layout.rows, &hunks(&layout.rows), &text);
+    stream.ranges = Ranges::new(&layout.rows, &message, &hunks(&layout.rows), &text);
     let old = std::mem::replace(&mut stream.files, files);
     stream.rows = layout.rows;
     stream.text = text;
@@ -1282,19 +1318,66 @@ mod tests {
         }
     }
 
+    fn commit(parents: &[&str], message: &str) -> Scope {
+        Scope::Commit(Arc::new(Commit {
+            id: "0123456789abcdef".into(),
+            short_id: "0123456".into(),
+            parents: parents.iter().map(|parent| parent.to_string()).collect(),
+            author: "Ada".into(),
+            email: "ada@example.com".into(),
+            date: "2000-01-01 00:00:00 +0000".into(),
+            message: message.into(),
+        }))
+    }
+
+    #[test]
+    fn ranges_cover_a_commits_hashes_author_and_date() {
+        let hash = "0123456789abcdef";
+        let author = "Ada <ada@example.com>";
+        let date = "2000-01-01 00:00:00 +0000";
+        let cases: [(&str, Scope, &[&str]); 3] = [
+            ("one parent", commit(&["aaaaaaa"], "Fix it."), &[hash]),
+            (
+                "a merge's parents are hashes too",
+                commit(&["aaaaaaa", "bbbbbbb"], "Merge it."),
+                &[hash, "aaaaaaa bbbbbbb"],
+            ),
+            (
+                "the working tree's changes have none",
+                Scope::Changes(ChangeView::All),
+                &[],
+            ),
+        ];
+        for (case, scope, hashes) in cases {
+            let message = message(&scope);
+            let shown = layout(
+                &message,
+                &files(vec![modified("a.txt", "old\n", "new\n")]),
+                layout::CONTEXT,
+            );
+            let text = Rope::from(shown.text.as_str());
+            let ranges = Ranges::new(&shown.rows, &message, &hunks(&shown.rows), &text);
+            let texts = |ranges: &[Range<usize>]| -> Vec<String> {
+                ranges
+                    .iter()
+                    .map(|range| text.slice(range.clone()).to_string())
+                    .collect()
+            };
+            let some = |field: &'static str| -> Vec<&str> {
+                if hashes.is_empty() {
+                    vec![]
+                } else {
+                    vec![field]
+                }
+            };
+            assert_eq!(texts(&ranges.hashes), hashes, "{case}");
+            assert_eq!(texts(&ranges.authors), some(author), "{case}");
+            assert_eq!(texts(&ranges.dates), some(date), "{case}");
+        }
+    }
+
     #[test]
     fn a_commits_message_is_laid_out_above_its_files() {
-        let commit = |parents: &[&str], message: &str| {
-            Scope::Commit(Arc::new(Commit {
-                id: "0123456789abcdef".into(),
-                short_id: "0123456".into(),
-                parents: parents.iter().map(|parent| parent.to_string()).collect(),
-                author: "Ada".into(),
-                email: "ada@example.com".into(),
-                date: "2000-01-01 00:00:00 +0000".into(),
-                message: message.into(),
-            }))
-        };
         let head = "commit 0123456789abcdef\n";
         let by = "Author: Ada <ada@example.com>\nDate:   2000-01-01 00:00:00 +0000\n\n";
         let cases = [
@@ -1517,7 +1600,7 @@ mod tests {
             layout::CONTEXT,
         );
         let text = Rope::from(shown.text.as_str());
-        let ranges = Ranges::new(&shown.rows, &hunks(&shown.rows), &text);
+        let ranges = Ranges::new(&shown.rows, &[], &hunks(&shown.rows), &text);
         let texts = |ranges: &[Range<usize>]| -> Vec<String> {
             ranges
                 .iter()

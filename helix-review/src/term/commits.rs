@@ -13,8 +13,8 @@ use helix_view::{Editor, Theme};
 
 use super::{read_commit, repository};
 
-/// The theme scope of a commit's hash, wherever the review shows one, and the
-/// scope it falls back to.
+/// The theme scope of a commit's hash, in this picker and in the message
+/// atop a commit's review, and the scope it falls back to.
 pub(super) const HASH: (&str, &str) = ("ui.review.commit.hash", "constant.numeric");
 pub(super) const DATE: (&str, &str) = ("ui.review.commit.date", "comment");
 pub(super) const AUTHOR: (&str, &str) = ("ui.review.commit.author", "string");
