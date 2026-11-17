@@ -271,8 +271,10 @@ pub struct Picker<T: 'static + Send + Sync, D: 'static> {
     /// have a change list, which then pass the key to the prompt.
     on_cycle_changes: Option<CycleChangesCallback<T, D>>,
     /// Runs [`PickerCommand::Action`] by its name. Absent on pickers with no
-    /// actions, which then pass the key to the prompt.
+    /// actions.
     on_action: Option<ActionCallback<T>>,
+    /// The name of its own key table, `[keys.picker.<name>]`, if it has one.
+    keys: Option<&'static str>,
 
     pub truncate_start: bool,
     /// Caches paths to documents
@@ -411,6 +413,7 @@ impl<T: 'static + Send + Sync, D: 'static + Send + Sync> Picker<T, D> {
             status_label: None,
             on_cycle_changes: None,
             on_action: None,
+            keys: None,
             completion_height: 0,
             widths,
             preview_cache: HashMap::new(),
@@ -559,6 +562,13 @@ impl<T: 'static + Send + Sync, D: 'static + Send + Sync> Picker<T, D> {
 
     pub fn with_on_cycle_changes(mut self, cycle: impl Fn(&mut Self) + 'static) -> Self {
         self.on_cycle_changes = Some(Box::new(cycle));
+        self
+    }
+
+    /// Gives it the key table `[keys.picker.<name>]`, which goes before the
+    /// table every picker reads.
+    pub fn with_keys(mut self, name: &'static str) -> Self {
+        self.keys = Some(name);
         self
     }
 
@@ -1148,7 +1158,7 @@ impl<I: 'static + Send + Sync, D: 'static + Send + Sync> Component for Picker<I,
             EventResult::Consumed(Some(callback))
         };
 
-        let command = ctx.editor.config().picker_keys.get(&key_event).copied();
+        let command = ctx.editor.config().picker_keys.get(self.keys, &key_event);
         match command {
             Some(PickerCommand::Previous) => {
                 self.move_by(1, Direction::Backward);
@@ -1224,24 +1234,20 @@ impl<I: 'static + Send + Sync, D: 'static + Send + Sync> Component for Picker<I,
             Some(PickerCommand::TogglePreview) => {
                 self.toggle_preview();
             }
-            Some(PickerCommand::CycleChanges) => {
+            Some(PickerCommand::Action(crate::commands::changed_file::CYCLE_CHANGES))
+                if self.on_cycle_changes.is_some() =>
+            {
                 if let Some(cycle) = self.on_cycle_changes.take() {
                     cycle(self);
                     self.on_cycle_changes = Some(cycle);
-                } else {
-                    self.prompt_handle_event(event, ctx);
                 }
             }
-            Some(PickerCommand::Action(name)) => match (&self.on_action, self.selection()) {
-                (Some(action), Some(item)) => {
+            Some(PickerCommand::Action(name)) => {
+                if let (Some(action), Some(item)) = (&self.on_action, self.selection()) {
                     action(ctx, name, item);
                     return close_fn(self);
                 }
-                (Some(_), None) => {}
-                (None, _) => {
-                    self.prompt_handle_event(event, ctx);
-                }
-            },
+            }
             // `no_op` and unbound keys edit the query.
             Some(PickerCommand::NoOp) | None => {
                 self.prompt_handle_event(event, ctx);

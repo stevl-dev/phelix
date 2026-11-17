@@ -5,9 +5,10 @@ use std::sync::OnceLock;
 
 use helix_vcs::{ChangeView, FileChange};
 use helix_view::input::KeyEvent;
+use helix_view::keyboard::{KeyCode, KeyModifiers};
 use helix_view::tree::Tab;
 
-use crate::commands::{MappableCommand, TypableCommand, TYPABLE_COMMAND_LIST};
+use crate::commands::{changed_file, MappableCommand, TypableCommand, TYPABLE_COMMAND_LIST};
 use crate::compositor;
 use crate::config::FeatureTable;
 
@@ -22,14 +23,15 @@ pub struct Feature {
     /// Its top-level table of `config.toml`, if it has one.
     pub config: Option<FeatureTable>,
     /// Its actions in the changed-file picker.
-    pub picker_actions: &'static [PickerAction],
+    pub changed_file_actions: &'static [PickerAction],
     /// Registers its hooks and the UI parts of its buffer kinds. Runs once
     /// per `Application`, from `handlers::setup`.
     pub register: fn(),
 }
 
 /// An action on the changed-file picker's selected file, which
-/// `[keys.picker]` binds by its name, as `PickerCommand::Action`.
+/// `[keys.picker.changed-files]` binds by its name, as
+/// `PickerCommand::Action`.
 pub struct PickerAction {
     pub name: &'static str,
     /// The key it has before `[keys.picker]`.
@@ -96,7 +98,37 @@ pub fn config_tables() -> impl Iterator<Item = &'static FeatureTable> {
         .filter_map(|feature| feature.config.as_ref())
 }
 
-/// The features' picker actions.
-pub fn picker_actions() -> impl Iterator<Item = &'static PickerAction> {
-    features().iter().flat_map(|feature| feature.picker_actions)
+/// The features' actions in the changed-file picker.
+pub fn changed_file_actions() -> impl Iterator<Item = &'static PickerAction> {
+    features()
+        .iter()
+        .flat_map(|feature| feature.changed_file_actions)
+}
+
+/// An action that a picker's table, `[keys.picker.<picker>]`, binds by its
+/// name.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PickerKey {
+    /// The name of the picker's table.
+    pub picker: &'static str,
+    pub action: &'static str,
+    /// The key it has before the config's.
+    pub key: Option<KeyEvent>,
+}
+
+/// The actions of every picker with a table: the core's, then the features'.
+pub fn picker_keys() -> impl Iterator<Item = PickerKey> {
+    let cycle = PickerKey {
+        picker: changed_file::KEYS,
+        action: changed_file::CYCLE_CHANGES,
+        key: Some(KeyEvent {
+            code: KeyCode::Char('g'),
+            modifiers: KeyModifiers::CONTROL,
+        }),
+    };
+    std::iter::once(cycle).chain(changed_file_actions().map(|action| PickerKey {
+        picker: changed_file::KEYS,
+        action: action.name,
+        key: Some(action.key),
+    }))
 }

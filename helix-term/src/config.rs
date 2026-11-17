@@ -1,8 +1,8 @@
-use crate::feature::{config_tables, picker_actions};
+use crate::feature::{config_tables, picker_keys};
 use crate::keymap;
 use crate::keymap::{merge_keys, KeyTrie};
 use helix_loader::merge_toml_values;
-use helix_view::editor::{default_picker_keys, overlay_picker_keys, PickerCommand};
+use helix_view::editor::{default_picker_keys, PickerCommand, PickerKeys};
 use helix_view::features::Features;
 use helix_view::input::KeyEvent;
 use helix_view::{document::Mode, theme};
@@ -38,7 +38,7 @@ const CORE_TABLES: &[&str] = &["theme", "keys", "editor"];
 pub struct RawKeys {
     pub modes: HashMap<Mode, KeyTrie>,
     /// Bindings from `[keys.picker]` only. Defaults are applied later.
-    pub picker: HashMap<KeyEvent, PickerCommand>,
+    pub picker: PickerKeys,
 }
 
 impl<'de> Deserialize<'de> for RawKeys {
@@ -53,47 +53,82 @@ impl<'de> Deserialize<'de> for RawKeys {
             .remove("picker")
         {
             Some(picker) => parse_picker_keys(picker).map_err(D::Error::custom)?,
-            None => HashMap::new(),
+            None => PickerKeys::default(),
         };
         let modes = HashMap::<Mode, KeyTrie>::deserialize(value).map_err(D::Error::custom)?;
         Ok(Self { modes, picker })
     }
 }
 
-fn parse_picker_keys(value: toml::Value) -> Result<HashMap<KeyEvent, PickerCommand>, String> {
+/// `[keys.picker]`: a key's command in every picker, or a picker's own table
+/// by its name.
+fn parse_picker_keys(value: toml::Value) -> Result<PickerKeys, String> {
     let table = value
         .as_table()
         .ok_or_else(|| "picker keymap must be a table of key = \"command\"".to_string())?;
-    let mut keys = HashMap::new();
-    for (key, command) in table {
-        let key = KeyEvent::from_str(key).map_err(|err| err.to_string())?;
-        let command = command
-            .as_str()
-            .ok_or_else(|| format!("picker binding for '{key}' must be a command name"))?;
-        let command = PickerCommand::from_name(command)
-            .or_else(|| {
-                picker_actions()
-                    .find(|action| action.name == command)
-                    .map(|action| PickerCommand::Action(action.name))
-            })
-            .ok_or_else(|| format!("unknown picker command '{command}'"))?;
-        keys.insert(key, command);
+    let mut keys = PickerKeys::default();
+    for (name, value) in table {
+        if let Some(table) = value.as_table() {
+            let picker = picker_keys()
+                .find(|action| action.picker == name)
+                .ok_or_else(|| format!("unknown picker '{name}'"))?
+                .picker;
+            keys.pickers
+                .insert(picker, parse_picker_table(table, picker)?);
+        } else {
+            let (key, command) = parse_picker_key(name, value, None)?;
+            keys.shared.insert(key, command);
+        }
     }
     Ok(keys)
 }
 
+fn parse_picker_table(
+    table: &toml::Table,
+    picker: &str,
+) -> Result<HashMap<KeyEvent, PickerCommand>, String> {
+    table
+        .iter()
+        .map(|(key, command)| parse_picker_key(key, command, Some(picker)))
+        .collect()
+}
+
+/// A binding of `[keys.picker]`, or of `picker`'s table, which also takes
+/// that picker's actions.
+fn parse_picker_key(
+    key: &str,
+    command: &toml::Value,
+    picker: Option<&str>,
+) -> Result<(KeyEvent, PickerCommand), String> {
+    let key = KeyEvent::from_str(key).map_err(|err| err.to_string())?;
+    let command = command
+        .as_str()
+        .ok_or_else(|| format!("picker binding for '{key}' must be a command name"))?;
+    let command = PickerCommand::from_name(command)
+        .or_else(|| {
+            picker_keys()
+                .find(|action| Some(action.picker) == picker && action.action == command)
+                .map(|action| PickerCommand::Action(action.action))
+        })
+        .ok_or_else(|| format!("unknown picker command '{command}'"))?;
+    Ok((key, command))
+}
+
 fn apply_picker_keys(
     editor: &mut helix_view::editor::Config,
-    overlays: impl IntoIterator<Item = HashMap<KeyEvent, PickerCommand>>,
+    overlays: impl IntoIterator<Item = PickerKeys>,
 ) {
-    let mut picker_keys = default_picker_keys();
-    for action in picker_actions() {
-        picker_keys.insert(action.key, PickerCommand::Action(action.name));
+    let mut keys = default_picker_keys();
+    for action in picker_keys() {
+        let table = keys.pickers.entry(action.picker).or_default();
+        if let Some(key) = action.key {
+            table.insert(key, PickerCommand::Action(action.action));
+        }
     }
     for overlay in overlays {
-        overlay_picker_keys(&mut picker_keys, overlay);
+        keys.overlay(overlay);
     }
-    editor.picker_keys = picker_keys;
+    editor.picker_keys = keys;
 }
 
 // WHY: no `deny_unknown_fields`, since the features' tables sit beside these.
@@ -228,7 +263,7 @@ impl Config {
                     merge_keys(&mut keys, keymap.modes);
                     keymap.picker
                 } else {
-                    HashMap::new()
+                    PickerKeys::default()
                 };
                 let mut editor = config.editor.map_or_else(
                     || Ok(helix_view::editor::Config::default()),
@@ -356,12 +391,14 @@ mod tests {
         assert_eq!(default_keys, keymap::default());
     }
 
+    fn key(name: &str) -> KeyEvent {
+        KeyEvent::from_str(name).unwrap()
+    }
+
+    const CHANGED_FILES: Option<&str> = Some("changed-files");
+
     #[test]
     fn picker_keys_overlay_defaults_and_no_op_unbinds() {
-        use helix_view::editor::PickerCommand;
-        use helix_view::input::KeyEvent;
-        use std::str::FromStr;
-
         let config = Config::load_test(
             r#"
             [keys.picker]
@@ -370,12 +407,87 @@ mod tests {
             "#,
         );
         let keys = &config.editor.picker_keys;
-        let ctrl_k = KeyEvent::from_str("C-k").unwrap();
-        let ctrl_p = KeyEvent::from_str("C-p").unwrap();
-        let ctrl_n = KeyEvent::from_str("C-n").unwrap();
-        assert_eq!(keys.get(&ctrl_k), Some(&PickerCommand::Previous));
-        assert!(!keys.contains_key(&ctrl_p));
-        assert_eq!(keys.get(&ctrl_n), Some(&PickerCommand::Next));
+        assert_eq!(keys.get(None, &key("C-k")), Some(PickerCommand::Previous));
+        assert_eq!(keys.get(None, &key("C-p")), None);
+        assert_eq!(keys.get(None, &key("C-n")), Some(PickerCommand::Next));
+    }
+
+    #[test]
+    fn a_pickers_table_goes_before_the_shared_one_in_that_picker_only() {
+        let config = Config::load_test(
+            r#"
+            [keys.picker]
+            C-k = "previous"
+
+            [keys.picker.changed-files]
+            C-k = "next"
+            C-n = "no_op"
+            "#,
+        );
+        let keys = &config.editor.picker_keys;
+        let cycle = Some(PickerCommand::Action("cycle_changes"));
+        let cases = [
+            ("C-k", CHANGED_FILES, Some(PickerCommand::Next)),
+            ("C-k", None, Some(PickerCommand::Previous)),
+            ("C-n", CHANGED_FILES, Some(PickerCommand::NoOp)),
+            ("C-n", None, Some(PickerCommand::Next)),
+            ("C-p", CHANGED_FILES, Some(PickerCommand::Previous)),
+            ("C-g", CHANGED_FILES, cycle),
+            ("C-g", None, None),
+        ];
+        for (name, picker, expected) in cases {
+            assert_eq!(
+                keys.get(picker, &key(name)),
+                expected,
+                "{name} in {picker:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_workspaces_picker_table_goes_over_the_global_one_key_by_key() {
+        let global = r#"
+            [keys.picker.changed-files]
+            C-k = "previous"
+            A-g = "cycle_changes"
+        "#;
+        let local = r#"
+            [keys.picker.changed-files]
+            C-k = "next"
+        "#;
+        let config = Config::load(Ok(&global.to_owned()), Ok(local.to_owned())).unwrap();
+        let keys = &config.editor.picker_keys;
+        let cycle = Some(PickerCommand::Action("cycle_changes"));
+        assert_eq!(
+            keys.get(CHANGED_FILES, &key("C-k")),
+            Some(PickerCommand::Next)
+        );
+        assert_eq!(keys.get(CHANGED_FILES, &key("A-g")), cycle);
+        assert_eq!(
+            keys.get(CHANGED_FILES, &key("C-g")),
+            cycle,
+            "the default stays"
+        );
+    }
+
+    #[test]
+    fn picker_keys_refuse_an_action_outside_its_table_and_an_unknown_picker() {
+        let cases = [
+            (
+                "[keys.picker]\nC-g = \"cycle_changes\"",
+                "unknown picker command 'cycle_changes'",
+            ),
+            (
+                "[keys.picker.nowhere]\nC-k = \"next\"",
+                "unknown picker 'nowhere'",
+            ),
+        ];
+        for (file, expected) in cases {
+            let refused = Config::load(Ok(&file.to_owned()), Err(ConfigLoadError::default()))
+                .unwrap_err()
+                .to_string();
+            assert!(refused.contains(expected), "{refused}");
+        }
     }
 
     #[test]

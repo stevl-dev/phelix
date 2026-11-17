@@ -66,7 +66,7 @@ pub const FEATURE: Feature = Feature {
         apply: apply_config,
     }),
     register,
-    picker_actions: &[PickerAction {
+    changed_file_actions: &[PickerAction {
         name: "review_jump",
         key: KeyEvent {
             code: KeyCode::Char('r'),
@@ -943,20 +943,30 @@ mod tests {
         use helix_view::input::KeyEvent;
 
         let key = |name: &str| KeyEvent::from_str(name).unwrap();
-        let jump = Some(&PickerCommand::Action("review_jump"));
+        let changed_files = Some("changed-files");
+        let jump = Some(PickerCommand::Action("review_jump"));
         let loaded = load("", None).unwrap();
-        assert_eq!(loaded.editor.picker_keys.get(&key("A-r")), jump);
+        let keys = &loaded.editor.picker_keys;
+        assert_eq!(keys.get(changed_files, &key("A-r")), jump);
+        assert_eq!(keys.get(None, &key("A-r")), None, "other pickers");
         assert_eq!(
-            Config::default().editor.picker_keys.get(&key("A-r")),
+            Config::default()
+                .editor
+                .picker_keys
+                .get(changed_files, &key("A-r")),
             jump,
             "with no config file too"
         );
         let config = load(
-            "[keys.picker]\nC-j = \"review_jump\"\nA-r = \"no_op\"",
+            "[keys.picker.changed-files]\nC-j = \"review_jump\"\nA-r = \"no_op\"",
             None,
         )
         .unwrap();
-        assert_eq!(config.editor.picker_keys.get(&key("C-j")), jump);
-        assert_eq!(config.editor.picker_keys.get(&key("A-r")), None);
+        let keys = &config.editor.picker_keys;
+        assert_eq!(keys.get(changed_files, &key("C-j")), jump);
+        assert_eq!(
+            keys.get(changed_files, &key("A-r")),
+            Some(PickerCommand::NoOp)
+        );
     }
 }

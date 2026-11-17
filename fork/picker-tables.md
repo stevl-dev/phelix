@@ -3,7 +3,7 @@
 Snapshot: `main` at `677dcf7a5`.
 Goes in `fork/picker-tables.md`. Feature slug: `picker-tables`, part of `picker-keys`'s entry in `FORK.md`, with the commit picker's keys in `review-stream`'s.
 
-Status: planned.
+Status: in progress. Phases 0–1 are committed.
 
 ## Bottom line
 
@@ -81,7 +81,7 @@ Each phase is one commit that builds and passes its tests, and marks itself done
 | # | Status | Commit | Work |
 | --- | --- | --- | --- |
 | 0 | Done | Add the plan for a key table per picker. | This file. |
-| 1 | | Give a picker a key table of its own. | 2.1. Unit tests in `config.rs`, from TOML: a picker's binding beats the shared one, a key it lacks falls back to the shared one, `no_op` in its table hands the key to the prompt there and nowhere else, a workspace table goes over the global one key by key, an action in another picker's table and an unknown picker are refused with their messages. `review_jump`'s test in `helix-review/src/term.rs` moves to `[keys.picker.changed-files]`. The `:set` test in `helix-term/tests/test/commands.rs` keeps a picker's table too. Book (`keymap.md`) and `FORK.md`. |
+| 1 | Done | Give a picker a key table of its own. | 2.1. Unit tests in `config.rs`, from TOML: a picker's binding beats the shared one, a key it lacks falls back to the shared one, `no_op` in its table hands the key to the prompt there and nowhere else, a workspace table goes over the global one key by key, an action in another picker's table and an unknown picker are refused with their messages. `review_jump`'s test in `helix-review/src/term.rs` moves to `[keys.picker.changed-files]`. The `:set` test in `helix-term/tests/test/commands.rs` keeps a picker's table too. Book (`keymap.md`) and `FORK.md`. |
 | 2 | | Let a picker action keep the picker open. | 2.2. No behavior changes. The changed-file picker has no end-to-end test, since it walks the working directory, so `cycle_changes` has none. Phase 3's tests show an action that stays. |
 | 3 | | Yank a commit's hash from the commit picker. | 2.3. Integration tests in `helix-review/tests/test/review/commit.rs`, on `clipboard-provider = "none"`, so no test writes your clipboard: `Ctrl-y` puts the selected commit's full hash in `+` and the picker stays on screen; `yank_hash` bound in `[keys.picker.review-log]` puts it in `"`; `Ctrl-y` in another picker, like the buffer picker, types into its prompt. Book (`keymap.md`), generated docs if they list the actions, and `FORK.md`. |
 
@@ -91,3 +91,7 @@ Phase 2 comes before 3, since the yank needs an action that stays.
 After phase 1, check in `phx`: `Ctrl-g` and `Alt-r` in the changed-file picker, and a binding in `[keys.picker.changed-files]`. After phase 3: `Ctrl-y` in `:review-log`, then paste outside the editor.
 
 ## What the work found
+
+- **Phase 1.** `PickerKeys` in `picker_keys.rs` holds the tables, with `get` and `overlay`, and replaces `overlay_picker_keys`. `feature::picker_keys` lists every table's actions: the core's `cycle_changes`, then the features' changed-file actions. A picker table's name is valid when some action names it.
+  The changed-file picker's name and `cycle_changes` are constants in `changed_file.rs`. Until phase 2, the picker's key handler names `cycle_changes` to run it through `on_cycle_changes`, the one place outside `changed_file.rs` that does.
+  A picker with an action bound but no `on_action` now ignores the key, where it handed it to the prompt. No picker has one: an action binds only in its own picker's table.

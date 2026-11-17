@@ -293,7 +293,7 @@ where
 }
 
 mod picker_keys;
-pub use picker_keys::{default_picker_keys, overlay_picker_keys, PickerCommand};
+pub use picker_keys::{default_picker_keys, PickerCommand, PickerKeys};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case", default, deny_unknown_fields)]
@@ -441,7 +441,7 @@ pub struct Config {
     /// Picker bindings. Not read from `[editor]`; the term config fills this
     /// from `[keys.picker]` after merging with the defaults.
     #[serde(skip, default = "default_picker_keys")]
-    pub picker_keys: HashMap<KeyEvent, PickerCommand>,
+    pub picker_keys: PickerKeys,
 }
 
 /// User-facing configuration for `[editor.workspace-trust]`.

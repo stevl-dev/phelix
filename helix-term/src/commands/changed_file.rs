@@ -14,6 +14,11 @@ use crate::ui::{Picker, PickerColumn};
 
 use super::Context;
 
+/// The name of the picker's key table, `[keys.picker.changed-files]`.
+pub const KEYS: &str = "changed-files";
+/// Its action that cycles the list: unstaged, staged, then both.
+pub const CYCLE_CHANGES: &str = "cycle_changes";
+
 pub(super) fn changed_file_picker(cx: &mut Context) {
     pub struct FileChangeData {
         cwd: PathBuf,
@@ -174,7 +179,8 @@ pub(super) fn changed_file_picker(cx: &mut Context) {
         },
     )
     .with_preview(|_editor, meta| Some((meta.path().into(), None)))
-    .with_status_label(ChangeView::Unstaged.label());
+    .with_status_label(ChangeView::Unstaged.label())
+    .with_keys(KEYS);
 
     let lists = Arc::new(Mutex::new(Lists {
         unstaged: Vec::new(),
@@ -203,7 +209,9 @@ pub(super) fn changed_file_picker(cx: &mut Context) {
     });
     let picker = picker.with_on_action(move |cx, name, change: &FileChange| {
         let scope = lists_for_actions.lock().unwrap().mode;
-        if let Some(action) = crate::feature::picker_actions().find(|action| action.name == name) {
+        if let Some(action) =
+            crate::feature::changed_file_actions().find(|action| action.name == name)
+        {
             (action.run)(cx, scope, change);
         }
     });

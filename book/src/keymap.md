@@ -555,13 +555,16 @@ The list adds one key:
 Keys to use within picker. Override them in `[keys.picker]`. A binding of `no_op` drops that key so the [prompt](#prompt) handles it. Other prompt keys work in pickers except where a picker binding takes them.
 See the documentation page on [pickers](./pickers.md) for more info.
 
-The changed-file picker opens on unstaged changes. `cycle_changes` switches that list to staged changes, then to both. The current list is named before the match count. Other pickers pass that key through to the prompt.
-`review_jump` puts the cursor on the selected file's header in the [review](#review) of the list's changes, reading them first when that review isn't open or lacks the file. Other pickers pass it to the prompt too.
+Some pickers have keys of their own, in a table by the picker's name, like `[keys.picker.changed-files]`. In that picker its table goes first, then `[keys.picker]`. Such a table takes the commands below and that picker's actions. A binding of `no_op` there hands the key to the prompt in that picker only.
 
 ```toml
 [keys.picker]
 C-k = "previous"
 C-j = "next"
+
+[keys.picker.changed-files]
+C-g = "no_op"
+A-g = "cycle_changes"
 ```
 
 | Key                         | Command            | Description                                                |
@@ -578,8 +581,16 @@ C-j = "next"
 | `Ctrl-v`                    | `open_vertical`    | Open vertically                                            |
 | `Ctrl-t`                    | `toggle_preview`   | Toggle preview                                             |
 | `Escape`, `Ctrl-c`          | `close`            | Close picker                                               |
-| `Ctrl-g`                    | `cycle_changes`    | Cycle the changed-file list: unstaged, staged, all         |
-| `Alt-r`                     | `review_jump`      | Jump to the selected changed file in the review            |
+
+### The changed-file picker
+
+Its table is `[keys.picker.changed-files]`. It opens on unstaged changes. `cycle_changes` switches that list to staged changes, then to both. The current list is named before the match count.
+`review_jump` puts the cursor on the selected file's header in the [review](#review) of the list's changes, reading them first when that review isn't open or lacks the file.
+
+| Key      | Command         | Description                                        |
+| -----    | -----           | -------------                                      |
+| `Ctrl-g` | `cycle_changes` | Cycle the changed-file list: unstaged, staged, all |
+| `Alt-r`  | `review_jump`   | Jump to the selected changed file in the review    |
 
 ## Prompt
 

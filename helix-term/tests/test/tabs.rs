@@ -25,7 +25,7 @@ const TABS: Feature = Feature {
     typable: &[],
     tabs: &[OTHER],
     config: None,
-    picker_actions: &[],
+    changed_file_actions: &[],
     register: || {},
 };
 

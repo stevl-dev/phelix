@@ -1,4 +1,4 @@
-mod changed_file;
+pub(crate) mod changed_file;
 pub(crate) mod dap;
 pub(crate) mod lsp;
 pub(crate) mod syntax;

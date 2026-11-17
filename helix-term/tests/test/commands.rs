@@ -1084,10 +1084,12 @@ async fn set_keeps_the_picker_keys_from_the_config() -> anyhow::Result<()> {
 
     let ctrl_k = helix_view::input::KeyEvent::from_str("C-k")?;
     let mut config = test_config();
-    config
-        .editor
-        .picker_keys
-        .insert(ctrl_k, PickerCommand::Previous);
+    let keys = &mut config.editor.picker_keys;
+    keys.shared.insert(ctrl_k, PickerCommand::Previous);
+    keys.pickers
+        .entry("changed-files")
+        .or_default()
+        .insert(ctrl_k, PickerCommand::Next);
     let mut app = AppBuilder::new().with_config(config).build()?;
 
     test_key_sequence(
@@ -1095,9 +1097,11 @@ async fn set_keeps_the_picker_keys_from_the_config() -> anyhow::Result<()> {
         Some(":set mouse false<ret>"),
         Some(&|app| {
             assert!(!app.editor.config().mouse, "the option is set");
+            let keys = &app.editor.config().picker_keys;
+            assert_eq!(keys.get(None, &ctrl_k), Some(PickerCommand::Previous));
             assert_eq!(
-                app.editor.config().picker_keys.get(&ctrl_k),
-                Some(&PickerCommand::Previous)
+                keys.get(Some("changed-files"), &ctrl_k),
+                Some(PickerCommand::Next)
             );
         }),
         false,

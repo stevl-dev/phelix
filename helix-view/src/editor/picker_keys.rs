@@ -19,11 +19,8 @@ pub enum PickerCommand {
     OpenVertical,
     TogglePreview,
     Close,
-    /// Cycle the changed-file picker: unstaged, staged, then both.
-    /// Other pickers pass this key through to the prompt.
-    CycleChanges,
-    /// A feature's action on the selected item, by its name. Pickers with no
-    /// actions pass this key through to the prompt.
+    /// An action of one picker on its selected item, by its name. Only that
+    /// picker's table binds it.
     Action(&'static str),
     NoOp,
 }
@@ -43,14 +40,49 @@ impl PickerCommand {
             "open_vertical" => Self::OpenVertical,
             "toggle_preview" => Self::TogglePreview,
             "close" => Self::Close,
-            "cycle_changes" => Self::CycleChanges,
             "no_op" => Self::NoOp,
             _ => return None,
         })
     }
 }
 
-pub fn default_picker_keys() -> HashMap<KeyEvent, PickerCommand> {
+/// The keys of the pickers: the table every picker reads, and the tables of
+/// the pickers that have a name, each of which goes first in its picker.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct PickerKeys {
+    pub shared: HashMap<KeyEvent, PickerCommand>,
+    pub pickers: HashMap<&'static str, HashMap<KeyEvent, PickerCommand>>,
+}
+
+impl PickerKeys {
+    /// What `key` does in the picker whose table is `picker`, or in a picker
+    /// with no table.
+    pub fn get(&self, picker: Option<&str>, key: &KeyEvent) -> Option<PickerCommand> {
+        picker
+            .and_then(|picker| self.pickers.get(picker))
+            .and_then(|table| table.get(key))
+            .or_else(|| self.shared.get(key))
+            .copied()
+    }
+
+    /// Puts `overlay`'s bindings over these. `no_op` drops a shared key, and
+    /// stays in a picker's table, where it hands the key to the prompt.
+    pub fn overlay(&mut self, overlay: PickerKeys) {
+        for (key, command) in overlay.shared {
+            if command == PickerCommand::NoOp {
+                self.shared.remove(&key);
+            } else {
+                self.shared.insert(key, command);
+            }
+        }
+        for (picker, table) in overlay.pickers {
+            self.pickers.entry(picker).or_default().extend(table);
+        }
+    }
+}
+
+/// The core's keys for every picker.
+pub fn default_picker_keys() -> PickerKeys {
     let mut keys = HashMap::new();
     let bind = |keys: &mut HashMap<KeyEvent, PickerCommand>,
                 code: KeyCode,
@@ -101,27 +133,10 @@ pub fn default_picker_keys() -> HashMap<KeyEvent, PickerCommand> {
         ctrl,
         PickerCommand::TogglePreview,
     );
-    // Changed-file picker only. Other pickers pass this key to the prompt.
-    bind(
-        &mut keys,
-        KeyCode::Char('g'),
-        ctrl,
-        PickerCommand::CycleChanges,
-    );
     bind(&mut keys, KeyCode::Esc, none, PickerCommand::Close);
     bind(&mut keys, KeyCode::Char('c'), ctrl, PickerCommand::Close);
-    keys
-}
-
-pub fn overlay_picker_keys(
-    keys: &mut HashMap<KeyEvent, PickerCommand>,
-    overlay: HashMap<KeyEvent, PickerCommand>,
-) {
-    for (key, command) in overlay {
-        if command == PickerCommand::NoOp {
-            keys.remove(&key);
-        } else {
-            keys.insert(key, command);
-        }
+    PickerKeys {
+        shared: keys,
+        pickers: HashMap::new(),
     }
 }
