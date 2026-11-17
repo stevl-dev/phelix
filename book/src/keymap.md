@@ -500,7 +500,7 @@ When that read, or staging the last hunk, finds no changes left, the review clos
 Its first rows are the commit's hash, author, date, and message, as `git show` prints them, and a merge's parents. `gn` goes from them to the first file.
 A commit's review is read-only, as a staged one is. It takes no edits, stages and restores nothing, and its rows ask no language server, since the files may have changed since the commit. `Enter` on a row opens the working tree's file at the row's line number, when the working tree has the file.
 The commit replaces what the review showed, with the cursor at the top, and is refused while a file the review shows has unsaved changes. `:review all`, `unstaged`, or `staged` replaces it in turn, and `:reload` reads the commit again. A commit that changes no files leaves the open review as it is.
-`:review-log` opens a picker of the commits `HEAD` reaches, newest first, with each one's hash, date, author, and subject. Typing filters by subject, and `Enter` shows the commit in the review, as `:review-commit` does. `Space '` opens the picker again where you left it, for the next commit. It has no key of its own: bind it like any typable command, as in `l = ":review-log"` under `[keys.normal.space]`.
+`:review-log` opens a picker of the commits `HEAD` reaches, newest first, with each one's hash, date, author, and subject. Typing filters by subject, and `Enter` shows the commit in the review, as `:review-commit` does. `Space '` opens the picker again where you left it, for the next commit. It has no key of its own: bind it like any typable command, as in `l = ":review-log"` under `[keys.normal.space]`. In the picker, `Ctrl-y` yanks the selected commit's full hash to the clipboard: see [the commit picker](#the-commit-picker).
 The review swaps these commands for its own, on whatever keys they're bound to:
 
 | Key  | Command             | In the review                              |
@@ -591,6 +591,16 @@ Its table is `[keys.picker.changed-files]`. It opens on unstaged changes. `cycle
 | -----    | -----           | -------------                                      |
 | `Ctrl-g` | `cycle_changes` | Cycle the changed-file list: unstaged, staged, all |
 | `Alt-r`  | `review_jump`   | Jump to the selected changed file in the review    |
+
+### The commit picker
+
+Its table is `[keys.picker.review-log]`, for the picker `:review-log` opens. Its actions yank the selected commit's full hash and leave the picker open.
+
+| Key      | Command                  | Description                                     |
+| -----    | -----                    | -------------                                   |
+|          | `yank_hash`              | Yank the selected commit's hash to the [default yank register](./editor.md#editor-section) |
+| `Ctrl-y` | `yank_hash_to_clipboard` | Yank the selected commit's hash to the clipboard |
+
 
 ## Prompt
 

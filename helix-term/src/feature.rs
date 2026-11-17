@@ -24,6 +24,8 @@ pub struct Feature {
     pub config: Option<FeatureTable>,
     /// Its actions in the changed-file picker.
     pub changed_file_actions: &'static [PickerAction],
+    /// The pickers it opens with a key table of their own.
+    pub pickers: &'static [PickerTable],
     /// Registers its hooks and the UI parts of its buffer kinds. Runs once
     /// per `Application`, from `handlers::setup`.
     pub register: fn(),
@@ -38,6 +40,14 @@ pub struct PickerAction {
     pub key: KeyEvent,
     /// Runs it with the picker's list, unstaged, staged or both, and the file.
     pub run: fn(&mut compositor::Context, ChangeView, &FileChange),
+}
+
+/// A feature's picker with a key table of its own, `[keys.picker.<name>]`,
+/// which `Picker::with_keys` names. The picker's `on_action` runs its actions.
+pub struct PickerTable {
+    pub name: &'static str,
+    /// Its actions' names, each with the key it has before the config's.
+    pub actions: &'static [(&'static str, Option<KeyEvent>)],
 }
 
 static FEATURES: OnceLock<&'static [Feature]> = OnceLock::new();
@@ -116,7 +126,8 @@ pub struct PickerKey {
     pub key: Option<KeyEvent>,
 }
 
-/// The actions of every picker with a table: the core's, then the features'.
+/// The actions of every picker with a table: the core's, then the features'
+/// in the changed-file picker, then the features' own pickers'.
 pub fn picker_keys() -> impl Iterator<Item = PickerKey> {
     let cycle = PickerKey {
         picker: changed_file::KEYS,
@@ -126,9 +137,21 @@ pub fn picker_keys() -> impl Iterator<Item = PickerKey> {
             modifiers: KeyModifiers::CONTROL,
         }),
     };
-    std::iter::once(cycle).chain(changed_file_actions().map(|action| PickerKey {
-        picker: changed_file::KEYS,
-        action: action.name,
-        key: Some(action.key),
-    }))
+    let own = features()
+        .iter()
+        .flat_map(|feature| feature.pickers)
+        .flat_map(|table| {
+            table.actions.iter().map(|&(action, key)| PickerKey {
+                picker: table.name,
+                action,
+                key,
+            })
+        });
+    std::iter::once(cycle)
+        .chain(changed_file_actions().map(|action| PickerKey {
+            picker: changed_file::KEYS,
+            action: action.name,
+            key: Some(action.key),
+        }))
+        .chain(own)
 }

@@ -471,6 +471,72 @@ async fn a_commits_message_colors_its_hash_author_and_date() -> anyhow::Result<(
     Ok(())
 }
 
+/// An app on `file` whose clipboard is the editor's alone, with the picker
+/// keys of `file_config`, a `config.toml`.
+fn app_with_picker_keys(file: PathBuf, file_config: &str) -> anyhow::Result<Application> {
+    // WHY: before the load, which reads the review's picker table by name.
+    let builder = builder();
+    let loaded = helix_term::config::Config::load(
+        Ok(&file_config.to_owned()),
+        Err(helix_term::config::ConfigLoadError::default()),
+    )
+    .map_err(|err| anyhow::anyhow!("{err}"))?;
+    let mut config = test_config();
+    config.editor.picker_keys = loaded.editor.picker_keys;
+    config.editor.clipboard_provider = helix_view::clipboard::ClipboardProvider::None;
+    builder.with_config(config).with_file(file, None).build()
+}
+
+/// The full hash of the commit `rev` names.
+fn full_hash(dir: &Path, rev: &str) -> String {
+    let output = Command::new("git")
+        .arg("-C")
+        .arg(dir)
+        .args(["rev-parse", rev])
+        .output()
+        .unwrap();
+    String::from_utf8(output.stdout).unwrap().trim().to_owned()
+}
+
+fn register(app: &Application, name: char) -> Vec<String> {
+    app.editor
+        .registers
+        .read(name, &app.editor)
+        .map(|values| values.map(|value| value.into_owned()).collect())
+        .unwrap_or_default()
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn the_commit_picker_yanks_the_selected_hash_and_stays_open() -> anyhow::Result<()> {
+    let repo = history();
+    let mut app = app_with_picker_keys(
+        repo.path().join("a.txt"),
+        "[keys.picker.review-log]\nA-y = \"yank_hash\"",
+    )?;
+    let head = full_hash(repo.path(), "HEAD");
+    let second = full_hash(repo.path(), "HEAD~1");
+    run_until(&mut app, ":review-log<ret>", |app| {
+        on_screen(app, "Change the second line.") && on_screen(app, "base")
+    })
+    .await?;
+
+    run_until(&mut app, "<C-y>", |app| !register(app, '+').is_empty()).await?;
+    assert_eq!(register(&app, '+'), [head.clone()]);
+    assert_eq!(status(&app), format!("yanked {head} to register +"));
+    assert!(
+        on_screen(&app, "Change the second line."),
+        "the picker stays"
+    );
+
+    run_until(&mut app, "<down><A-y>", |app| {
+        !register(app, '"').is_empty()
+    })
+    .await?;
+    assert_eq!(register(&app, '"'), [second]);
+    assert_eq!(register(&app, '+'), [head], "the clipboard keeps its hash");
+    Ok(())
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn the_commit_picker_says_when_the_repository_has_no_commit() -> anyhow::Result<()> {
     let repo = tempfile::tempdir()?;

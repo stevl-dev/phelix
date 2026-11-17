@@ -26,6 +26,7 @@ const TABS: Feature = Feature {
     tabs: &[OTHER],
     config: None,
     changed_file_actions: &[],
+    pickers: &[],
     register: || {},
 };
 

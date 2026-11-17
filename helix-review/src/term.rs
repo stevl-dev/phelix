@@ -74,6 +74,7 @@ pub const FEATURE: Feature = Feature {
         },
         run: |cx, scope, change| jump(cx, scope, change.path()),
     }],
+    pickers: &[commits::TABLE],
     typable: &[
         TypableCommand {
             name: "review",
@@ -933,6 +934,37 @@ mod tests {
         assert_eq!(name("C-r"), "review_open");
         assert_eq!(name("C-t"), "review");
         assert_eq!(name("C-f"), "review_goto_file");
+    }
+
+    #[test]
+    fn the_commit_pickers_yanks_bind_in_its_table_only() {
+        use std::str::FromStr;
+
+        use helix_view::editor::PickerCommand;
+        use helix_view::input::KeyEvent;
+
+        let key = |name: &str| KeyEvent::from_str(name).unwrap();
+        let log = Some("review-log");
+        let loaded = load("", None).unwrap();
+        let keys = &loaded.editor.picker_keys;
+        assert_eq!(
+            keys.get(log, &key("C-y")),
+            Some(PickerCommand::Action("yank_hash_to_clipboard"))
+        );
+        assert_eq!(keys.get(None, &key("C-y")), None, "other pickers");
+
+        let config = load("[keys.picker.review-log]\nA-y = \"yank_hash\"", None).unwrap();
+        assert_eq!(
+            config.editor.picker_keys.get(log, &key("A-y")),
+            Some(PickerCommand::Action("yank_hash"))
+        );
+        let refused = load("[keys.picker.changed-files]\nA-y = \"yank_hash\"", None);
+        assert!(
+            refused
+                .as_ref()
+                .is_err_and(|err| err.contains("unknown picker command 'yank_hash'")),
+            "{refused:?}"
+        );
     }
 
     #[test]
